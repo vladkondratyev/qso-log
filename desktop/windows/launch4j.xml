@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Windows launcher: QSO Log.exe starts app\qsolog.jar with the bundled runtime\ folder.
+     The jar is not wrapped into the exe: unsigned wrapped exes trigger more antivirus false positives. -->
+<launch4jConfig>
+  <dontWrapJar>true</dontWrapJar>
+  <headerType>gui</headerType>
+  <jar>app\qsolog.jar</jar>
+  <outfile>../build/windows/QSO Log/QSO Log.exe</outfile>
+  <errTitle>QSO Log</errTitle>
+  <chdir>.</chdir>
+  <priority>normal</priority>
+  <stayAlive>false</stayAlive>
+  <restartOnCrash>false</restartOnCrash>
+  <icon>../icons/icon.ico</icon>
+  <jre>
+    <path>runtime</path>
+    <requiresJdk>false</requiresJdk>
+    <requires64Bit>true</requires64Bit>
+    <opt>-Dfile.encoding=UTF-8</opt>
+    <opt>-Dsun.stdout.encoding=UTF-8</opt>
+    <opt>-Xmx768m</opt>
+  </jre>
+  <singleInstance>
+    <mutexName>ru.r3xed.qsolog</mutexName>
+    <windowTitle>QSO Log</windowTitle>
+  </singleInstance>
+  <versionInfo>
+    <fileVersion>1.1.0.0</fileVersion>
+    <txtFileVersion>1.1.0</txtFileVersion>
+    <fileDescription>QSO Log</fileDescription>
+    <copyright>R3XED</copyright>
+    <productVersion>1.1.0.0</productVersion>
+    <txtProductVersion>1.1.0</txtProductVersion>
+    <productName>QSO Log</productName>
+    <companyName>R3XED</companyName>
+    <internalName>qsolog</internalName>
+    <originalFilename>QSO Log.exe</originalFilename>
+    <language>RUSSIAN</language>
+  </versionInfo>
+</launch4jConfig>

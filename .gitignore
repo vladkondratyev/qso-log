@@ -14,7 +14,6 @@ local.properties
 .DS_Store
 
 # Not part of the public repository
-desktop/
 design/
 progress.md
 # Logs and sample files used during development (may contain other people's data)
