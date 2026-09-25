@@ -1,12 +1,16 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,14 +26,27 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SortByAlpha
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,54 +54,68 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.foundation.TooltipArea
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.r3xed.qsolog.APP_VERSION
 import ru.r3xed.qsolog.AppState
 import ru.r3xed.qsolog.DATE_FMT
+import ru.r3xed.qsolog.IS_MAC
 import ru.r3xed.qsolog.Pane
+import ru.r3xed.qsolog.SortBy
 import ru.r3xed.qsolog.TIME_FMT
+import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.utc
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun LogPane(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
+fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, modifier: Modifier = Modifier) {
     val x = LocalExtra.current
     Column(modifier.background(MaterialTheme.colorScheme.background)) {
-        Row(
+        if (state.selecting) SelectionBar(state, onExportSelected) else Row(
             Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                QsoLogo()
+                Row(verticalAlignment = Alignment.Bottom) {
+                    QsoLogo()
+                    Text(
+                        "v$APP_VERSION",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = x.muted,
+                        modifier = Modifier.padding(start = 8.dp, bottom = 6.dp),
+                    )
+                }
                 val me = state.settings.myCall
                 Text((if (me.isNotBlank()) "$me · " else "") + "записей: ${state.total}", style = MaterialTheme.typography.bodyMedium, color = x.muted)
             }
-            FilledTonalIconButton(onClick = { state.pane = Pane.Settings }, modifier = Modifier.size(52.dp)) {
-                Icon(Icons.Filled.Settings, contentDescription = "Настройки", modifier = Modifier.size(28.dp))
+            Tip("Карта QSO") {
+                FilledTonalIconButton(onClick = state::openMap, modifier = Modifier.size(52.dp)) {
+                    Icon(Icons.Filled.Map, contentDescription = "Карта QSO", modifier = Modifier.size(28.dp))
+                }
             }
-        }
-
-        Button(
-            onClick = state::newQso,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(60.dp),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Icon(Icons.Filled.Add, null, Modifier.size(28.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Новая связь", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(10.dp))
-            Text(shortcut, fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f))
+            Tip("Настройки") {
+                FilledTonalIconButton(onClick = { state.pane = Pane.Settings }, modifier = Modifier.size(52.dp)) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Настройки", modifier = Modifier.size(28.dp))
+                }
+            }
         }
 
         OutlinedTextField(
@@ -105,6 +136,8 @@ fun LogPane(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
             ),
         )
 
+        AddQsoButton(state, shortcut, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+
         if (state.qsos.isEmpty()) {
             Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (state.query.isNotBlank()) {
@@ -112,12 +145,19 @@ fun LogPane(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
                     Text("Проверьте написание или очистите поиск.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
                 } else {
                     Text("Лог пока пуст", style = MaterialTheme.typography.titleLarge)
-                    Text("Нажмите «Новая связь», чтобы записать первое QSO. Старый лог можно загрузить из CSV в меню «Файл».", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                    Text(
+                        "Нажмите «Добавить QSO», чтобы записать первую связь. Если удерживать кнопку, запишется голосовая заметка. " +
+                            "Старый лог можно загрузить из ADIF или CSV в меню «Файл».",
+                        style = MaterialTheme.typography.bodyLarge, color = x.muted,
+                    )
                 }
             }
         } else {
-            val grouped = remember(state.qsos) { state.qsos.groupBy { utc(it.timeUtc).toLocalDate() } }
+            SortBar(state)
+            val groups = remember(state.qsos, state.sortBy, state.sortDesc) { groupAndSort(state.qsos, state.sortBy, state.sortDesc) }
             val listState = rememberLazyListState()
+            // A new order starts from the top, not from wherever the old one was scrolled to.
+            LaunchedEffect(state.sortBy, state.sortDesc) { listState.scrollToItem(0) }
             Box(Modifier.fillMaxSize()) {
                 LazyColumn(
                     Modifier.fillMaxSize().padding(end = 8.dp),
@@ -125,10 +165,10 @@ fun LogPane(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
                     contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    grouped.forEach { (day, list) ->
-                        stickyHeader(key = "d$day") { DayHeader(day, list.size) }
-                        items(list, key = { it.id }) { qso ->
-                            QsoRow(qso, selected = state.pane == Pane.Edit && state.form.id == qso.id, onClick = { state.edit(qso) }, onDelete = { state.delete(qso) })
+                    groups.forEach { g ->
+                        if (g.title != null) stickyHeader(key = "h" + g.key) { GroupHeader(g.title, g.items.size) }
+                        items(g.items, key = { it.id }) { qso ->
+                            QsoRow(qso, state, showDate = state.sortBy != SortBy.DATE)
                         }
                     }
                 }
@@ -138,40 +178,197 @@ fun LogPane(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-private fun DayHeader(day: LocalDate, count: Int) {
+private val SHORT_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yy")
+
+private class Group(val key: String, val title: String?, val items: List<Qso>)
+
+private fun dayTitle(day: LocalDate): String {
     val today = LocalDate.now(ZoneOffset.UTC)
-    val label = when (day) {
+    return when (day) {
         today -> "Сегодня, ${DATE_FMT.format(day)}"
         today.minusDays(1) -> "Вчера, ${DATE_FMT.format(day)}"
         else -> DATE_FMT.format(day)
     }
+}
+
+/** The log as sections for the chosen sort. The list arrives newest first. */
+private fun groupAndSort(list: List<Qso>, by: SortBy, desc: Boolean): List<Group> {
+    val newestFirst = list.sortedByDescending { it.timeUtc }
+    return when (by) {
+        SortBy.DATE -> {
+            val byDay = (if (desc) newestFirst else newestFirst.reversed()).groupBy { utc(it.timeUtc).toLocalDate() }
+            byDay.map { (day, items) -> Group("d$day", dayTitle(day), items) }
+        }
+        SortBy.DISTANCE -> {
+            // Contacts without a distance go last in both directions.
+            val known = newestFirst.filter { it.distanceKm != null }.let { l -> if (desc) l.sortedByDescending { it.distanceKm } else l.sortedBy { it.distanceKm } }
+            val unknown = newestFirst.filter { it.distanceKm == null }
+            listOfNotNull(
+                Group("dist", null, known),
+                if (unknown.isNotEmpty()) Group("nodist", "Расстояние неизвестно", unknown) else null,
+            )
+        }
+        SortBy.CALL -> {
+            val byCall = newestFirst.groupBy { it.call }
+            val calls = if (desc) byCall.keys.sortedDescending() else byCall.keys.sorted()
+            calls.map { Group("c$it", it, byCall.getValue(it)) }
+        }
+        SortBy.BAND -> {
+            val byBand = newestFirst.groupBy { it.band }
+            // Known bands in frequency order, anything else after them.
+            val order = byBand.keys.sortedWith(compareBy({ BANDS.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } }, { it }))
+            (if (desc) order.reversed() else order).map { Group("b$it", it.ifBlank { "Без диапазона" }, byBand.getValue(it)) }
+        }
+    }
+}
+
+/** Four sort buttons in one row, icon over label; the selected one shows the direction arrow. */
+@Composable
+private fun SortBar(state: AppState) {
+    val x = LocalExtra.current
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        SortBy.entries.forEach { by ->
+            val selected = state.sortBy == by
+            val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+            Column(
+                Modifier.weight(1f).fillMaxHeight()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
+                    .clickable(onClickLabel = "Сортировать: ${by.label}") { state.sort(by) }
+                    .padding(vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        when (by) {
+                            SortBy.DATE -> Icons.Filled.CalendarMonth
+                            SortBy.DISTANCE -> Icons.Filled.Straighten
+                            SortBy.CALL -> Icons.Filled.SortByAlpha
+                            SortBy.BAND -> Icons.Filled.GraphicEq
+                        },
+                        null,
+                        Modifier.size(22.dp),
+                        tint = fg,
+                    )
+                    if (selected) {
+                        Icon(
+                            if (state.sortDesc) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
+                            if (state.sortDesc) "по убыванию" else "по возрастанию",
+                            Modifier.size(18.dp),
+                            tint = fg,
+                        )
+                    }
+                }
+                Text(by.label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupHeader(title: String, count: Int) {
     Row(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(top = 10.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label.uppercase(), style = MaterialTheme.typography.labelMedium, color = LocalExtra.current.muted, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
+        Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = LocalExtra.current.muted, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
         Text("$count QSO", style = MaterialTheme.typography.labelMedium, color = LocalExtra.current.muted)
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/** Replaces the log header while records are picked: count, select all, export to ADIF, cancel. */
 @Composable
-private fun QsoRow(qso: Qso, selected: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun SelectionBar(state: AppState, onExport: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 16.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = state::clearSelection, modifier = Modifier.size(56.dp)) {
+            Icon(Icons.Filled.Close, "Отменить выбор (Esc)", Modifier.size(30.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text("Выбрано: ${state.selected.size}", style = MaterialTheme.typography.headlineSmall)
+            Text("Щёлкайте записи, чтобы добавить", style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
+        }
+        Tip("Выбрать все") {
+            IconButton(onClick = state::selectAllShown, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Filled.SelectAll, "Выбрать все", Modifier.size(28.dp))
+            }
+        }
+        Button(onClick = onExport, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp)) {
+            Icon(Icons.Filled.FileUpload, null)
+            Spacer(Modifier.width(6.dp))
+            Text("ADIF", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@Composable
+private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
     val x = LocalExtra.current
     val shape = RoundedCornerShape(14.dp)
+    val selecting = state.selecting
+    val picked = qso.id in state.selected
+    val open = !selecting && state.pane == Pane.Edit && state.form.id == qso.id
+    val highlighted = picked || open
+    val window = LocalWindowInfo.current
     Row(
         Modifier.fillMaxWidth()
-            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape)
-            .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else x.line, shape)
-            .clickable(onClick = onClick)
+            .background(if (highlighted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape)
+            .border(if (highlighted) 2.dp else 1.dp, if (highlighted) MaterialTheme.colorScheme.primary else x.line, shape)
+            .combinedClickable(
+                onClick = {
+                    // ⌘-click (macOS) or Ctrl-click picks records, like a long press.
+                    val mods = window.keyboardModifiers
+                    val multi = if (IS_MAC) mods.isMetaPressed else mods.isCtrlPressed
+                    if (selecting || multi) state.toggleSelected(qso.id) else state.edit(qso)
+                },
+                onLongClickLabel = "Выбрать запись",
+                onLongClick = { state.toggleSelected(qso.id) },
+            )
             .padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (selecting) {
+            Icon(
+                if (picked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                if (picked) "Выбрана" else "Не выбрана",
+                Modifier.size(28.dp),
+                tint = if (picked) MaterialTheme.colorScheme.primary else x.muted,
+            )
+            Spacer(Modifier.width(10.dp))
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(TIME_FMT.format(utc(qso.timeUtc)) + " UTC", fontFamily = Mono, fontSize = 16.sp, color = x.muted)
+                if (qso.audio.isNotBlank()) {
+                    Icon(Icons.Filled.Mic, "Есть голосовая заметка", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                }
+                // Saved while QRZ.ru was unreachable: fetch the station data again.
+                if (qso.pendingLookup && !selecting) {
+                    if (qso.id in state.refreshing) {
+                        CircularProgressIndicator(Modifier.padding(horizontal = 8.dp).size(26.dp), strokeWidth = 3.dp)
+                    } else {
+                        Tip("Обновить данные с QRZ.ru") {
+                            FilledTonalIconButton(onClick = { state.refreshLookup(qso) }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Filled.Refresh, "Обновить данные с QRZ.ru", Modifier.size(24.dp))
+                            }
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                // Outside the date sort there are no day headers, so the row carries its own date.
+                val t = utc(qso.timeUtc)
+                Text(
+                    (if (showDate) SHORT_DATE.format(t) + " " else "") + TIME_FMT.format(t) + " UTC",
+                    fontFamily = Mono, fontSize = 16.sp, color = x.muted,
+                )
             }
             val meta = listOfNotNull(
                 qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null },
@@ -182,11 +379,23 @@ private fun QsoRow(qso: Qso, selected: Boolean, onClick: () -> Unit, onDelete: (
             if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ")
             if (who.isNotEmpty()) Text(who, style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            else if (qso.pendingLookup) Text("Данные QRZ.ru не получены", style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1)
         }
-        TooltipArea(tooltip = {
-            Text("Удалить", Modifier.background(MaterialTheme.colorScheme.inverseSurface, RoundedCornerShape(6.dp)).padding(8.dp), color = MaterialTheme.colorScheme.inverseOnSurface)
-        }) {
-            IconButton(onClick = onDelete) { Icon(Icons.Filled.DeleteOutline, "Удалить связь с ${qso.call}", tint = x.muted) }
+        if (!selecting) {
+            Tip("Удалить") {
+                IconButton(onClick = { state.delete(qso) }) { Icon(Icons.Filled.DeleteOutline, "Удалить связь с ${qso.call}", tint = x.muted) }
+            }
+        } else {
+            Spacer(Modifier.width(10.dp))
         }
     }
+}
+
+/** Tooltip on hover, for icon-only buttons. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun Tip(text: String, content: @Composable () -> Unit) {
+    TooltipArea(tooltip = {
+        Text(text, Modifier.background(MaterialTheme.colorScheme.inverseSurface, RoundedCornerShape(6.dp)).padding(8.dp), color = MaterialTheme.colorScheme.inverseOnSurface)
+    }) { content() }
 }

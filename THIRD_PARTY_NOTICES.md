@@ -11,7 +11,7 @@
 | Compose Multiplatform (JetBrains) | интерфейс версии для компьютера | Apache License 2.0 |
 | sqlite-jdbc (Xerial) | база данных версии для компьютера | Apache License 2.0 |
 | java-keyring | хранение пароля в системной связке ключей | BSD 3-Clause |
-| Eclipse Temurin (OpenJDK) | встроенная Java в сборках для Windows и macOS | GPLv2 with Classpath Exception |
+| Eclipse Temurin (OpenJDK) | встроенная Java в сборках для macOS, Windows и Linux | GPLv2 with Classpath Exception |
 | Launch4j | запускатель `QSO-LOG.exe` | BSD / MIT (заголовок exe) |
 
 Картографические данные © участники OpenStreetMap, лицензия ODbL. Тайлы загружаются с серверов OpenStreetMap

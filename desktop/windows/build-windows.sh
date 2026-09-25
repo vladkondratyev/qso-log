@@ -13,9 +13,9 @@
 #   LAUNCH4J  Launch4j 3.50 for macOS          (default ~/.gradle/jdks/launch4j)
 set -euo pipefail
 
-VERSION=1.1.1
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
+VERSION=$(sed -n 's/^val appVersion = "\(.*\)"/\1/p' "$ROOT/desktop/build.gradle.kts")
 MAC_JDK="${MAC_JDK:-$HOME/.gradle/jdks/jdk-17.0.20.1+1/Contents/Home}"
 WIN_JDK="${WIN_JDK:-$HOME/.gradle/jdks/win/jdk-17.0.20.1+1}"
 LAUNCH4J="${LAUNCH4J:-$HOME/.gradle/jdks/launch4j}"
@@ -44,7 +44,9 @@ echo "2/4 Java для Windows (jlink)"
     --output "$OUT/runtime"
 
 echo "3/4 QSO-LOG.exe (Launch4j)"
-"$MAC_JDK/bin/java" -jar "$LAUNCH4J/launch4j.jar" "$HERE/launch4j.xml" | grep -v "^launch4j: \(Compiling\|Linking\)" || true
+# The config's relative paths work from desktop/build as well as from here; the copy carries the version.
+sed "s/@VERSION@/$VERSION/g" "$HERE/launch4j.xml" > "$ROOT/desktop/build/launch4j.xml"
+"$MAC_JDK/bin/java" -jar "$LAUNCH4J/launch4j.jar" "$ROOT/desktop/build/launch4j.xml" | grep -v "^launch4j: \(Compiling\|Linking\)" || true
 [ -f "$OUT/QSO-LOG.exe" ] || { echo "Launch4j не создал exe" >&2; exit 1; }
 # Latin file name (Cyrillic names in a zip made on a Mac can look garbled in Explorer); BOM + CRLF for Notepad.
 { printf '\xef\xbb\xbf'; sed 's/$/\r/' "$HERE/README.txt"; } > "$OUT/README.txt"

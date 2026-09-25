@@ -3,6 +3,7 @@ package ru.r3xed.qsolog.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +60,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image
 import ru.r3xed.qsolog.AppDirs
+import ru.r3xed.qsolog.USER_AGENT
 import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.LatLon
 import java.io.File
@@ -103,7 +105,7 @@ private object Tiles {
             gate.withPermit {
                 try {
                     val conn = URL("https://tile.openstreetmap.org/$z/$x/$y.png").openConnection() as HttpURLConnection
-                    conn.setRequestProperty("User-Agent", "QSOLog/1.1 (+https://github.com/vladkondratyev/qso-log)")
+                    conn.setRequestProperty("User-Agent", USER_AGENT)
                     conn.connectTimeout = 10_000
                     conn.readTimeout = 15_000
                     if (conn.responseCode != 200) return null
@@ -142,11 +144,16 @@ private fun unwrapped(points: List<LatLon>): List<LatLon> {
     }
 }
 
+/** A labelled point on the map; [onClick] makes it clickable. */
+class MapMarker(val pos: LatLon, val label: String, val color: Color, val onClick: (() -> Unit)? = null)
+
+/** Zoom level and centre in world pixels, kept by the caller to return to the same view. */
+data class MapCamera(val zoom: Int, val cx: Double, val cy: Double)
+
 /**
  * Map with my station, the other station and the great-circle path.
  * [interactive]: drag to pan, wheel to zoom, +/- buttons. Otherwise a static preview.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun TileMap(
     me: LatLon,
@@ -156,27 +163,67 @@ fun TileMap(
     interactive: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val path = remember(me, them) { unwrapped(Geo.greatCircle(me, them, 128)) }
+    val ink = MaterialTheme.colorScheme.onSurface
+    val primary = MaterialTheme.colorScheme.primary
+    val markers = remember(path, myLabel, theirLabel, ink, primary) {
+        listOf(MapMarker(path.first(), myLabel, ink), MapMarker(path.last(), theirLabel, primary))
+    }
+    MarkerMap(markers, path, interactive, filledLabels = false, fitHint = "Показать всю трассу", modifier = modifier)
+}
+
+/**
+ * Tiles with labelled markers and an optional path. The view first fits all markers (or the path).
+ * [filledLabels]: labels in the marker colour with white text (stations map); otherwise white with dark text.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun MarkerMap(
+    markers: List<MapMarker>,
+    path: List<LatLon>?,
+    interactive: Boolean,
+    filledLabels: Boolean,
+    fitHint: String,
+    modifier: Modifier = Modifier,
+    camera: MapCamera? = null,
+    onCamera: (MapCamera) -> Unit = {},
+) {
     val density = LocalDensity.current.density
     val tile = 256f * density // tile edge in pixels; scaled so map text stays readable on HiDPI screens
-    val path = remember(me, them) { unwrapped(Geo.greatCircle(me, them, 128)) }
+    val fitPoints = path ?: markers.map { it.pos }
     var size by remember { mutableStateOf(IntSize.Zero) }
-    var zoom by remember(me, them) { mutableStateOf(-1) }
+    var zoom by remember(fitPoints) { mutableStateOf(camera?.zoom ?: -1) }
     // Map centre in "world pixels" at the current zoom.
-    var cx by remember(me, them) { mutableStateOf(0.0) }
-    var cy by remember(me, them) { mutableStateOf(0.0) }
+    var cx by remember(fitPoints) { mutableStateOf(camera?.cx ?: 0.0) }
+    var cy by remember(fitPoints) { mutableStateOf(camera?.cy ?: 0.0) }
     var scrollAcc by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
     val measurer = rememberTextMeasurer()
     val primary = MaterialTheme.colorScheme.primary
-    val ink = MaterialTheme.colorScheme.onSurface
     val mapBg = MaterialTheme.colorScheme.surfaceVariant
+    val labelStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+
+    // Keeps the world filling the view vertically: no empty band above the Arctic or below the Antarctic.
+    fun minZoomForHeight(): Int {
+        var z = MIN_ZOOM
+        while (z < MAX_ZOOM && tile * 2.0.pow(z) < size.height) z++
+        return z
+    }
+
+    fun clampY() {
+        val world = tile * 2.0.pow(zoom)
+        val half = size.height / 2.0
+        cy = if (world <= size.height) world / 2 else cy.coerceIn(half, world - half)
+    }
 
     fun fit() {
-        if (size.width == 0) return
-        val minX = path.minOf { unitX(it.lon) }; val maxX = path.maxOf { unitX(it.lon) }
-        val minY = path.minOf { unitY(it.lat) }; val maxY = path.maxOf { unitY(it.lat) }
-        var z = MAX_ZOOM
-        while (z > MIN_ZOOM) {
+        if (size.width == 0 || fitPoints.isEmpty()) return
+        val minX = fitPoints.minOf { unitX(it.lon) }; val maxX = fitPoints.maxOf { unitX(it.lon) }
+        val minY = fitPoints.minOf { unitY(it.lat) }; val maxY = fitPoints.maxOf { unitY(it.lat) }
+        // A single point has no extent: show it at a regional zoom instead of the closest one.
+        var z = if (fitPoints.size == 1) 6 else MAX_ZOOM
+        val floor = minZoomForHeight()
+        while (z > floor) {
             val scale = tile * 2.0.pow(z)
             if ((maxX - minX) * scale <= size.width * 0.72 && (maxY - minY) * scale <= size.height * 0.62) break
             z--
@@ -185,10 +232,11 @@ fun TileMap(
         zoom = z
         cx = (minX + maxX) / 2 * scale
         cy = (minY + maxY) / 2 * scale - size.height * 0.04 // a little extra room above for the labels
+        clampY()
     }
 
     fun zoomBy(dz: Int, anchor: Offset) {
-        val nz = (zoom + dz).coerceIn(MIN_ZOOM, MAX_ZOOM)
+        val nz = (zoom + dz).coerceIn(minZoomForHeight(), MAX_ZOOM)
         if (nz == zoom) return
         val f = 2.0.pow(nz - zoom)
         val wx = cx - size.width / 2 + anchor.x
@@ -196,9 +244,16 @@ fun TileMap(
         cx = wx * f - anchor.x + size.width / 2
         cy = wy * f - anchor.y + size.height / 2
         zoom = nz
+        clampY()
     }
 
-    LaunchedEffect(size, me, them) { if (zoom < 0) fit() }
+    fun screen(p: LatLon): Offset {
+        val scale = tile * (1 shl zoom)
+        return Offset((unitX(p.lon) * scale - (cx - size.width / 2)).toFloat(), (unitY(p.lat) * scale - (cy - size.height / 2)).toFloat())
+    }
+
+    LaunchedEffect(size, fitPoints) { if (zoom < 0) fit() }
+    LaunchedEffect(zoom, cx, cy) { if (zoom >= 0) onCamera(MapCamera(zoom, cx, cy)) }
 
     // Ask for every visible tile; downloads outlive panning so they are not restarted on each move.
     LaunchedEffect(zoom, cx, cy, size) {
@@ -220,6 +275,7 @@ fun TileMap(
                 change.consume()
                 cx -= drag.x
                 cy -= drag.y
+                clampY()
             }
         }.onPointerEvent(PointerEventType.Scroll) { e ->
             val c = e.changes.first()
@@ -228,6 +284,21 @@ fun TileMap(
                 zoomBy(if (scrollAcc < 0) 1 else -1, c.position)
                 scrollAcc = 0f
             }
+        }.pointerInput(markers) {
+            // A click on a dot or its label; the topmost (last drawn) marker wins.
+            detectTapGestures { tap ->
+                if (zoom < 0) return@detectTapGestures
+                val hit = markers.lastOrNull { mk ->
+                    if (mk.onClick == null) return@lastOrNull false
+                    val s = screen(mk.pos)
+                    val w = measurer.measure(mk.label, labelStyle).size
+                    val pad = 5.dp.toPx()
+                    val labelTop = s.y - 14.dp.toPx() - w.height - pad / 2
+                    (tap - s).getDistance() <= 12.dp.toPx() ||
+                        (tap.x in (s.x - w.width / 2f - pad)..(s.x + w.width / 2f + pad) && tap.y in labelTop..(s.y - 14.dp.toPx() + pad / 2))
+                }
+                hit?.onClick?.invoke()
+            }
         }
     }
 
@@ -235,7 +306,6 @@ fun TileMap(
         Canvas(Modifier.fillMaxSize()) {
             if (zoom < 0) return@Canvas
             val n = 1 shl zoom
-            val scale = tile * n
             val ox = cx - size.width / 2; val oy = cy - size.height / 2
             val tx0 = floor(ox / tile).toInt(); val tx1 = floor((ox + size.width) / tile).toInt()
             val ty0 = floor(oy / tile).toInt().coerceAtLeast(0); val ty1 = floor((oy + size.height) / tile).toInt().coerceAtMost(n - 1)
@@ -248,23 +318,24 @@ fun TileMap(
                     dstSize = IntSize(edge, edge),
                 )
             }
-            fun screen(p: LatLon) = Offset((unitX(p.lon) * scale - ox).toFloat(), (unitY(p.lat) * scale - oy).toFloat())
 
-            val line = Path()
-            path.forEachIndexed { i, p -> val s = screen(p); if (i == 0) line.moveTo(s.x, s.y) else line.lineTo(s.x, s.y) }
-            drawPath(line, Color.White.copy(alpha = 0.85f), style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-            drawPath(line, primary, style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            if (path != null) {
+                val line = Path()
+                path.forEachIndexed { i, p -> val s = screen(p); if (i == 0) line.moveTo(s.x, s.y) else line.lineTo(s.x, s.y) }
+                drawPath(line, Color.White.copy(alpha = 0.85f), style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                drawPath(line, primary, style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
 
-            listOf(Triple(path.first(), myLabel, ink), Triple(path.last(), theirLabel, primary)).forEach { (p, label, color) ->
-                val s = screen(p)
+            markers.forEach { mk ->
+                val s = screen(mk.pos)
                 drawCircle(Color.White, radius = 9.dp.toPx(), center = s)
-                drawCircle(color, radius = 6.5.dp.toPx(), center = s)
-                if (label.isNotBlank()) {
-                    val text = measurer.measure(label, TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF14202B)))
+                drawCircle(mk.color, radius = 6.5.dp.toPx(), center = s)
+                if (mk.label.isNotBlank()) {
+                    val text = measurer.measure(mk.label, labelStyle.copy(color = if (filledLabels) Color.White else Color(0xFF14202B)))
                     val pad = 5.dp.toPx()
                     val tl = Offset(s.x - text.size.width / 2f, s.y - 14.dp.toPx() - text.size.height)
                     drawRoundRect(
-                        Color.White.copy(alpha = 0.92f),
+                        if (filledLabels) mk.color else Color.White.copy(alpha = 0.92f),
                         topLeft = tl - Offset(pad, pad / 2),
                         size = androidx.compose.ui.geometry.Size(text.size.width + 2 * pad, text.size.height + pad),
                         cornerRadius = CornerRadius(6.dp.toPx()),
@@ -284,7 +355,7 @@ fun TileMap(
                 val center = Offset(size.width / 2f, size.height / 2f)
                 MapButton({ zoomBy(1, center) }) { Icon(Icons.Filled.Add, "Приблизить") }
                 MapButton({ zoomBy(-1, center) }) { Icon(Icons.Filled.Remove, "Отдалить") }
-                MapButton({ fit() }) { Icon(Icons.Filled.CenterFocusStrong, "Показать всю трассу") }
+                MapButton({ fit() }) { Icon(Icons.Filled.CenterFocusStrong, fitHint) }
             }
         }
     }

@@ -24,7 +24,7 @@ data class Qso(
     val comment: String = "",
     val myCall: String = "",
     val myLocator: String = "",
-    /** File name of the voice note in the app's audio folder, or empty. Android only; not exported to CSV. */
+    /** File name of the voice note in the app's audio folder, or empty. Stays on the device; not exported to CSV. */
     val audio: String = "",
     /** ADIF fields without a dedicated property (STATE, CQZ, MY_RIG, …), kept so nothing is lost on import/export. */
     val adif: Map<String, String> = emptyMap(),

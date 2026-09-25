@@ -1,6 +1,5 @@
 package ru.r3xed.qsolog
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +14,7 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -38,6 +38,7 @@ import androidx.compose.ui.window.rememberWindowState
 import ru.r3xed.qsolog.ui.EditPane
 import ru.r3xed.qsolog.ui.LocalExtra
 import ru.r3xed.qsolog.ui.LogPane
+import ru.r3xed.qsolog.ui.MapPane
 import ru.r3xed.qsolog.ui.QsoTheme
 import ru.r3xed.qsolog.ui.SettingsPane
 import java.awt.Dimension
@@ -45,6 +46,7 @@ import java.awt.FileDialog
 import java.io.File
 
 val IS_MAC = System.getProperty("os.name").lowercase().contains("mac")
+val IS_WINDOWS = System.getProperty("os.name").lowercase().contains("win")
 val NEW_SHORTCUT = if (IS_MAC) "⌘N" else "Ctrl+N"
 val SAVE_SHORTCUT = if (IS_MAC) "⌘S" else "Ctrl+S"
 
@@ -64,8 +66,11 @@ fun main() {
             icon = painterResource("icon.png"),
             state = windowState,
             onPreviewKeyEvent = { e ->
-                if (e.type == KeyEventType.KeyDown && e.key == Key.Escape && state.pane != Pane.Empty) {
-                    state.pane = Pane.Empty; true
+                if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) when {
+                    state.selecting -> { state.clearSelection(); true }
+                    state.pane == Pane.Edit -> { state.closeEditor(); true }
+                    state.pane != Pane.Empty -> { state.pane = Pane.Empty; true }
+                    else -> false
                 } else false
             },
         ) {
@@ -86,9 +91,14 @@ fun main() {
                 chooseFile(window, "Импорт лога из CSV", save = false)?.let(state::importCsv)
                 Unit
             }
+            val exportSelected = {
+                chooseFile(window, "Экспорт выбранных связей в ADIF", save = true, suggested = state.selectedAdifFileName(), ext = "adi")
+                    ?.let(state::exportSelectedAdif)
+                Unit
+            }
             MenuBar {
                 Menu("Файл") {
-                    Item("Новая связь", shortcut = shortcut(Key.N), onClick = state::newQso)
+                    Item("Новый QSO", shortcut = shortcut(Key.N), onClick = { state.newQso() })
                     Item("Сохранить связь", enabled = state.pane == Pane.Edit, shortcut = shortcut(Key.S), onClick = state::trySave)
                     Separator()
                     Item("Экспорт лога в ADIF…", onClick = exportAdif)
@@ -97,6 +107,7 @@ fun main() {
                     Item("Экспорт лога в CSV…", onClick = exportCsv)
                     Item("Импорт лога из CSV…", onClick = importCsv)
                     Separator()
+                    Item("Карта QSO", shortcut = shortcut(Key.M), onClick = state::openMap)
                     Item("Настройки", shortcut = shortcut(Key.Comma), onClick = { state.pane = Pane.Settings })
                     if (!IS_MAC) {
                         Separator()
@@ -104,13 +115,22 @@ fun main() {
                     }
                 }
             }
-            QsoTheme { App(state, exportCsv, importCsv) }
+            QsoTheme { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected)) }
         }
     }
 }
 
+/** File dialogs, opened from the menu, the settings pane and the selection bar. */
+class Exports(
+    val exportCsv: () -> Unit,
+    val importCsv: () -> Unit,
+    val exportAdif: () -> Unit,
+    val importAdif: () -> Unit,
+    val exportSelected: () -> Unit,
+)
+
 @Composable
-private fun App(state: AppState, onExport: () -> Unit, onImport: () -> Unit) {
+fun App(state: AppState, files: Exports) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) {
         state.messages.collect { m ->
@@ -122,19 +142,23 @@ private fun App(state: AppState, onExport: () -> Unit, onImport: () -> Unit) {
             if (r == SnackbarResult.ActionPerformed) m.undo?.invoke()
         }
     }
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Row(Modifier.fillMaxSize()) {
-            LogPane(state, NEW_SHORTCUT, Modifier.width(440.dp).fillMaxHeight())
-            VerticalDivider(color = LocalExtra.current.line)
-            Box(Modifier.weight(1f).fillMaxHeight()) {
-                when (state.pane) {
-                    Pane.Empty -> EmptyPane(state)
-                    Pane.Edit -> EditPane(state)
-                    Pane.Settings -> SettingsPane(state, onExport, onImport)
+    // Surface sets the default text colour from the theme, so text is light grey in the dark theme.
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
+        Box(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxSize()) {
+                LogPane(state, NEW_SHORTCUT, files.exportSelected, Modifier.width(460.dp).fillMaxHeight())
+                VerticalDivider(color = LocalExtra.current.line)
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    when (state.pane) {
+                        Pane.Empty -> EmptyPane(state)
+                        Pane.Edit -> EditPane(state)
+                        Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif)
+                        Pane.Map -> MapPane(state)
+                    }
                 }
             }
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).widthIn(max = 640.dp))
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).widthIn(max = 640.dp))
     }
 }
 
@@ -147,7 +171,8 @@ private fun EmptyPane(state: AppState) {
     ) {
         Text("Готов к записи", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "Нажмите «Новая связь» или $NEW_SHORTCUT. Чтобы исправить запись, выберите её в логе слева.",
+            "Нажмите «Добавить QSO» или $NEW_SHORTCUT. Удерживайте кнопку, чтобы записать голосовую заметку. " +
+                "Чтобы исправить запись, выберите её в логе слева.",
             style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.widthIn(max = 560.dp),
         )
         val s = state.settings
@@ -175,3 +200,6 @@ private fun chooseFile(window: ComposeWindow, title: String, save: Boolean, sugg
     val dir = dialog.directory ?: return null
     return if (save && !name.lowercase().endsWith(".$ext")) File(dir, "$name.$ext") else File(dir, name)
 }
+
+const val PROJECT_URL = "https://github.com/vladkondratyev/qso-log"
+val USER_AGENT = "QSO-LOG/$APP_VERSION (+$PROJECT_URL)"

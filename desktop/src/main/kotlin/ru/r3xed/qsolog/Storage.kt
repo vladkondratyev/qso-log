@@ -2,7 +2,10 @@ package ru.r3xed.qsolog
 
 import com.github.javakeyring.Keyring
 import ru.r3xed.qsolog.data.Adif
+import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.CallHistory
+import ru.r3xed.qsolog.data.DEFAULT_BANDS
+import ru.r3xed.qsolog.data.DEFAULT_MODES
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.data.StationSettings
 import java.io.File
@@ -14,22 +17,24 @@ import java.sql.Types
 import java.util.Properties
 
 /**
- * Per-user data folder: ~/Library/Application Support/QSO Log on macOS, %APPDATA%\QSO Log on Windows.
- * Kept under the old name after the rename to QSO-LOG, so existing logs and settings stay where they are.
+ * Per-user data folder: ~/Library/Application Support/QSO Log on macOS, %APPDATA%\QSO Log on Windows,
+ * ~/.local/share/qso-log on Linux. The macOS and Windows folders keep the name from before the rename to QSO-LOG,
+ * so existing logs and settings stay where they are. The `qsolog.data` system property overrides it (tests, screenshots).
  */
 object AppDirs {
     val data: File by lazy {
         val os = System.getProperty("os.name").lowercase()
         val home = System.getProperty("user.home")
-        val dir = when {
+        val dir = System.getProperty("qsolog.data")?.let(::File) ?: when {
             os.contains("mac") -> File(home, "Library/Application Support/QSO Log")
             os.contains("win") -> File(System.getenv("APPDATA") ?: home, "QSO Log")
-            else -> File(home, ".qsolog")
+            else -> File(System.getenv("XDG_DATA_HOME")?.ifBlank { null } ?: "$home/.local/share", "qso-log")
         }
         dir.mkdirs()
         dir
     }
     val tiles: File get() = File(data, "tiles").apply { mkdirs() }
+    val audio: File get() = File(data, "audio").apply { mkdirs() }
 }
 
 /** The log in a local SQLite file, same schema as the Android app. */
@@ -54,13 +59,12 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
                 )
                 """.trimIndent()
             )
-            // Added in 1.1.0: extra ADIF fields in the same "<KEY:len>value" form as on Android.
-            val hasExtra = it.executeQuery("PRAGMA table_info(qso)").use { rs ->
-                var found = false
-                while (rs.next()) if (rs.getString("name") == "adif_extra") found = true
-                found
-            }
-            if (!hasExtra) it.executeUpdate("ALTER TABLE qso ADD COLUMN adif_extra TEXT")
+            // Columns added later, same names as on Android: extra ADIF fields in "<KEY:len>value" form (1.1.0),
+            // voice note file and "QRZ.ru data still missing" mark (1.2.0).
+            val have = it.executeQuery("PRAGMA table_info(qso)").use { rs -> buildSet { while (rs.next()) add(rs.getString("name")) } }
+            if ("adif_extra" !in have) it.executeUpdate("ALTER TABLE qso ADD COLUMN adif_extra TEXT")
+            if ("audio" !in have) it.executeUpdate("ALTER TABLE qso ADD COLUMN audio TEXT")
+            if ("pending_lookup" !in have) it.executeUpdate("ALTER TABLE qso ADD COLUMN pending_lookup INTEGER")
             it.executeUpdate("CREATE INDEX IF NOT EXISTS qso_call ON qso(call)")
             it.executeUpdate("CREATE INDEX IF NOT EXISTS qso_time ON qso(time_utc)")
         }
@@ -121,6 +125,18 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
         conn.prepareStatement("DELETE FROM qso WHERE id = ?").use { it.setLong(1, id); it.executeUpdate() }
     }
 
+    /** Deletes every record; returns how many there were. */
+    @Synchronized
+    fun deleteAll(): Int = conn.createStatement().use { it.executeUpdate("DELETE FROM qso") }
+
+    /** Voice note files that records refer to. */
+    @Synchronized
+    fun audioFiles(): Set<String> = conn.createStatement().use { st ->
+        st.executeQuery("SELECT audio FROM qso WHERE audio IS NOT NULL AND audio != ''").use { rs ->
+            buildSet { while (rs.next()) add(rs.getString(1)) }
+        }
+    }
+
     /** Same call, same minute, same band and mode: treated as the same contact on import. */
     @Synchronized
     fun exists(qso: Qso): Boolean =
@@ -163,6 +179,7 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
             q.name, q.qth, q.country, q.locator, q.lat, q.lon, q.distanceKm, q.bearing,
             q.power, if (q.qslSent) 1 else 0, if (q.qslRcvd) 1 else 0, q.comment,
             q.myCall, q.myLocator, q.createdAt, q.updatedAt, Adif.encodeFields(q.adif),
+            q.audio, if (q.pendingLookup) 1 else 0,
         )
         values.forEachIndexed { i, v ->
             when (v) {
@@ -192,6 +209,8 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
         myCall = str("my_call"), myLocator = str("my_locator"),
         createdAt = getLong("created_at"), updatedAt = getLong("updated_at"),
         adif = Adif.decodeFields(getString("adif_extra")),
+        audio = str("audio"),
+        pendingLookup = getInt("pending_lookup") == 1,
     )
 
     private companion object {
@@ -199,7 +218,7 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
             "call", "time_utc", "band", "mode", "freq", "rst_sent", "rst_rcvd",
             "name", "qth", "country", "locator", "lat", "lon", "distance_km", "bearing",
             "power", "qsl_sent", "qsl_rcvd", "comment", "my_call", "my_locator", "created_at", "updated_at",
-            "adif_extra",
+            "adif_extra", "audio", "pending_lookup",
         )
     }
 }
@@ -212,7 +231,8 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
 class Settings {
     private val file = File(AppDirs.data, "settings.properties")
     private val props = Properties().apply { if (file.exists()) file.inputStream().use { load(it) } }
-    private val keyring: Keyring? = try { Keyring.create() } catch (e: Exception) { null }
+    // A test or screenshot run with its own data folder must not touch the real keychain.
+    private val keyring: Keyring? = if (System.getProperty("qsolog.data") != null) null else try { Keyring.create() } catch (e: Exception) { null }
 
     private fun get(key: String, def: String = "") = props.getProperty(key, def)
     private fun put(key: String, value: String) {
@@ -246,6 +266,8 @@ class Settings {
         myQth = get("my_qth"),
         qrzLogin = get("qrz_login"),
         qrzPassword = cachedPassword.orEmpty(),
+        power = get("my_power"),
+        station = AdifLabels.MINE.keys.associateWith { get("station_$it") }.filterValues { it.isNotEmpty() },
     )
 
     fun password(): String = cachedPassword ?: loadPassword().also { cachedPassword = it }
@@ -254,6 +276,8 @@ class Settings {
         props.setProperty("my_call", s.myCall.trim().uppercase())
         props.setProperty("my_locator", s.myLocator.trim())
         props.setProperty("my_qth", s.myQth.trim())
+        props.setProperty("my_power", s.power.trim())
+        for (key in AdifLabels.MINE.keys) props.setProperty("station_$key", s.station[key].orEmpty().trim())
         put("qrz_login", s.qrzLogin.trim())
         // Until the stored password has been read, an empty field means "not loaded yet", not "cleared".
         if (cachedPassword != null && s.qrzPassword != cachedPassword) {
@@ -274,6 +298,23 @@ class Settings {
     var lastPower: String
         get() = get("last_power")
         set(v) = put("last_power", v)
+
+    /** Bands and modes shown as buttons in the contact card. */
+    var enabledBands: Set<String>
+        get() = props.getProperty("enabled_bands")?.let(::splitSet) ?: DEFAULT_BANDS.toSet()
+        set(v) = put("enabled_bands", v.joinToString(","))
+    var enabledModes: Set<String>
+        get() = props.getProperty("enabled_modes")?.let(::splitSet) ?: DEFAULT_MODES.toSet()
+        set(v) = put("enabled_modes", v.joinToString(","))
+
+    var sortBy: String
+        get() = get("sort_by", "DATE")
+        set(v) = put("sort_by", v)
+    var sortDesc: Boolean
+        get() = get("sort_desc", "true") == "true"
+        set(v) = put("sort_desc", v.toString())
+
+    private fun splitSet(s: String) = s.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 
     private companion object {
         const val SERVICE = "QSO Log"

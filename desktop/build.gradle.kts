@@ -9,13 +9,29 @@ kotlin {
     jvmToolchain(17)
 }
 
-// -Ptarget=windows builds the jar with Windows graphics libraries (used for the Windows bundle made on a Mac).
+// -Ptarget=windows / linux builds the jar with that system's graphics libraries (bundles for them are made on a Mac).
 val target = (findProperty("target") as String?) ?: "current"
+
+val appVersion = "1.2.0"
+
+// APP_VERSION for the settings pane, the ADIF header and the HTTP User-Agent.
+val generateBuildInfo by tasks.registering {
+    val out = layout.buildDirectory.dir("generated/buildinfo")
+    inputs.property("version", appVersion)
+    outputs.dir(out)
+    doLast {
+        val f = out.get().file("ru/r3xed/qsolog/BuildInfo.kt").asFile
+        f.parentFile.mkdirs()
+        f.writeText("package ru.r3xed.qsolog\n\nconst val APP_VERSION = \"$appVersion\"\n")
+    }
+}
+kotlin.sourceSets["main"].kotlin.srcDir(generateBuildInfo)
 
 dependencies {
     implementation(project(":shared"))
     when (target) {
         "windows" -> implementation(compose.desktop.windows_x64)
+        "linux" -> implementation(compose.desktop.linux_x64)
         else -> implementation(compose.desktop.currentOs)
     }
     implementation(compose.material3)
@@ -34,9 +50,9 @@ compose.desktop {
             optimize.set(false)
         }
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb)
             packageName = "QSO-LOG"
-            packageVersion = "1.1.1"
+            packageVersion = appVersion
             description = "Аппаратный журнал QSO с поиском по QRZ.ru"
             vendor = "R3XED"
             // From `suggestRuntimeModules`, plus TLS ciphers for HTTPS and Russian locale data.
@@ -47,6 +63,13 @@ compose.desktop {
             macOS {
                 bundleID = "ru.r3xed.qsolog"
                 iconFile.set(project.file("icons/icon.icns"))
+                // Without this key macOS refuses the microphone to the app instead of asking the user.
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>NSMicrophoneUsageDescription</key>
+                        <string>QSO-LOG записывает голосовые заметки к связям.</string>
+                    """.trimIndent()
+                }
             }
             windows {
                 iconFile.set(project.file("icons/icon.ico"))
@@ -54,6 +77,14 @@ compose.desktop {
                 shortcut = true
                 menu = true
                 upgradeUuid = "6f1d0a52-3c3e-4f7e-9a51-5b8c2f0e9a11"
+            }
+            linux {
+                iconFile.set(project.file("icons/icon.png"))
+                packageName = "qso-log"
+                debMaintainer = "R3XED <13299424+vladkondratyev@users.noreply.github.com>"
+                menuGroup = "HamRadio"
+                appCategory = "hamradio"
+                shortcut = true
             }
         }
     }
@@ -65,4 +96,13 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+// README screenshots with made-up data: docs/screenshots/desktop-*.png
+tasks.register<JavaExec>("screenshots") {
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("ru.r3xed.qsolog.ScreenshotsKt")
+    args(rootProject.file("docs/screenshots").absolutePath)
+    jvmArgs("-Djava.awt.headless=true")
 }
