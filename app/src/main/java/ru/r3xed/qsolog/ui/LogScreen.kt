@@ -124,7 +124,7 @@ fun LogScreen(
                     )
                 }
                 FilledTonalIconButton(onClick = vm::openMap, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Filled.Map, contentDescription = "Карта связей", modifier = Modifier.size(30.dp))
+                    Icon(Icons.Filled.Map, contentDescription = "Карта QSO", modifier = Modifier.size(30.dp))
                 }
                 Spacer(Modifier.width(10.dp))
                 FilledTonalIconButton(onClick = { vm.screen = ru.r3xed.qsolog.Screen.Settings }, modifier = Modifier.size(56.dp)) {

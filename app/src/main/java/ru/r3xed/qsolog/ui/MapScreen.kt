@@ -63,7 +63,7 @@ fun MapScreen(vm: AppViewModel) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад", Modifier.size(30.dp))
             }
             Column {
-                Text("Карта связей", style = MaterialTheme.typography.headlineSmall)
+                Text("Карта QSO", style = MaterialTheme.typography.headlineSmall)
                 Text(
                     "позывных на карте: ${stations.size}" + if (withoutPosition > 0) " · без координат: $withoutPosition" else "",
                     style = MaterialTheme.typography.bodyMedium, color = x.muted,
