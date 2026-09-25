@@ -35,8 +35,8 @@ compose.desktop {
         }
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe)
-            packageName = "QSO Log"
-            packageVersion = "1.1.0"
+            packageName = "QSO-LOG"
+            packageVersion = "1.1.1"
             description = "Аппаратный журнал QSO с поиском по QRZ.ru"
             vendor = "R3XED"
             // From `suggestRuntimeModules`, plus TLS ciphers for HTTPS and Russian locale data.
@@ -50,7 +50,7 @@ compose.desktop {
             }
             windows {
                 iconFile.set(project.file("icons/icon.ico"))
-                menuGroup = "QSO Log"
+                menuGroup = "QSO-LOG"
                 shortcut = true
                 menu = true
                 upgradeUuid = "6f1d0a52-3c3e-4f7e-9a51-5b8c2f0e9a11"

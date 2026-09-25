@@ -4,6 +4,7 @@
 |---|---|---|
 | Atkinson Hyperlegible (Braille Institute of America) | шрифт интерфейса, `app/src/main/res/font/`, `desktop/src/main/resources/font/` | SIL Open Font License 1.1, [текст](licenses/OFL-AtkinsonHyperlegible.txt) |
 | JetBrains Mono | шрифт позывных и чисел, там же | SIL Open Font License 1.1, [текст](licenses/OFL-JetBrainsMono.txt) |
+| Russo One (Jovanny Lemonad) | логотип QSO-LOG, `russo_one.ttf` там же | SIL Open Font License 1.1, [текст](licenses/OFL-RussoOne.txt) |
 | osmdroid | карты | Apache License 2.0 |
 | AndroidX, Jetpack Compose, Material 3 | интерфейс | Apache License 2.0 |
 | Kotlin, kotlinx.coroutines | язык и асинхронность | Apache License 2.0 |

@@ -404,7 +404,7 @@ class AppState {
             val msg = try {
                 val count = withContext(Dispatchers.IO) {
                     val list = db.all()
-                    file.outputStream().use { Adif.export(list, it, program = "QSO Log", version = "1.1.0") }
+                    file.outputStream().use { Adif.export(list, it, program = "QSO-LOG", version = "1.1.1") }
                     list.size
                 }
                 "Экспортировано в ADIF: $count, файл ${file.name}"

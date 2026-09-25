@@ -13,7 +13,10 @@ import java.sql.ResultSet
 import java.sql.Types
 import java.util.Properties
 
-/** Per-user data folder: ~/Library/Application Support/QSO Log on macOS, %APPDATA%\QSO Log on Windows. */
+/**
+ * Per-user data folder: ~/Library/Application Support/QSO Log on macOS, %APPDATA%\QSO Log on Windows.
+ * Kept under the old name after the rename to QSO-LOG, so existing logs and settings stay where they are.
+ */
 object AppDirs {
     val data: File by lazy {
         val os = System.getProperty("os.name").lowercase()

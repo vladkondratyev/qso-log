@@ -112,7 +112,7 @@ fun SettingsPane(vm: AppState, onExport: () -> Unit, onImport: () -> Unit) {
             ActionButton("Проверить подключение", null, vm::testQrz)
             Note("Пароль хранится в системной связке ключей (Связка ключей macOS или Диспетчер учётных данных Windows).")
 
-            Section("Лог QSO · записей: ${vm.total}")
+            Section("Журнал связей · записей: ${vm.total}")
             ActionButton("Экспорт лога в CSV", Icons.Filled.FileUpload, onExport)
             ActionButton("Импорт лога из CSV", Icons.Filled.FileDownload, onImport)
             Note("В файл попадают все поля каждой связи: дата и время UTC, диапазон, частота, вид, RST, имя, QTH, локатор, координаты, расстояние, азимут, мощность, QSL, комментарий. При импорте повторы пропускаются. Разделитель «;», файл открывается в Excel.")

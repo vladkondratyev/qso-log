@@ -53,14 +53,14 @@ private fun shortcut(key: Key) = KeyShortcut(key, meta = IS_MAC, ctrl = !IS_MAC)
 fun main() {
     if (IS_MAC) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")
-        System.setProperty("apple.awt.application.name", "QSO Log")
+        System.setProperty("apple.awt.application.name", "QSO-LOG")
     }
     application {
         val state = remember { AppState() }
         val windowState = rememberWindowState(width = 1280.dp, height = 880.dp, position = WindowPosition(Alignment.Center))
         Window(
             onCloseRequest = { state.flushSettings(); exitApplication() },
-            title = "QSO Log",
+            title = "QSO-LOG",
             icon = painterResource("icon.png"),
             state = windowState,
             onPreviewKeyEvent = { e ->

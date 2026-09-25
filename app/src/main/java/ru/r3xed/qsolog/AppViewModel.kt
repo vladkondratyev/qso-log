@@ -567,7 +567,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val count = withContext(Dispatchers.IO) {
                     val list = db.all().let { all -> if (only == null) all else all.filter { it.id in only } }
                     getApplication<Application>().contentResolver.openOutputStream(uri)!!.use {
-                        Adif.export(list, it, program = "QSO Log", version = BuildConfig.VERSION_NAME)
+                        Adif.export(list, it, program = "QSO-LOG", version = BuildConfig.VERSION_NAME)
                     }
                     list.size
                 }

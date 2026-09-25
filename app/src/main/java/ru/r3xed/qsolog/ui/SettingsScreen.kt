@@ -147,7 +147,7 @@ fun SettingsScreen(
             ToggleGrid(MODES, vm.enabledModes, vm::setModeEnabled)
             Note("Если у записи диапазон или вид, который здесь выключен, кнопка для него в её карточке всё равно видна.")
 
-            Section("Лог QSO · записей: ${vm.total}")
+            Section("Журнал связей · записей: ${vm.total}")
             ActionButton("Экспорт в ADIF", Icons.Filled.FileUpload, onExportAdif)
             ActionButton("Импорт из ADIF", Icons.Filled.FileDownload, onImportAdif)
             Note("ADIF (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com. Файл сохраняется в кодировке Windows-1251, как у LogHX. При импорте кодировка определяется сама (Windows-1251 или UTF-8). Все поля файла сохраняются в карточке.")

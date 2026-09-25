@@ -107,7 +107,7 @@ fun LogScreen(
             ) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text("Лог QSO", style = MaterialTheme.typography.headlineMedium)
+                        QsoLogo()
                         Text(
                             "v" + BuildConfig.VERSION_NAME,
                             style = MaterialTheme.typography.labelMedium,

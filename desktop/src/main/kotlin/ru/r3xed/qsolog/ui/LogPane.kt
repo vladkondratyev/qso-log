@@ -66,7 +66,7 @@ fun LogPane(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Лог QSO", style = MaterialTheme.typography.headlineMedium)
+                QsoLogo()
                 val me = state.settings.myCall
                 Text((if (me.isNotBlank()) "$me · " else "") + "записей: ${state.total}", style = MaterialTheme.typography.bodyMedium, color = x.muted)
             }
