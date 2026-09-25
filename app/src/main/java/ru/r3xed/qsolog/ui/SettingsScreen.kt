@@ -2,6 +2,7 @@ package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -56,9 +58,11 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.r3xed.qsolog.AppViewModel
+import ru.r3xed.qsolog.BuildConfig
 import ru.r3xed.qsolog.Screen
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.BANDS
@@ -188,10 +192,30 @@ fun SettingsScreen(
                     dismissButton = { TextButton(onClick = { confirmDeleteAll = false }) { Text("Отмена") } },
                 )
             }
+            // About: version, tap to open the project page.
+            val uri = LocalUriHandler.current
+            Column(
+                Modifier.fillMaxWidth().padding(top = 28.dp)
+                    .clickable(onClickLabel = "Открыть страницу проекта на GitHub") { uri.openUri(PROJECT_URL) }
+                    .padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                QsoLogo(fontSize = 22.sp)
+                Text("Версия ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                Text(
+                    PROJECT_URL.removePrefix("https://"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    textDecoration = TextDecoration.Underline,
+                )
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
 }
+
+private const val PROJECT_URL = "https://github.com/vladkondratyev/qso-log"
 
 /** Items with an on/off switch each, two to a row. */
 @Composable

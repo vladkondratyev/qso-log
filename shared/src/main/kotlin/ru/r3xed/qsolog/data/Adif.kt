@@ -46,7 +46,7 @@ object Adif {
 
     // ---------- export ----------
 
-    fun export(list: List<Qso>, out: OutputStream, charset: Charset = WINDOWS_1251, program: String = "QSO Log", version: String = "") {
+    fun export(list: List<Qso>, out: OutputStream, charset: Charset = WINDOWS_1251, program: String = "QSO-LOG", version: String = "") {
         val w = AdiWriter(out, charset)
         w.raw("ADIF export from $program\r\n")
         w.field("ADIF_VER", "3.1.4")

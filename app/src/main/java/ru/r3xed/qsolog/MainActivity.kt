@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -78,30 +80,34 @@ class MainActivity : ComponentActivity() {
                         if (r == SnackbarResult.ActionPerformed) m.undo?.invoke()
                     }
                 }
-                Box(Modifier.fillMaxSize()) {
-                    when (vm.screen) {
-                        Screen.Log -> LogScreen(
-                            vm,
-                            hasMicPermission = {
-                                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                            },
-                            requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
-                            onExportSelected = { exportSelectedAdif.launch(vm.selectedAdifFileName()) },
-                        )
-                        Screen.Map -> MapScreen(vm)
-                        Screen.Edit -> EditScreen(vm)
-                        Screen.Settings -> SettingsScreen(
-                            vm,
-                            onExportCsv = { export.launch(vm.csvFileName()) },
-                            onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
-                            onExportAdif = { exportAdif.launch(vm.adifFileName()) },
-                            onImportAdif = { importAdif.launch(arrayOf("*/*")) },
+                // Surface sets the default text colour from the theme (light grey on the dark theme);
+                // without it Text falls back to black on every theme.
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
+                    Box(Modifier.fillMaxSize()) {
+                        when (vm.screen) {
+                            Screen.Log -> LogScreen(
+                                vm,
+                                hasMicPermission = {
+                                    ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                                },
+                                requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
+                                onExportSelected = { exportSelectedAdif.launch(vm.selectedAdifFileName()) },
+                            )
+                            Screen.Map -> MapScreen(vm)
+                            Screen.Edit -> EditScreen(vm)
+                            Screen.Settings -> SettingsScreen(
+                                vm,
+                                onExportCsv = { export.launch(vm.csvFileName()) },
+                                onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
+                                onExportAdif = { exportAdif.launch(vm.adifFileName()) },
+                                onImportAdif = { importAdif.launch(arrayOf("*/*")) },
+                            )
+                        }
+                        SnackbarHost(
+                            snackbar,
+                            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = if (vm.screen == Screen.Edit) 80.dp else 16.dp),
                         )
                     }
-                    SnackbarHost(
-                        snackbar,
-                        Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = if (vm.screen == Screen.Edit) 80.dp else 16.dp),
-                    )
                 }
             }
         }

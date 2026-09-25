@@ -48,6 +48,8 @@ data class Form(
     val bandRxFollows: Boolean = true,
     val freqRxFollows: Boolean = true,
     val timeOffFollows: Boolean = true,
+    /** See [ru.r3xed.qsolog.data.Qso.pendingLookup]. */
+    val pendingLookup: Boolean = false,
     /** Distance and bearing from an imported log, used when positions are unknown. */
     val distanceKm: Double? = null,
     val bearing: Double? = null,

@@ -29,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -88,8 +87,9 @@ fun MapScreen(vm: AppViewModel) {
 @Composable
 private fun StationsMap(vm: AppViewModel, stations: List<Station>) {
     val context = LocalContext.current
-    val accent = MaterialTheme.colorScheme.primary.toArgb()
-    val dark = MaterialTheme.colorScheme.onBackground.toArgb()
+    // Map tiles stay light in the dark theme too, so labels keep dark fills with white text.
+    val accent = 0xFF0A5C8A.toInt()
+    val dark = 0xFF14202B.toInt()
     val map = remember {
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)

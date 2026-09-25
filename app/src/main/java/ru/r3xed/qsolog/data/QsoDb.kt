@@ -6,7 +6,7 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class QsoDb(context: Context) : SQLiteOpenHelper(context, "qsolog.db", null, 3) {
+class QsoDb(context: Context) : SQLiteOpenHelper(context, "qsolog.db", null, 4) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -22,7 +22,8 @@ class QsoDb(context: Context) : SQLiteOpenHelper(context, "qsolog.db", null, 3) 
                 power TEXT, qsl_sent INTEGER, qsl_rcvd INTEGER, comment TEXT,
                 my_call TEXT, my_locator TEXT,
                 created_at INTEGER, updated_at INTEGER,
-                audio TEXT, adif_extra TEXT
+                audio TEXT, adif_extra TEXT,
+                pending_lookup INTEGER
             )
             """.trimIndent()
         )
@@ -33,6 +34,7 @@ class QsoDb(context: Context) : SQLiteOpenHelper(context, "qsolog.db", null, 3) 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) db.execSQL("ALTER TABLE qso ADD COLUMN audio TEXT")
         if (oldVersion < 3) db.execSQL("ALTER TABLE qso ADD COLUMN adif_extra TEXT")
+        if (oldVersion < 4) db.execSQL("ALTER TABLE qso ADD COLUMN pending_lookup INTEGER")
     }
 
     /** Voice note file names referenced by the log, used to clean up abandoned recordings. */
@@ -125,6 +127,7 @@ class QsoDb(context: Context) : SQLiteOpenHelper(context, "qsolog.db", null, 3) 
         put("created_at", createdAt); put("updated_at", updatedAt)
         put("audio", audio)
         put("adif_extra", Adif.encodeFields(adif))
+        put("pending_lookup", if (pendingLookup) 1 else 0)
     }
 
     private fun Cursor.str(col: String) = getString(getColumnIndexOrThrow(col)) ?: ""
@@ -147,5 +150,6 @@ class QsoDb(context: Context) : SQLiteOpenHelper(context, "qsolog.db", null, 3) 
         createdAt = lng("created_at"), updatedAt = lng("updated_at"),
         audio = str("audio"),
         adif = Adif.decodeFields(str("adif_extra")),
+        pendingLookup = getColumnIndexOrThrow("pending_lookup").let { !isNull(it) && getInt(it) == 1 },
     )
 }

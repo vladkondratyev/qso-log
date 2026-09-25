@@ -1,13 +1,11 @@
 package ru.r3xed.qsolog.ui
 
 import android.graphics.Paint
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlin.math.ln
@@ -34,7 +32,7 @@ fun PathMap(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val lineColor = MaterialTheme.colorScheme.primary.toArgb()
+    val lineColor = 0xFF0A5C8A.toInt() // tiles are light in both themes
     val map = remember {
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)

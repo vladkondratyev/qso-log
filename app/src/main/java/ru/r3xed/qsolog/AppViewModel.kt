@@ -291,6 +291,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             timeOff = Adif.displayTime(qso.adif["TIME_OFF"]),
             bandRxFollows = qso.adif["BAND_RX"].let { it.isNullOrBlank() || it.equals(qso.band, ignoreCase = true) },
             freqRxFollows = qso.adif["FREQ_RX"].let { it.isNullOrBlank() || it.toDoubleOrNull() == qso.freqMhz.toDoubleOrNull() },
+            pendingLookup = qso.pendingLookup,
             timeOffFollows = qso.adif["TIME_OFF"].isNullOrBlank() ||
                 (Adif.displayDate(qso.adif["QSO_DATE_OFF"]) == DATE_FMT.format(t) && Adif.displayTime(qso.adif["TIME_OFF"]) == TIME_FMT.format(t)),
             distanceKm = qso.distanceKm,
@@ -417,6 +418,53 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Records whose QRZ.ru data is being fetched again right now (spinner instead of the button). */
+    var refreshing by mutableStateOf<Set<Long>>(emptySet()); private set
+
+    /** Retries the QRZ.ru lookup for a contact saved offline; fills only fields that are still empty. */
+    fun refreshLookup(qso: Qso) {
+        if (qso.id in refreshing) return
+        refreshing = refreshing + qso.id
+        viewModelScope.launch {
+            val msg = try {
+                val info = qrz.lookup(qso.call)
+                if (info == null) {
+                    withContext(Dispatchers.IO) { db.save(qso.copy(pendingLookup = false)) }
+                    "На QRZ.ru позывного ${qso.call} нет"
+                } else {
+                    val pos = info.position
+                    val lat = qso.lat ?: pos?.lat
+                    val lon = qso.lon ?: pos?.lon
+                    val me = Geo.locatorToLatLon(qso.myLocator) ?: settings.myPosition
+                    val them = if (lat != null && lon != null) LatLon(lat, lon) else null
+                    val updated = qso.copy(
+                        name = qso.name.ifBlank { info.fullName },
+                        qth = qso.qth.ifBlank { info.city },
+                        country = qso.country.ifBlank { info.country },
+                        locator = qso.locator.ifBlank { info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) }.orEmpty() } },
+                        lat = lat, lon = lon,
+                        distanceKm = qso.distanceKm ?: if (me != null && them != null) Geo.distanceKm(me, them) else null,
+                        bearing = qso.bearing ?: if (me != null && them != null) Geo.bearing(me, them) else null,
+                        pendingLookup = false,
+                        updatedAt = System.currentTimeMillis(),
+                    )
+                    withContext(Dispatchers.IO) { db.save(updated) }
+                    "Данные ${qso.call} получены с QRZ.ru"
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: QrzException) {
+                e.message ?: "Ошибка QRZ.ru"
+            } catch (e: Exception) {
+                networkError(e)
+            } finally {
+                refreshing = refreshing - qso.id
+            }
+            reload()
+            _messages.send(Message(msg))
+        }
+    }
+
     /** Returns an error message, or null when saved. */
     fun save(): String? {
         val f = form
@@ -449,14 +497,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             createdAt = f.createdAt, updatedAt = System.currentTimeMillis(),
         )
         if (f.removedAudio.isNotBlank() && f.removedAudio != f.audio) voice.delete(f.removedAudio)
+        // QRZ.ru did not answer (no internet, error, still waiting): keep a mark so the log can retry later.
+        val lookupMissed = settings.qrzLogin.isNotBlank() && !f.infoFromQrz &&
+            (lookup is Lookup.Failed || lookup is Lookup.Loading)
+        val finalQso = qso.copy(pendingLookup = if (f.infoFromQrz) false else lookupMissed || (!f.isNew && f.pendingLookup))
         prefs.lastBand = f.band
         prefs.lastMode = f.mode
         prefs.lastFreq = f.freq
         prefs.lastPower = f.power
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { db.save(qso) }
+            withContext(Dispatchers.IO) { db.save(finalQso) }
             reload()
-            _messages.send(Message(if (f.isNew) "Связь с ${f.call} записана" else "Изменения сохранены"))
+            val note = if (finalQso.pendingLookup) ". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе" else ""
+            _messages.send(Message((if (f.isNew) "Связь с ${f.call} записана" else "Изменения сохранены") + note))
         }
         screen = editReturn
         return null

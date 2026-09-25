@@ -102,7 +102,7 @@ fun EditScreen(vm: AppViewModel) {
             IconButton(onClick = vm::closeEditor, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Filled.Close, "Закрыть без сохранения", Modifier.size(30.dp))
             }
-            Text(if (f.isNew) "Новая связь" else "Запись QSO", style = MaterialTheme.typography.headlineSmall)
+            Text(if (f.isNew) "Новый QSO" else "Запись QSO", style = MaterialTheme.typography.headlineSmall)
         }
 
         Column(

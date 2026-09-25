@@ -28,6 +28,8 @@ data class Qso(
     val audio: String = "",
     /** ADIF fields without a dedicated property (STATE, CQZ, MY_RIG, …), kept so nothing is lost on import/export. */
     val adif: Map<String, String> = emptyMap(),
+    /** Saved while QRZ.ru could not be reached; the log offers a button to fetch the station data again. */
+    val pendingLookup: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 )

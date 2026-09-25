@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
@@ -48,6 +49,7 @@ import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -334,6 +336,8 @@ private fun SwipeRow(qso: Qso, vm: AppViewModel, showDate: Boolean, modifier: Mo
             selected = qso.id in vm.selected,
             onClick = { if (vm.selecting) vm.toggleSelected(qso.id) else vm.edit(qso) },
             onLongClick = { vm.toggleSelected(qso.id) },
+            refreshing = qso.id in vm.refreshing,
+            onRefresh = { vm.refreshLookup(qso) },
         )
     }
 }
@@ -372,6 +376,8 @@ private fun QsoRow(
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
 ) {
     val x = LocalExtra.current
     val haptic = LocalHapticFeedback.current
@@ -406,6 +412,17 @@ private fun QsoRow(
                 Icon(Icons.Filled.Mic, "Есть голосовая заметка", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
             }
+            // Saved while QRZ.ru was unreachable: fetch the station data again.
+            if (qso.pendingLookup && !selecting) {
+                if (refreshing) {
+                    CircularProgressIndicator(Modifier.padding(horizontal = 8.dp).size(28.dp), strokeWidth = 3.dp)
+                } else {
+                    FilledTonalIconButton(onClick = onRefresh, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Filled.Refresh, "Обновить данные с QRZ.ru", Modifier.size(26.dp))
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+            }
             // Outside the date sort there are no day headers, so the row carries its own date.
             val t = utc(qso.timeUtc)
             Text(
@@ -422,5 +439,6 @@ private fun QsoRow(
         if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
         val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ")
         if (who.isNotEmpty()) Text(who, style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        else if (qso.pendingLookup) Text("Данные QRZ.ru не получены", style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1)
     }
 }
