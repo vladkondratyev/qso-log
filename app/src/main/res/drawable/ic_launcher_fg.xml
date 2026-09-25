@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- antenna mast -->
+    <path android:fillColor="#FFFFFF" android:pathData="M52,40h4v34h-4z"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M54,38m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0"/>
+    <!-- waves -->
+    <path android:strokeColor="#FFC940" android:strokeWidth="4" android:strokeLineCap="round"
+        android:fillColor="#00000000" android:pathData="M42,28a17,17 0,0 0,0 20M66,28a17,17 0,0 1,0 20"/>
+    <path android:strokeColor="#FFC940" android:strokeWidth="4" android:strokeLineCap="round"
+        android:fillColor="#00000000" android:pathData="M34,22a27,27 0,0 0,0 32M74,22a27,27 0,0 1,0 32"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M42,74h24v5h-24z"/>
+</vector>

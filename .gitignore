@@ -1,0 +1,23 @@
+# Build output
+.gradle/
+build/
+.kotlin/
+*.apk
+*.aab
+*.dmg
+dist/
+
+# Local machine settings
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Not part of the public repository
+desktop/
+design/
+progress.md
+# Logs and sample files used during development (may contain other people's data)
+*.adi
+*.adif
+*.csv
