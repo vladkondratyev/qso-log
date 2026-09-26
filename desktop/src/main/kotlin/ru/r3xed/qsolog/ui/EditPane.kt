@@ -430,12 +430,12 @@ private fun StationCard(vm: AppState) {
                 Text("≈ Страна и область по позывному (HamQTH)", fontSize = 16.sp, color = ink.copy(alpha = 0.8f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        lookup.qrzProblem ?: if (vm.settings.qrzLogin.isBlank()) "Имя и точный QTH — с учётной записью QRZ.ru" else "На QRZ.ru такого позывного нет",
+                        lookup.qrzProblem ?: if (!vm.hasQrzAccount) "Имя и точный QTH — с учётной записью QRZ.ru" else "На QRZ.ru такого позывного нет",
                         fontSize = 16.sp, color = ink.copy(alpha = 0.8f), modifier = Modifier.weight(1f),
                     )
                     when {
                         lookup.qrzProblem != null -> TextButton(onClick = vm::retryLookup) { Text("Повторить") }
-                        vm.settings.qrzLogin.isBlank() -> TextButton(onClick = { vm.openSettings(from = Pane.Edit) }) { Text("Настройки") }
+                        !vm.hasQrzAccount -> TextButton(onClick = { vm.openSettings(from = Pane.Edit) }) { Text("Настройки") }
                     }
                 }
             }

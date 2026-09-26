@@ -22,6 +22,9 @@ data class QrzInfo(
     val locator: String,
     val lat: Double?,
     val lon: Double?,
+    /** Region and RDA district: only the site page ([QrzSite]) gives them. */
+    val region: String = "",
+    val rda: String = "",
 ) {
     val fullName get() = listOf(name, surname).filter { it.isNotBlank() }.joinToString(" ")
     val position: LatLon?

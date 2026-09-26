@@ -26,6 +26,8 @@ class Settings(context: Context) {
         myQth = prefs.getString("my_qth", "") ?: "",
         qrzLogin = prefs.getString("qrz_login", "") ?: "",
         qrzPassword = secret.getString("qrz_password", "") ?: "",
+        qrzSiteEmail = prefs.getString("qrz_site_email", "") ?: "",
+        qrzSitePassword = secret.getString("qrz_site_password", "") ?: "",
         power = prefs.getString("my_power", "") ?: "",
         station = AdifLabels.MINE.keys.associateWith { prefs.getString("station_$it", "") ?: "" }.filterValues { it.isNotEmpty() },
     )
@@ -36,12 +38,13 @@ class Settings(context: Context) {
             .putString("my_locator", s.myLocator.trim())
             .putString("my_qth", s.myQth.trim())
             .putString("qrz_login", s.qrzLogin.trim())
+            .putString("qrz_site_email", s.qrzSiteEmail.trim())
             .putString("my_power", s.power.trim())
             .apply {
                 for (key in AdifLabels.MINE.keys) putString("station_$key", s.station[key].orEmpty().trim())
             }
             .apply()
-        secret.edit().putString("qrz_password", s.qrzPassword).apply()
+        secret.edit().putString("qrz_password", s.qrzPassword).putString("qrz_site_password", s.qrzSitePassword).apply()
     }
 
     /** Band, mode and frequency from the previous contact, so the next one starts pre-filled. */

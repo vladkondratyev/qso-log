@@ -242,24 +242,25 @@ class Settings {
         file.outputStream().use { props.store(it, "QSO Log") }
     }
 
-    private fun loadPassword(): String =
-        keyring?.let { try { it.getPassword(SERVICE, ACCOUNT) } catch (e: Exception) { null } } ?: get("qrz_password")
+    private fun loadPassword(account: String = ACCOUNT, key: String = "qrz_password"): String =
+        keyring?.let { try { it.getPassword(SERVICE, account) } catch (e: Exception) { null } } ?: get(key)
 
-    private fun savePassword(pw: String) {
+    private fun savePassword(pw: String, account: String = ACCOUNT, key: String = "qrz_password") {
         val ring = keyring
         if (ring != null) {
             try {
-                if (pw.isEmpty()) ring.deletePassword(SERVICE, ACCOUNT) else ring.setPassword(SERVICE, ACCOUNT, pw)
-                if (props.containsKey("qrz_password")) { props.remove("qrz_password"); put("qrz_login", get("qrz_login")) }
+                if (pw.isEmpty()) ring.deletePassword(SERVICE, account) else ring.setPassword(SERVICE, account, pw)
+                if (props.containsKey(key)) { props.remove(key); put("qrz_login", get("qrz_login")) }
                 return
             } catch (e: Exception) {
                 if (pw.isEmpty()) return
             }
         }
-        put("qrz_password", pw)
+        put(key, pw)
     }
 
     private var cachedPassword: String? = null
+    private var cachedSitePassword: String? = null
 
     /** Everything except the password, which may wait on a keychain prompt; read it with [password]. */
     fun load() = StationSettings(
@@ -268,11 +269,14 @@ class Settings {
         myQth = get("my_qth"),
         qrzLogin = get("qrz_login"),
         qrzPassword = cachedPassword.orEmpty(),
+        qrzSiteEmail = get("qrz_site_email"),
+        qrzSitePassword = cachedSitePassword.orEmpty(),
         power = get("my_power"),
         station = AdifLabels.MINE.keys.associateWith { get("station_$it") }.filterValues { it.isNotEmpty() },
     )
 
     fun password(): String = cachedPassword ?: loadPassword().also { cachedPassword = it }
+    fun sitePassword(): String = cachedSitePassword ?: loadPassword(SITE_ACCOUNT, "qrz_site_password").also { cachedSitePassword = it }
 
     fun save(s: StationSettings) {
         props.setProperty("my_call", s.myCall.trim().uppercase())
@@ -280,7 +284,12 @@ class Settings {
         props.setProperty("my_qth", s.myQth.trim())
         props.setProperty("my_power", s.power.trim())
         for (key in AdifLabels.MINE.keys) props.setProperty("station_$key", s.station[key].orEmpty().trim())
+        props.setProperty("qrz_site_email", s.qrzSiteEmail.trim())
         put("qrz_login", s.qrzLogin.trim())
+        if (cachedSitePassword != null && s.qrzSitePassword != cachedSitePassword) {
+            cachedSitePassword = s.qrzSitePassword
+            savePassword(s.qrzSitePassword, SITE_ACCOUNT, "qrz_site_password")
+        }
         // Until the stored password has been read, an empty field means "not loaded yet", not "cleared".
         if (cachedPassword != null && s.qrzPassword != cachedPassword) {
             cachedPassword = s.qrzPassword
@@ -335,5 +344,7 @@ class Settings {
     private companion object {
         const val SERVICE = "QSO Log"
         const val ACCOUNT = "qrz.ru"
+        /** The site's own login (e-mail), separate from the XML API one. */
+        const val SITE_ACCOUNT = "www.qrz.ru"
     }
 }

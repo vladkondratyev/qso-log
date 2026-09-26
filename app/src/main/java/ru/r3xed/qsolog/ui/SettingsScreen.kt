@@ -168,6 +168,54 @@ fun SettingsScreen(
             }
             QrzApiHelp(expandedByDefault = s.qrzLogin.isBlank())
             ActionButton("Проверить подключение", null, vm::testQrz)
+            Note("Это основной и правильный способ подключения: XML API — официальный интерфейс QRZ.ru для программ-журналов. Если указаны и эта учётная запись, и учётная запись сайта ниже, данные берутся через XML API.")
+            }
+
+            // A fallback for users without XML API access: the site's own login, the callsign page read as HTML.
+            SettingsBlock(
+                "Учётная запись сайта QRZ.ru",
+                when {
+                    s.qrzSiteEmail.isBlank() -> "не указана · запасной способ"
+                    vm.qrzSiteOk == true -> "${s.qrzSiteEmail} · вход выполнен"
+                    vm.qrzSiteOk == false -> "${s.qrzSiteEmail} · ошибка"
+                    s.qrzLogin.isNotBlank() -> "${s.qrzSiteEmail} · запасной, основной — XML API"
+                    else -> s.qrzSiteEmail
+                },
+                open = false,
+            ) {
+                Note("Запасной способ, если доступа к XML API нет. Правильнее подключаться через XML API (блок выше): это официальный интерфейс для программ. Здесь программа входит на сайт qrz.ru с вашими e-mail и паролем и читает страницу позывного (www.qrz.ru/db/ПОЗЫВНОЙ): имя, город, область, RDA и то, что сайт показывает после входа.")
+                SettingField("E-mail на qrz.ru", s.qrzSiteEmail, { vm.updateSettings(s.copy(qrzSiteEmail = it.trim())) }, mono = true)
+                var showSite by remember { mutableStateOf(false) }
+                OutlinedTextField(
+                    value = s.qrzSitePassword,
+                    onValueChange = { vm.updateSettings(s.copy(qrzSitePassword = it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Пароль от сайта") },
+                    singleLine = true,
+                    textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    visualTransformation = if (showSite) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        IconButton(onClick = { showSite = !showSite }) {
+                            Icon(if (showSite) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (showSite) "Скрыть пароль" else "Показать пароль")
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                )
+                vm.qrzSiteStatus?.let { status ->
+                    val color = when (vm.qrzSiteOk) {
+                        true -> x.ok
+                        false -> MaterialTheme.colorScheme.error
+                        null -> x.muted
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(12.dp).background(color, CircleShape))
+                        Spacer(Modifier.width(10.dp))
+                        Text(status, color = color, style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+                ActionButton("Проверить вход", null, vm::testQrzSite)
+                Note("Ограничения: страница сайта — не интерфейс для программ, после изменений на сайте поиск может перестать работать; каждый запрос добавляет абоненту «Просмотр»; правила сайта могут запрещать автоматические запросы. Если указана и учётная запись XML API, данные берутся через неё, а сайт — только когда XML API не ответил.")
             }
 
             // Station defaults: copied into each new contact, where they stay as that record's own values.

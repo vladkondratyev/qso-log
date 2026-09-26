@@ -26,6 +26,7 @@ import ru.r3xed.qsolog.data.HamQth
 import ru.r3xed.qsolog.data.approxPosition
 import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
+import ru.r3xed.qsolog.data.QrzSite
 import ru.r3xed.qsolog.data.QrzException
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.data.StationSettings
@@ -91,6 +92,41 @@ class AppState {
 
     var settings by mutableStateOf(prefs.load()); private set
     private val qrz = QrzClient { settings.qrzLogin to settings.qrzPassword }
+    private val qrzSite = QrzSite { settings.qrzSiteEmail to settings.qrzSitePassword }
+
+    /** Some QRZ.ru account is set: the XML API (preferred) or the site's own e-mail login. */
+    val hasQrzAccount get() = settings.qrzLogin.isNotBlank() || settings.qrzSiteEmail.isNotBlank()
+
+    /**
+     * QRZ.ru data for a callsign: through the XML API when its account is set (it wins when both are set),
+     * otherwise — or when the API fails — from the site's callsign page with the e-mail login. Null: not in QRZ.ru.
+     */
+    private suspend fun qrzLookup(call: String, stillWanted: () -> Boolean = { true }): QrzInfo? {
+        var problem: Exception? = null
+        if (settings.qrzLogin.isNotBlank()) {
+            try {
+                return qrz.lookup(call, stillWanted)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                problem = e
+            }
+        }
+        if (settings.qrzSiteEmail.isNotBlank()) {
+            try {
+                return qrzSite.lookup(call)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (problem == null) problem = e
+            }
+        }
+        throw problem ?: QrzException(403, "Укажите учётную запись QRZ.ru в настройках")
+    }
+
+    /** Region and RDA that only the site page gives, into ADIF STATE / CNTY unless the card has them. */
+    private fun withQrzExtras(adif: Map<String, String>, info: QrzInfo): Map<String, String> =
+        adif + listOf("STATE" to info.region, "CNTY" to info.rda).filter { (k, v) -> v.isNotBlank() && adif[k].isNullOrBlank() }
 
     var pane by mutableStateOf(Pane.Empty)
     var query by mutableStateOf(""); private set
@@ -255,6 +291,9 @@ class AppState {
         scope.launch {
             val pw = withContext(Dispatchers.IO) { prefs.password() }
             if (settings.qrzPassword.isEmpty()) settings = settings.copy(qrzPassword = pw)
+            // Read once even without an e-mail: the settings only save a password that has been loaded.
+            val sitePw = withContext(Dispatchers.IO) { prefs.sitePassword() }
+            if (settings.qrzSitePassword.isEmpty()) settings = settings.copy(qrzSitePassword = sitePw)
         }
     }
 
@@ -288,13 +327,13 @@ class AppState {
             delay(900) // wait until typing pauses; QRZ.ru allows one request per 3 s
             val inLog = withContext(Dispatchers.IO) { db.all(call) }
             if (inLog.isNotEmpty() || query.trim().uppercase() != call) return@launch
-            if (settings.qrzLogin.isBlank()) {
+            if (!hasQrzAccount) {
                 searchLookup = SearchLookup.NoAccount
                 return@launch
             }
             searchLookup = SearchLookup.Searching(call)
             searchLookup = try {
-                val info = qrz.lookup(call) { query.trim().uppercase() == call }
+                val info = qrzLookup(call) { query.trim().uppercase() == call }
                 if (info == null) SearchLookup.NotFound(call) else {
                     newQsoFor(call, info)
                     SearchLookup.Idle
@@ -322,6 +361,7 @@ class AppState {
             call = call, name = info.fullName, qth = info.city, country = info.country,
             locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
             lat = info.lat, lon = info.lon, infoFromQrz = true,
+            adif = withQrzExtras(form.adif, info),
         )
         // Nothing typed by the user yet: closing this card right away does not ask.
         formOriginal = form
@@ -563,7 +603,7 @@ class AppState {
         query = ""
         reload()
         // Without an account there is nothing to update: the card keeps what the log had.
-        if (settings.qrzLogin.isNotBlank()) lookupJob = scope.launch { runLookup(last.call) }
+        if (hasQrzAccount) lookupJob = scope.launch { runLookup(last.call) }
     }
 
     fun newQso(audio: String = "") {
@@ -721,13 +761,13 @@ class AppState {
      */
     private suspend fun runLookup(call: String) {
         lookup = Lookup.Loading
-        if (settings.qrzLogin.isBlank()) {
+        if (!hasQrzAccount) {
             lookup = hamqthFallback(call, qrzProblem = null)
                 ?: Lookup.Failed("Укажите учётную запись QRZ.ru в настройках", noAccount = true)
             return
         }
         lookup = try {
-            val info = qrz.lookup(call) { form.call == call }
+            val info = qrzLookup(call) { form.call == call }
             if (info == null) hamqthFallback(call, qrzProblem = null) ?: Lookup.NotFound else {
                 val f = form
                 if (f.call == call && cardFromLog) {
@@ -737,14 +777,14 @@ class AppState {
                         name = info.fullName.ifBlank { f.name }, qth = info.city.ifBlank { f.qth }, country = info.country.ifBlank { f.country },
                         locator = info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) } ?: f.locator },
                         lat = if (pos != null) info.lat else f.lat, lon = if (pos != null) info.lon else f.lon,
-                        adif = if (pos != null || info.locator.isNotBlank()) f.adif - HamQth.POSITION_FIELD else f.adif,
+                        adif = withQrzExtras(if (pos != null || info.locator.isNotBlank()) f.adif - HamQth.POSITION_FIELD else f.adif, info),
                     )
                 } else if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
                     form = f.copy(
                         name = info.fullName, qth = info.city, country = info.country,
                         locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
                         lat = info.lat, lon = info.lon, infoFromQrz = true,
-                        adif = f.adif - HamQth.POSITION_FIELD,
+                        adif = withQrzExtras(f.adif - HamQth.POSITION_FIELD, info),
                     )
                 }
                 Lookup.Found(info)
@@ -811,7 +851,7 @@ class AppState {
         refreshing = refreshing + qso.id
         scope.launch {
             val msg = try {
-                val info = qrz.lookup(qso.call)
+                val info = qrzLookup(qso.call)
                 if (info == null) {
                     withContext(Dispatchers.IO) { db.save(qso.copy(pendingLookup = false)) }
                     "На QRZ.ru позывного ${qso.call} нет"
@@ -831,7 +871,7 @@ class AppState {
                         lat = lat, lon = lon,
                         distanceKm = (if (approx) null else qso.distanceKm) ?: if (me != null && them != null) Geo.distanceKm(me, them) else null,
                         bearing = (if (approx) null else qso.bearing) ?: if (me != null && them != null) Geo.bearing(me, them) else null,
-                        adif = if (approx) qso.adif - HamQth.POSITION_FIELD else qso.adif,
+                        adif = withQrzExtras(if (approx) qso.adif - HamQth.POSITION_FIELD else qso.adif, info),
                         pendingLookup = false,
                         updatedAt = System.currentTimeMillis(),
                     )
@@ -888,7 +928,7 @@ class AppState {
         if (f.removedAudio.isNotBlank() && f.removedAudio != f.audio) voice.delete(f.removedAudio)
         // QRZ.ru did not answer (no internet, error, still waiting): keep a mark so the log can retry later.
         val l = lookup
-        val lookupMissed = settings.qrzLogin.isNotBlank() &&
+        val lookupMissed = hasQrzAccount &&
             (!f.infoFromQrz && (l is Lookup.Failed || l is Lookup.Loading) || (l is Lookup.Approx && l.qrzProblem != null))
         val finalQso = qso.copy(pendingLookup = lookupMissed || (!f.isNew && f.pendingLookup && !(f.infoFromQrz && l is Lookup.Found)))
         prefs.lastBand = f.band
@@ -921,6 +961,7 @@ class AppState {
 
     fun updateSettings(s: StationSettings) {
         val credentialsChanged = s.qrzLogin != settings.qrzLogin || s.qrzPassword != settings.qrzPassword
+        val siteChanged = s.qrzSiteEmail != settings.qrzSiteEmail || s.qrzSitePassword != settings.qrzSitePassword
         settings = s
         // Written a moment after typing stops, so the keychain is not touched on every keystroke.
         saveSettingsJob?.cancel()
@@ -933,11 +974,39 @@ class AppState {
             qrzOk = null
             qrzStatus = null
         }
+        if (siteChanged) {
+            qrzSite.reset()
+            qrzSiteOk = null
+            qrzSiteStatus = null
+        }
     }
 
     fun flushSettings() {
         saveSettingsJob?.cancel()
         prefs.save(settings)
+    }
+
+    /** Result of "Проверить вход" for the site account. */
+    var qrzSiteStatus by mutableStateOf<String?>(null); private set
+    var qrzSiteOk by mutableStateOf<Boolean?>(null); private set
+
+    fun testQrzSite() {
+        scope.launch {
+            qrzSiteOk = null
+            qrzSiteStatus = "Проверяю…"
+            qrzSite.reset()
+            try {
+                qrzSite.login()
+                qrzSiteOk = true
+                qrzSiteStatus = "Вход выполнен"
+            } catch (e: QrzException) {
+                qrzSiteOk = false
+                qrzSiteStatus = e.message
+            } catch (e: Exception) {
+                qrzSiteOk = false
+                qrzSiteStatus = networkError(e).replace("api.qrz.ru", "www.qrz.ru")
+            }
+        }
     }
 
     fun testQrz() {
@@ -965,9 +1034,9 @@ class AppState {
             val s = settings
             var pos: LatLon? = null
             var qth = s.myQth
-            if (s.myCall.isNotBlank() && s.qrzLogin.isNotBlank()) {
+            if (s.myCall.isNotBlank() && hasQrzAccount) {
                 try {
-                    qrz.lookup(s.myCall)?.let { info ->
+                    qrzLookup(s.myCall)?.let { info ->
                         pos = info.position
                         if (qth.isBlank()) qth = info.city
                     }
