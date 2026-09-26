@@ -56,6 +56,33 @@ class QrzSiteTest {
         assertEquals(37.61, i.lon)
     }
 
+    /** Photo before the data, a city without a region, and (logged in) the full name with the surname in the block. */
+    @Test
+    fun photoCityOnlyAndFullName() {
+        val html = """
+            <html><head><title>R0DEMO - Иван Демонстров :: Информация о позывном</title></head><body>
+            <img src="/images/flags/48/Russia.png" alt="Россия" title="Россия">
+            <div id="infoBlock" class="inline">
+                <div style="width:500px;float:right"><div style="height:350px"><img src="https://static.example/photo.jpg" alt="R0DEMO"></div></div>
+                <div style="font-family:Verdana,Helvetica,Arial Cyr,sans-serif;font-size:1.2em">
+                    <b>Иван Петрович Демонстров</b>
+                    <div style="color:gray;"><b>Ivan Petrovich Demonstrov</b></div>            <br>
+                    Демоград                                                Россия<br>
+                    <br>RDA/URDA #KG-99<br>
+                </div>
+                <b>Просмотров:</b> 12<br>
+                <div id="detailInfo"></div>
+            </div></body></html>
+        """.trimIndent()
+        val i = QrzSite.parse(html, "R0DEMO")!!
+        assertEquals("Иван Петрович", i.name)
+        assertEquals("Демонстров", i.surname)
+        assertEquals("Иван Петрович Демонстров", i.fullName)
+        assertEquals("Демоград", i.city)
+        assertEquals("", i.region)
+        assertEquals("KG-99", i.rda)
+    }
+
     @Test
     fun unknownCallsign() {
         val html = "<html><title>Поиск в радиолюбительских позывных - ничего не найдено</title><h2>Ничего не найдено</h2>" +

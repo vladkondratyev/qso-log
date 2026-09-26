@@ -122,24 +122,34 @@ class QrzSite(private val credentials: () -> Pair<String, String>) {
             val info = html.substringAfter("id=\"infoBlock\"").substringBefore("id=\"detailInfo\"")
             val details = if (html.contains("id=\"detailInfo\"")) html.substringAfter("id=\"detailInfo\"").substringBefore("<script") else ""
 
-            // "Имя Отчество Ф" in the block; the full "Имя Фамилия" is in the page title.
-            val shown = text(Regex("<b>(.*?)</b>", RegexOption.DOT_MATCHES_ALL).find(info.substringAfter("</h3>", info))?.groupValues?.get(1).orEmpty())
+            // The data block: <b>name</b>, <div color:gray><b>Latin name</b></div>, the address line, RDA.
+            // (A photo, "ex CALL(s)" or "позывной устарел" may come before it inside #infoBlock.)
+            val block = info.substringAfter("font-family:Verdana", info)
+            val shown = text(Regex("<b>(.*?)</b>", RegexOption.DOT_MATCHES_ALL).find(block)?.groupValues?.get(1).orEmpty())
             val title = text(Regex("<title>(.*?)</title>", RegexOption.DOT_MATCHES_ALL).find(html)?.groupValues?.get(1).orEmpty())
                 .substringAfter(" - ", "").substringBefore("::").trim()
             val titleWords = title.split(' ').filter { it.isNotBlank() }
             val shownWords = shown.split(' ').filter { it.isNotBlank() }
             val surname = if (titleWords.size >= 2) titleWords.last() else ""
-            // Keep the patronymic, replace the initial with the surname.
-            val name = when {
-                shownWords.size >= 2 && surname.isNotEmpty() && shownWords.last().length <= 2 -> shownWords.dropLast(1).joinToString(" ")
-                shownWords.isNotEmpty() -> shownWords.joinToString(" ")
-                else -> titleWords.dropLast(1).joinToString(" ")
+            // Anonymous: "Имя Отчество Ч" — the initial gives way to the surname from the title.
+            // Logged in the block may already hold the whole "Имя Отчество Фамилия": the surname is not repeated.
+            val nameWords = when {
+                shownWords.isEmpty() -> titleWords.dropLast(1)
+                surname.isNotEmpty() && shownWords.last().equals(surname, ignoreCase = true) -> shownWords.dropLast(1)
+                surname.isNotEmpty() && shownWords.size >= 2 && shownWords.last().length <= 2 &&
+                    surname.startsWith(shownWords.last().trimEnd('.'), ignoreCase = true) -> shownWords.dropLast(1)
+                else -> shownWords
             }
+            val name = nameWords.joinToString(" ")
 
             val country = Regex("<img[^>]*/flags/[^>]*title=\"([^\"]+)\"").find(html)?.groupValues?.get(1)?.let(::text).orEmpty()
-            // The address line: "Город, Область Страна" after the Latin name.
-            val afterName = info.substringAfter("</div>", "").substringBefore("RDA")
-            val address = text(afterName.substringBefore("Просмотров")).lines().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
+            // The address: after the grey Latin name (or after the name), up to RDA or the end of the block.
+            val afterName = if (block.contains("color:gray")) block.substringAfter("color:gray").substringAfter("</div>")
+            else block.substringAfter("</b>", "")
+            val addressHtml = afterName.substringBefore("RDA").substringBefore("Просмотров").substringBefore("</div>")
+            val lines = text(addressHtml).lines().map { it.trim() }.filter { it.isNotEmpty() }
+            // "Город, Область Страна"; logged in there may be more lines (street, postcode): the one with the country wins.
+            val address = lines.firstOrNull { country.isNotEmpty() && it.endsWith(country) } ?: lines.firstOrNull().orEmpty()
             val parts = address.removeSuffix(country).trim().trimEnd(',').split(',').map { it.trim() }.filter { it.isNotEmpty() }
             val city = parts.firstOrNull().orEmpty()
             val region = parts.drop(1).joinToString(", ")
