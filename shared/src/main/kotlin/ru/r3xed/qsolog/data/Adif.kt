@@ -338,6 +338,10 @@ object AdifLabels {
         "EMAIL" to "E-mail",
     )
     val CONTACT = linkedMapOf(
+        // Contest exchange; ЕРМАК / Cabrillo reports take the numbers from here.
+        "STX_STRING" to "Контрольный номер передан",
+        "SRX_STRING" to "Контрольный номер принят",
+        "CONTEST_ID" to "Соревнование (код)",
         "SUBMODE" to "Подвид (SUBMODE)",
         "PROP_MODE" to "Вид прохождения",
         "NOTES" to "Заметки",

@@ -34,6 +34,7 @@ import org.osmdroid.config.Configuration
 import ru.r3xed.qsolog.ui.EditScreen
 import ru.r3xed.qsolog.ui.LogScreen
 import ru.r3xed.qsolog.ui.MapScreen
+import ru.r3xed.qsolog.ui.ContestExportDialog
 import ru.r3xed.qsolog.ui.QsoTheme
 import ru.r3xed.qsolog.ui.SettingsScreen
 import java.io.File
@@ -79,6 +80,13 @@ class MainActivity : ComponentActivity() {
                 val exportSelectedAdif = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
                     uri?.let(vm::exportSelectedAdif)
                 }
+                // Contest reports: .txt (ЕРМАК) and .cbr (Cabrillo) are plain text.
+                val exportContest = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+                    uri?.let(vm::exportContest)
+                }
+                val importContest = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                    uri?.let(vm::importContest)
+                }
                 val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
                     vm.say(
                         if (granted) "Микрофон разрешён. Удерживайте «Добавить QSO», чтобы записать голос"
@@ -116,6 +124,15 @@ class MainActivity : ComponentActivity() {
                                 onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
                                 onExportAdif = { exportAdif.launch(vm.adifFileName()) },
                                 onImportAdif = { importAdif.launch(arrayOf("*/*")) },
+                                onImportContest = { importContest.launch(arrayOf("*/*")) },
+                            )
+                        }
+                        vm.contestTarget?.let { target ->
+                            ContestExportDialog(
+                                defaults = vm.contestDefaults(),
+                                count = target.only?.size ?: vm.total,
+                                onDismiss = vm::closeContestExport,
+                                onConfirm = { h -> exportContest.launch(vm.prepareContest(h)) },
                             )
                         }
                         SnackbarHost(

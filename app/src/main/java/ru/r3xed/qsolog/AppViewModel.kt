@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import ru.r3xed.qsolog.data.Adif
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.CallHistory
+import ru.r3xed.qsolog.data.Cabrillo
 import ru.r3xed.qsolog.data.Csv
 import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.HamQth
@@ -52,6 +53,9 @@ enum class ThemeMode(val label: String) {
 
 /** Callsign length at which the QRZ.ru / HamQTH lookup starts. */
 const val MIN_LOOKUP_LENGTH = 4
+
+/** Records for a contest report: [only] the picked ones, or the whole log when null. */
+data class ContestTarget(val only: Set<Long>?)
 
 sealed interface UpdateState {
     data object Idle : UpdateState
@@ -157,6 +161,89 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The "hold to record" line under the add button: only for the first few starts, then the mic icon is enough. */
     val showRecordHint: Boolean
+
+    // ---------- ЕРМАК / Cabrillo ----------
+
+    /** The contest-report dialog is open: for [ContestTarget.only] records, or the whole log when null. */
+    var contestTarget by mutableStateOf<ContestTarget?>(null); private set
+
+    /** Header chosen in the dialog, waiting for the file picker. */
+    private var pendingContest: Pair<Cabrillo.Header, Set<Long>?>? = null
+
+    fun openContestExport(selectedOnly: Boolean) {
+        contestTarget = ContestTarget(if (selectedOnly) selected else null)
+    }
+
+    fun closeContestExport() {
+        contestTarget = null
+    }
+
+    /** Values the dialog starts with: last format and contest, RDA from "Мой район", operator from the station. */
+    fun contestDefaults(): Cabrillo.Header = Cabrillo.Header(
+        format = runCatching { Cabrillo.Format.valueOf(prefs.contestFormat) }.getOrDefault(Cabrillo.Format.ERMAK),
+        contest = prefs.contestCode,
+        callsign = settings.myCall,
+        categoryOperator = prefs.contestOperator,
+        location = settings.station["MY_CNTY"].orEmpty().replace("-", "").uppercase(),
+        operators = settings.station["OPERATOR"].orEmpty(),
+        createdBy = "QSO-LOG " + BuildConfig.VERSION_NAME,
+    )
+
+    /** Remembers the dialog's choice and returns the file name to offer. */
+    fun prepareContest(h: Cabrillo.Header): String {
+        prefs.contestFormat = h.format.name
+        prefs.contestCode = h.contest
+        prefs.contestOperator = h.categoryOperator
+        pendingContest = h to contestTarget?.only
+        contestTarget = null
+        val code = h.contest.uppercase().ifBlank { "LOG" }.replace('/', '-')
+        return "${h.callsign.ifBlank { "log" }.replace('/', '-')}_$code.${h.format.extension}"
+    }
+
+    fun exportContest(uri: Uri) {
+        val (h, only) = pendingContest ?: return
+        pendingContest = null
+        if (only != null) clearSelection()
+        viewModelScope.launch {
+            val msg = try {
+                val count = withContext(Dispatchers.IO) {
+                    val list = db.all().let { all -> if (only == null) all else all.filter { it.id in only } }
+                    getApplication<Application>().contentResolver.openOutputStream(uri)!!.use {
+                        it.write(Cabrillo.export(list, h).toByteArray(Cabrillo.charset(h.format)))
+                    }
+                    list.size
+                }
+                "Экспортировано в ${h.format.title}: $count"
+            } catch (e: Exception) {
+                "Не удалось сохранить файл: ${e.message}"
+            }
+            _messages.send(Message(msg))
+        }
+    }
+
+    fun importContest(uri: Uri) {
+        viewModelScope.launch {
+            val msg = try {
+                val (added, dup, r) = withContext(Dispatchers.IO) {
+                    val r = getApplication<Application>().contentResolver.openInputStream(uri)!!.use { Cabrillo.import(it) }
+                    val rows = r.rows.map { it.withDistance(settings.myPosition) }
+                    val added = db.insertAll(rows)
+                    Triple(added, rows.size - added, r)
+                }
+                buildString {
+                    append("Импортировано из отчёта")
+                    if (r.contest.isNotBlank()) append(" ${r.contest}")
+                    append(": $added")
+                    if (dup > 0) append(", повторов пропущено: $dup")
+                    if (r.skipped > 0) append(", строк с ошибками: ${r.skipped}")
+                }
+            } catch (e: Exception) {
+                "Не удалось прочитать файл: ${e.message}"
+            }
+            reload()
+            _messages.send(Message(msg))
+        }
+    }
 
     /** Bumped when a new contact is saved; the log scrolls to the top to show it. */
     var newSavedTick by mutableStateOf(0); private set

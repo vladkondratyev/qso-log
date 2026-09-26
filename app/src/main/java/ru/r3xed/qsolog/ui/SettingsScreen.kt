@@ -89,6 +89,7 @@ fun SettingsScreen(
     onImportCsv: () -> Unit,
     onExportAdif: () -> Unit,
     onImportAdif: () -> Unit,
+    onImportContest: () -> Unit,
 ) {
     val s = vm.settings
     val x = LocalExtra.current
@@ -224,6 +225,9 @@ fun SettingsScreen(
                 ActionButton("Экспорт в CSV", Icons.Filled.FileUpload, onExportCsv)
                 ActionButton("Импорт из CSV", Icons.Filled.FileDownload, onImportCsv)
                 Note("CSV открывается в Excel: разделитель «;», все поля каждой связи, включая дополнительные поля ADIF. При любом импорте повторы пропускаются.")
+                ActionButton("Экспорт в ЕРМАК / Cabrillo", Icons.Filled.FileUpload) { vm.openContestExport(selectedOnly = false) }
+                ActionButton("Импорт из ЕРМАК / Cabrillo", Icons.Filled.FileDownload, onImportContest)
+                Note("Отчёты для соревнований. ЕРМАК — российский формат (ermak.srr.ru), Cabrillo 3.0 — международный. Перед сохранением программа спросит код соревнования и категорию. Чтобы выгрузить только часть журнала, выберите записи долгим нажатием и нажмите «Экспорт».")
 
                 var confirmDeleteAll by remember { mutableStateOf(false) }
                 Button(

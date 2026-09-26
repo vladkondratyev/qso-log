@@ -56,6 +56,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -321,10 +323,18 @@ private fun SelectionBar(vm: AppViewModel, onExport: () -> Unit) {
         IconButton(onClick = vm::selectAllShown, modifier = Modifier.size(52.dp)) {
             Icon(Icons.Filled.SelectAll, "Выбрать все", Modifier.size(28.dp))
         }
-        Button(onClick = onExport, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp)) {
-            Icon(Icons.Filled.FileUpload, null)
-            Spacer(Modifier.width(6.dp))
-            Text("ADIF", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        // Export of the picked records: ADIF, or a contest report (ЕРМАК / Cabrillo) via its settings dialog.
+        var menu by remember { mutableStateOf(false) }
+        Box {
+            Button(onClick = { menu = true }, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp)) {
+                Icon(Icons.Filled.FileUpload, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Экспорт", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("ADIF (.adi)", fontSize = 17.sp) }, onClick = { menu = false; onExport() })
+                DropdownMenuItem(text = { Text("ЕРМАК / Cabrillo", fontSize = 17.sp) }, onClick = { menu = false; vm.openContestExport(selectedOnly = true) })
+            }
         }
     }
 }

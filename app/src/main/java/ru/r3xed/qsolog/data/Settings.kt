@@ -66,6 +66,16 @@ class Settings(context: Context) {
     var hamqthEnabled: Boolean
         get() = prefs.getBoolean("hamqth_enabled", true)
         set(v) = prefs.edit().putBoolean("hamqth_enabled", v).apply()
+    /** Last ЕРМАК / Cabrillo export: format name, CONTEST code, CATEGORY-OPERATOR. */
+    var contestFormat: String
+        get() = prefs.getString("contest_format", "ERMAK") ?: "ERMAK"
+        set(v) = prefs.edit().putString("contest_format", v).apply()
+    var contestCode: String
+        get() = prefs.getString("contest_code", "") ?: ""
+        set(v) = prefs.edit().putString("contest_code", v).apply()
+    var contestOperator: String
+        get() = prefs.getString("contest_operator", "SINGLE-OP") ?: "SINGLE-OP"
+        set(v) = prefs.edit().putString("contest_operator", v).apply()
     /** Colour theme: "system" (follow Android), "light" or "dark". */
     var theme: String
         get() = prefs.getString("theme", "system") ?: "system"
