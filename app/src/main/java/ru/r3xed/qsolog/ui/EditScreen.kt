@@ -2,6 +2,8 @@ package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -162,7 +164,7 @@ fun EditScreen(vm: AppViewModel) {
                         onDelete = vm::removeAudio,
                         onShare = {
                             val form = vm.form
-                            shareVoiceNote(context, vm.voice.file(form.audio), qsoText(form, vm.myPositionFor(form)), "QSO ${form.call} ${form.date} ${form.time} UTC")
+                            shareForm(context, form, vm.myPositionFor(form), vm.voice.file(form.audio))
                         },
                         modifier = Modifier.fillMaxHeight().padding(top = 8.dp),
                     )
@@ -283,6 +285,16 @@ fun EditScreen(vm: AppViewModel) {
                         border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                     ) { Text("Удалить", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                    // Saved records only: send the contact to another app, with its voice note if there is one.
+                    val context = LocalContext.current
+                    FilledTonalIconButton(
+                        onClick = {
+                            val form = vm.form
+                            shareForm(context, form, vm.myPositionFor(form), form.audio.ifBlank { null }?.let { vm.voice.file(it) })
+                        },
+                        modifier = Modifier.size(60.dp),
+                        shape = RoundedCornerShape(16.dp),
+                    ) { Icon(Icons.Filled.Share, "Отправить QSO в другое приложение", Modifier.size(28.dp)) }
                 }
                 Button(
                     onClick = {

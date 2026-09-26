@@ -26,16 +26,27 @@ fun qsoText(f: Form, myPosition: ru.r3xed.qsolog.data.LatLon?): String = buildLi
     add("— ${f.myCall.ifBlank { "QSO-LOG" }}, QSO-LOG")
 }.filter { it.isNotBlank() }.joinToString("\n")
 
-/** Share sheet with the voice note file and the contact as text (messengers show the text as a caption). */
-fun shareVoiceNote(context: Context, file: File, text: String, subject: String) {
-    val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
+/**
+ * Share sheet with the contact as text and, if [audio] is given and exists, its voice note attached
+ * (messengers show the text as the caption of the file).
+ */
+fun shareQso(context: Context, audio: File?, text: String, subject: String) {
     val send = Intent(Intent.ACTION_SEND).apply {
-        type = "audio/mp4"
-        putExtra(Intent.EXTRA_STREAM, uri)
         putExtra(Intent.EXTRA_TEXT, text)
         putExtra(Intent.EXTRA_SUBJECT, subject)
-        clipData = ClipData.newRawUri(subject, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (audio != null && audio.exists()) {
+            val uri = FileProvider.getUriForFile(context, context.packageName + ".files", audio)
+            type = "audio/mp4"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newRawUri(subject, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } else {
+            type = "text/plain"
+        }
     }
-    context.startActivity(Intent.createChooser(send, "Отправить запись QSO").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    context.startActivity(Intent.createChooser(send, "Отправить QSO").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
+
+/** The card's contact: text plus its voice note if there is one. */
+fun shareForm(context: Context, f: Form, myPosition: ru.r3xed.qsolog.data.LatLon?, audio: File?) =
+    shareQso(context, audio, qsoText(f, myPosition), "QSO ${f.call} ${f.date} ${f.time} UTC")
