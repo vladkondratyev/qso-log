@@ -1,6 +1,13 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
+import ru.r3xed.qsolog.ThemeMode
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.selection.selectable
+import ru.r3xed.qsolog.UpdateState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.ui.text.style.TextOverflow
@@ -175,6 +182,27 @@ fun SettingsScreen(
                 Note("Если у записи диапазон или вид, который здесь выключен, кнопка для него в её карточке всё равно видна.")
             }
 
+            SettingsBlock("Оформление", "тема: ${vm.themeMode.label.lowercase()}") {
+                Text("Тема", style = MaterialTheme.typography.titleSmall)
+                // Three options in one row; the chosen one is filled.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeMode.entries.forEach { mode ->
+                        val on = vm.themeMode == mode
+                        Box(
+                            Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
+                                .background(if (on) MaterialTheme.colorScheme.primary else x.field)
+                                .selectable(selected = on, role = Role.RadioButton) { vm.setTheme(mode) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                mode.label, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                                color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+                Note("«Как в системе» переключается вместе с тёмной темой Android.")
+            }
             SettingsBlock("Журнал связей", "записей: ${vm.total} · ADIF, CSV") {
                 ActionButton("Экспорт в ADIF", Icons.Filled.FileUpload, onExportAdif)
                 ActionButton("Импорт из ADIF", Icons.Filled.FileDownload, onImportAdif)
@@ -235,12 +263,58 @@ fun SettingsScreen(
                     textDecoration = TextDecoration.Underline,
                 )
             }
+            UpdateCheck(vm)
             Spacer(Modifier.height(24.dp))
         }
     }
 }
 
 private const val PROJECT_URL = "https://github.com/vladkondratyev/qso-log"
+
+/** "Проверить обновления": asks GitHub for the latest release; a newer one opens a dialog with its changes and a download. */
+@Composable
+private fun UpdateCheck(vm: AppViewModel) {
+    val x = LocalExtra.current
+    val uri = LocalUriHandler.current
+    val state = vm.update
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(
+            onClick = vm::checkUpdate,
+            enabled = state != UpdateState.Checking,
+            modifier = Modifier.height(52.dp),
+            shape = RoundedCornerShape(14.dp),
+        ) {
+            if (state == UpdateState.Checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            else Icon(Icons.Filled.SystemUpdate, null)
+            Spacer(Modifier.width(8.dp))
+            Text(if (state == UpdateState.Checking) "Проверяю…" else "Проверить обновления", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        }
+        when (state) {
+            UpdateState.UpToDate -> Text("У вас последняя версия ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge, color = x.ok)
+            is UpdateState.Failed -> Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
+            else -> {}
+        }
+    }
+    if (state is UpdateState.Available) {
+        val r = state.release
+        AlertDialog(
+            onDismissRequest = vm::dismissUpdate,
+            icon = { Icon(Icons.Filled.SystemUpdate, null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Доступна версия ${r.version}") },
+            text = {
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Установлена ${BuildConfig.VERSION_NAME}. Что нового:", style = MaterialTheme.typography.titleSmall)
+                    Text(r.notes.ifBlank { "Описание изменений есть на странице релиза." }, style = MaterialTheme.typography.bodyLarge)
+                }
+            },
+            confirmButton = {
+                // The APK opens in the browser; Android then offers to install it over the current version.
+                Button(onClick = { uri.openUri(r.apkUrl ?: r.pageUrl); vm.dismissUpdate() }) { Text("Скачать") }
+            },
+            dismissButton = { TextButton(onClick = vm::dismissUpdate) { Text("Позже") } },
+        )
+    }
+}
 
 /** A collapsible settings block: title, one-line summary of what is set, chevron. */
 @Composable

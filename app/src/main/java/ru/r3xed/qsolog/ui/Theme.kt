@@ -89,8 +89,7 @@ private val AppTypography = Typography(
 )
 
 @Composable
-fun QsoTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+fun QsoTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     androidx.compose.runtime.CompositionLocalProvider(LocalExtra provides if (dark) DarkExtra else LightExtra) {
         MaterialTheme(colorScheme = if (dark) Dark else Light, typography = AppTypography, content = content)
     }

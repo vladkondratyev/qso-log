@@ -1,11 +1,6 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
-import kotlinx.coroutines.delay
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -41,7 +36,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Mic
@@ -53,17 +47,13 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -162,8 +152,6 @@ fun LogScreen(
                 val listState = rememberLazyListState()
                 // A new order starts from the top, not from wherever the old one was scrolled to.
                 LaunchedEffect(vm.sortBy, vm.sortDesc) { listState.scrollToItem(0) }
-                // The first row of the log demonstrates the swipe once, see SwipeRow.
-                val firstId = groups.firstOrNull()?.items?.firstOrNull()?.id
                 LazyColumn(
                     Modifier.weight(1f).fillMaxWidth(),
                     state = listState,
@@ -173,7 +161,7 @@ fun LogScreen(
                     groups.forEach { g ->
                         if (g.title != null) stickyHeader(key = "h" + g.key) { GroupHeader(g.title, g.items.size) }
                         items(g.items, key = { it.id }) { qso ->
-                            SwipeRow(qso, vm, showDate = vm.sortBy != SortBy.DATE, peek = vm.swipeHintPending && qso.id == firstId, modifier = Modifier.animateItem())
+                            LogRow(qso, vm, showDate = vm.sortBy != SortBy.DATE, modifier = Modifier.animateItem())
                         }
                     }
                 }
@@ -291,62 +279,20 @@ private fun GroupHeader(title: String, count: Int) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** A log row. Deleting is only possible from the card ("Удалить" there), never from the list. */
 @Composable
-private fun SwipeRow(qso: Qso, vm: AppViewModel, showDate: Boolean, peek: Boolean = false, modifier: Modifier = Modifier) {
-    // Shown once: the row slides a little to the left and back, uncovering the red "Удалить" underneath.
-    val peekOffset = remember { Animatable(0f) }
-    val density = LocalDensity.current
-    if (peek) LaunchedEffect(Unit) {
-        delay(900)
-        val dx = with(density) { -96.dp.toPx() }
-        peekOffset.animateTo(dx, tween(450))
-        delay(700)
-        peekOffset.animateTo(0f, tween(350))
-        vm.swipeHintDone()
-    }
-    // confirmValueChange can fire more than once for one swipe; delete only once.
-    var deleted by remember(qso.id) { mutableStateOf(false) }
-    val state = rememberSwipeToDismissBoxState(confirmValueChange = {
-        if (it == SwipeToDismissBoxValue.EndToStart) {
-            if (!deleted) {
-                deleted = true
-                vm.delete(qso)
-            }
-            true
-        } else false
-    })
-    SwipeToDismissBox(
-        state = state,
+private fun LogRow(qso: Qso, vm: AppViewModel, showDate: Boolean, modifier: Modifier = Modifier) {
+    QsoRow(
+        qso,
         modifier = modifier,
-        enableDismissFromStartToEnd = false,
-        // No swipe-to-delete while picking records: a stray swipe must not delete one of them.
-        enableDismissFromEndToStart = !vm.selecting,
-        backgroundContent = {
-            Box(
-                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.error, RoundedCornerShape(14.dp)).padding(horizontal = 24.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Удалить", color = MaterialTheme.colorScheme.onError, style = MaterialTheme.typography.labelLarge)
-                    Spacer(Modifier.width(8.dp))
-                    Icon(Icons.Filled.Delete, null, tint = MaterialTheme.colorScheme.onError)
-                }
-            }
-        },
-    ) {
-        QsoRow(
-            qso,
-            modifier = Modifier.graphicsLayer { translationX = peekOffset.value },
-            showDate = showDate,
-            selecting = vm.selecting,
-            selected = qso.id in vm.selected,
-            onClick = { if (vm.selecting) vm.toggleSelected(qso.id) else vm.edit(qso) },
-            onLongClick = { vm.toggleSelected(qso.id) },
-            refreshing = qso.id in vm.refreshing,
-            onRefresh = { vm.refreshLookup(qso) },
-        )
-    }
+        showDate = showDate,
+        selecting = vm.selecting,
+        selected = qso.id in vm.selected,
+        onClick = { if (vm.selecting) vm.toggleSelected(qso.id) else vm.edit(qso) },
+        onLongClick = { vm.toggleSelected(qso.id) },
+        refreshing = qso.id in vm.refreshing,
+        onRefresh = { vm.refreshLookup(qso) },
+    )
 }
 
 /** Replaces the log header while records are picked: count, select all, export to ADIF, cancel. */

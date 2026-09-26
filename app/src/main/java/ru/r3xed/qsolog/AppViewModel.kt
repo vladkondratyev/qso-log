@@ -26,6 +26,8 @@ import ru.r3xed.qsolog.data.QrzException
 import ru.r3xed.qsolog.data.QrzInfo
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.data.QsoDb
+import ru.r3xed.qsolog.data.Release
+import ru.r3xed.qsolog.data.UpdateChecker
 import ru.r3xed.qsolog.data.Settings
 import ru.r3xed.qsolog.data.StationSettings
 import ru.r3xed.qsolog.data.VoiceNotes
@@ -39,6 +41,20 @@ import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+enum class ThemeMode(val label: String) {
+    SYSTEM("Как в системе"),
+    LIGHT("Светлая"),
+    DARK("Тёмная"),
+}
+
+sealed interface UpdateState {
+    data object Idle : UpdateState
+    data object Checking : UpdateState
+    data object UpToDate : UpdateState
+    data class Available(val release: Release) : UpdateState
+    data class Failed(val message: String) : UpdateState
+}
 
 enum class SortBy(val label: String, val defaultDesc: Boolean) {
     DATE("Дата", true),
@@ -103,14 +119,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         form = form.copy(band = band)
     }
 
-    var sortBy by mutableStateOf(runCatching { SortBy.valueOf(prefs.sortBy) }.getOrDefault(SortBy.DATE)); private set
-    var sortDesc by mutableStateOf(prefs.sortDesc); private set
+    // The log always opens by date, newest on top; another sort lasts only until the app is closed.
+    var sortBy by mutableStateOf(SortBy.DATE); private set
+    var sortDesc by mutableStateOf(true); private set
 
     /** A tap on the current sort flips its direction; a tap on another one selects it with its natural direction. */
     fun sort(by: SortBy) {
         if (by == sortBy) sortDesc = !sortDesc else { sortBy = by; sortDesc = by.defaultDesc }
-        prefs.sortBy = by.name
-        prefs.sortDesc = sortDesc
     }
 
     /** Last centre and zoom of the stations map (lat, lon, zoom), kept while the app runs. */
@@ -138,12 +153,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The "hold to record" line under the add button: only for the first few starts, then the mic icon is enough. */
     val showRecordHint: Boolean
 
-    /** One gentle slide of the top row, so the swipe-to-delete gesture is discoverable. */
-    var swipeHintPending by mutableStateOf(!prefs.swipeHintShown); private set
+    var themeMode by mutableStateOf(runCatching { ThemeMode.valueOf(prefs.theme.uppercase()) }.getOrDefault(ThemeMode.SYSTEM)); private set
 
-    fun swipeHintDone() {
-        swipeHintPending = false
-        prefs.swipeHintShown = true
+    fun setTheme(mode: ThemeMode) {
+        themeMode = mode
+        prefs.theme = mode.name.lowercase()
+    }
+
+    /** Result of "Проверить обновления" in the about block of the settings. */
+    var update by mutableStateOf<UpdateState>(UpdateState.Idle); private set
+
+    fun checkUpdate() {
+        if (update == UpdateState.Checking) return
+        update = UpdateState.Checking
+        viewModelScope.launch {
+            update = try {
+                val r = withContext(Dispatchers.IO) { UpdateChecker.latest() }
+                if (UpdateChecker.isNewer(r.version, BuildConfig.VERSION_NAME)) UpdateState.Available(r) else UpdateState.UpToDate
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                UpdateState.Failed(
+                    if (e is java.net.UnknownHostException) "Нет интернета: не удаётся связаться с GitHub"
+                    else "Не удалось проверить: ${e.message ?: e.javaClass.simpleName}"
+                )
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        update = UpdateState.Idle
     }
 
     /** Where "Назад" in the settings returns: the log, or the card that sent the user there. */
@@ -285,13 +324,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun newQso(audio: String = "") {
         val now = LocalDateTime.now(ZoneOffset.UTC)
-        val mode = prefs.lastMode
+        // Mode, band and frequency of the most recent contact in the log: usually the next one is on the same.
+        // An empty log falls back to what the last saved card had.
+        val latest = allQsos.maxByOrNull { it.timeUtc }
+        val mode = latest?.mode?.ifBlank { null } ?: prefs.lastMode
         form = Form(
             date = DATE_FMT.format(now),
             time = TIME_FMT.format(now),
-            band = prefs.lastBand,
+            band = latest?.band?.ifBlank { null } ?: prefs.lastBand,
             mode = mode,
-            freq = prefs.lastFreq,
+            freq = if (latest != null) latest.freqMhz else prefs.lastFreq,
             rstSent = defaultRst(mode),
             rstRcvd = defaultRst(mode),
             power = settings.power.ifBlank { prefs.lastPower },

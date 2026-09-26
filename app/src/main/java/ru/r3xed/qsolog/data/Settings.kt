@@ -62,20 +62,14 @@ class Settings(context: Context) {
         get() = prefs.getStringSet("enabled_modes", null)?.toSet() ?: DEFAULT_MODES.toSet()
         set(v) = prefs.edit().putStringSet("enabled_modes", v).apply()
 
-    var sortBy: String
-        get() = prefs.getString("sort_by", "DATE") ?: "DATE"
-        set(v) = prefs.edit().putString("sort_by", v).apply()
-    var sortDesc: Boolean
-        get() = prefs.getBoolean("sort_desc", true)
-        set(v) = prefs.edit().putBoolean("sort_desc", v).apply()
+    /** Colour theme: "system" (follow Android), "light" or "dark". */
+    var theme: String
+        get() = prefs.getString("theme", "system") ?: "system"
+        set(v) = prefs.edit().putString("theme", v).apply()
     /** App starts so far; the "hold to record" hint under the add button shows only on the first few. */
     var launchCount: Int
         get() = prefs.getInt("launch_count", 0)
         set(v) = prefs.edit().putInt("launch_count", v).apply()
-    /** The log has shown once how a row slides aside to reveal "Удалить". */
-    var swipeHintShown: Boolean
-        get() = prefs.getBoolean("swipe_hint_shown", false)
-        set(v) = prefs.edit().putBoolean("swipe_hint_shown", v).apply()
     var lastPower: String
         get() = prefs.getString("last_power", "") ?: ""
         set(v) = prefs.edit().putString("last_power", v).apply()
