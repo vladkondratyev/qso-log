@@ -62,6 +62,10 @@ class Settings(context: Context) {
         get() = prefs.getStringSet("enabled_modes", null)?.toSet() ?: DEFAULT_MODES.toSet()
         set(v) = prefs.edit().putStringSet("enabled_modes", v).apply()
 
+    /** Second lookup source: country and region by prefix from HamQTH (free, no account). On by default. */
+    var hamqthEnabled: Boolean
+        get() = prefs.getBoolean("hamqth_enabled", true)
+        set(v) = prefs.edit().putBoolean("hamqth_enabled", v).apply()
     /** Colour theme: "system" (follow Android), "light" or "dark". */
     var theme: String
         get() = prefs.getString("theme", "system") ?: "system"

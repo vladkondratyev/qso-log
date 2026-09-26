@@ -380,6 +380,20 @@ private fun StationCard(vm: AppViewModel) {
                 Text("Ищу на QRZ.ru…", fontSize = 18.sp, color = ink)
             }
             Lookup.NotFound -> if (!hasInfo) Text("На QRZ.ru такого позывного нет", fontSize = 18.sp, color = ink)
+            // Country and region by prefix from HamQTH; say where the data came from and why QRZ.ru did not help.
+            is Lookup.Approx -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("≈ Страна и область по позывному (HamQTH)", fontSize = 16.sp, color = ink.copy(alpha = 0.8f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        lookup.qrzProblem ?: if (vm.settings.qrzLogin.isBlank()) "Имя и точный QTH — с учётной записью QRZ.ru" else "На QRZ.ru такого позывного нет",
+                        fontSize = 16.sp, color = ink.copy(alpha = 0.8f), modifier = Modifier.weight(1f),
+                    )
+                    when {
+                        lookup.qrzProblem != null -> TextButton(onClick = vm::retryLookup) { Text("Повторить") }
+                        vm.settings.qrzLogin.isBlank() -> TextButton(onClick = { vm.openSettings(from = Screen.Edit) }) { Text("Настройки") }
+                    }
+                }
+            }
             is Lookup.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(lookup.message, fontSize = 17.sp, color = ink, modifier = Modifier.weight(1f))
                 // Without an account retrying cannot help: go to the settings, the card waits and looks up on return.
@@ -450,8 +464,12 @@ private fun DistanceCard(vm: AppViewModel, onOpenMap: () -> Unit) {
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(formatKm(km), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 30.sp)
-                        Text("азимут ${az.toInt()}°", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                        val approx = vm.form.approxPosition
+                        Text((if (approx) "≈ " else "") + formatKm(km), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+                        Text(
+                            "азимут ${az.toInt()}°" + if (approx) " · до центра области" else "",
+                            style = MaterialTheme.typography.bodyLarge, color = x.muted,
+                        )
                     }
                     OutlinedButton(onClick = onOpenMap, shape = RoundedCornerShape(12.dp)) {
                         Icon(Icons.Filled.Map, null)
@@ -491,7 +509,7 @@ private fun MapOverlay(vm: AppViewModel, onClose: () -> Unit) {
         ) {
             val az = Geo.bearing(me, them)
             val back = Geo.bearing(them, me)
-            Text(formatKm(Geo.distanceKm(me, them)), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 36.sp)
+            Text((if (vm.form.approxPosition) "≈ " else "") + formatKm(Geo.distanceKm(me, them)), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 36.sp)
             Pair("Азимут на абонента", "${az.toInt()}°")
             Pair("Обратный азимут", "${back.toInt()}°")
             Pair("Локаторы", "${vm.form.myLocator.ifBlank { vm.settings.myLocator }} → ${vm.form.locator.ifBlank { Geo.latLonToLocator(them) }}")

@@ -82,6 +82,7 @@ import ru.r3xed.qsolog.SortBy
 import ru.r3xed.qsolog.TIME_FMT
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.Qso
+import ru.r3xed.qsolog.data.approxPosition
 import ru.r3xed.qsolog.utc
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -152,6 +153,8 @@ fun LogScreen(
                 val listState = rememberLazyListState()
                 // A new order starts from the top, not from wherever the old one was scrolled to.
                 LaunchedEffect(vm.sortBy, vm.sortDesc) { listState.scrollToItem(0) }
+                // A just-saved contact is shown: with the date sort it is the first row.
+                LaunchedEffect(vm.newSavedTick) { if (vm.newSavedTick > 0) listState.animateScrollToItem(0) }
                 LazyColumn(
                     Modifier.weight(1f).fillMaxWidth(),
                     state = listState,
@@ -388,10 +391,10 @@ private fun QsoRow(
             qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null },
             qso.mode.ifBlank { null },
             if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent} / ${qso.rstRcvd}" else null,
-            qso.distanceKm?.let { formatKm(it) },
+            qso.distanceKm?.let { (if (qso.approxPosition) "≈ " else "") + formatKm(it) },
         ).joinToString("  ·  ")
         if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-        val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ")
+        val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ").ifBlank { qso.country }
         if (who.isNotEmpty()) Text(who, style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         else if (qso.pendingLookup) Text("Данные QRZ.ru не получены", style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1)
     }

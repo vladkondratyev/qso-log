@@ -20,6 +20,8 @@ import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.CallHistory
 import ru.r3xed.qsolog.data.Csv
 import ru.r3xed.qsolog.data.Geo
+import ru.r3xed.qsolog.data.HamQth
+import ru.r3xed.qsolog.data.approxPosition
 import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzException
@@ -152,6 +154,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The "hold to record" line under the add button: only for the first few starts, then the mic icon is enough. */
     val showRecordHint: Boolean
+
+    /** Bumped when a new contact is saved; the log scrolls to the top to show it. */
+    var newSavedTick by mutableStateOf(0); private set
+
+    var hamqthEnabled by mutableStateOf(prefs.hamqthEnabled); private set
+
+    fun setHamqth(on: Boolean) {
+        hamqthEnabled = on
+        prefs.hamqthEnabled = on
+    }
 
     var themeMode by mutableStateOf(runCatching { ThemeMode.valueOf(prefs.theme.uppercase()) }.getOrDefault(ThemeMode.SYSTEM)); private set
 
@@ -408,14 +420,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setLocator(loc: String) {
-        form = form.copy(locator = loc, lat = null, lon = null, infoFromQrz = false)
+        form = form.copy(locator = loc, lat = null, lon = null, infoFromQrz = false, adif = form.adif - HamQth.POSITION_FIELD)
     }
 
     fun setCall(raw: String) {
         val call = raw.uppercase().filter { it.isLetterOrDigit() || it == '/' }
         val f = form
         form = if (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank())) {
-            f.copy(call = call, name = "", qth = "", country = "", locator = "", lat = null, lon = null, infoFromQrz = false)
+            f.copy(call = call, name = "", qth = "", country = "", locator = "", lat = null, lon = null, infoFromQrz = false, adif = f.adif - HamQth.POSITION_FIELD)
         } else f.copy(call = call)
         loadHistory(call)
         lookupJob?.cancel()
@@ -434,21 +446,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         lookupJob = viewModelScope.launch { runLookup(form.call) }
     }
 
+    /**
+     * QRZ.ru first (full data: name, QTH, locator). Without an account, when it does not know the callsign or fails,
+     * HamQTH's free prefix search fills country, region, zones and an approximate position, if switched on.
+     */
     private suspend fun runLookup(call: String) {
+        lookup = Lookup.Loading
         if (settings.qrzLogin.isBlank()) {
-            lookup = Lookup.Failed("Укажите учётную запись QRZ.ru в настройках", noAccount = true)
+            lookup = hamqthFallback(call, qrzProblem = null)
+                ?: Lookup.Failed("Укажите учётную запись QRZ.ru в настройках", noAccount = true)
             return
         }
-        lookup = Lookup.Loading
         lookup = try {
             val info = qrz.lookup(call) { form.call == call }
-            if (info == null) Lookup.NotFound else {
+            if (info == null) hamqthFallback(call, qrzProblem = null) ?: Lookup.NotFound else {
                 val f = form
                 if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
                     form = f.copy(
                         name = info.fullName, qth = info.city, country = info.country,
                         locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
                         lat = info.lat, lon = info.lon, infoFromQrz = true,
+                        adif = f.adif - HamQth.POSITION_FIELD,
                     )
                 }
                 Lookup.Found(info)
@@ -456,10 +474,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: QrzException) {
-            Lookup.Failed(e.message ?: "Ошибка QRZ.ru")
+            val msg = e.message ?: "Ошибка QRZ.ru"
+            hamqthFallback(call, qrzProblem = msg) ?: Lookup.Failed(msg)
         } catch (e: Exception) {
-            Lookup.Failed(networkError(e))
+            val msg = networkError(e)
+            hamqthFallback(call, qrzProblem = msg) ?: Lookup.Failed(msg)
         }
+    }
+
+    /** HamQTH prefix search into the card; null when switched off, unknown or unreachable. */
+    private suspend fun hamqthFallback(call: String, qrzProblem: String?): Lookup? {
+        if (!hamqthEnabled) return null
+        val d = try {
+            withContext(Dispatchers.IO) { HamQth.dxcc(call) } ?: return null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return null
+        }
+        val f = form
+        if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
+            // Zones and DXCC go to their ADIF fields unless the card already has them.
+            val extra = mapOf("CQZ" to d.cqZone, "ITUZ" to d.ituZone, "DXCC" to d.dxcc, "CONT" to d.continent)
+                .filter { (k, v) -> v.isNotBlank() && f.adif[k].isNullOrBlank() }
+            form = f.copy(
+                name = "", qth = d.region, country = d.country, locator = "",
+                lat = d.lat, lon = d.lon, infoFromQrz = true,
+                adif = f.adif + extra + if (d.position != null) mapOf(HamQth.POSITION_FIELD to HamQth.POSITION_REGION) else emptyMap(),
+            )
+        }
+        return Lookup.Approx(d, qrzProblem)
     }
 
     private fun networkError(e: Exception) = when (e) {
@@ -511,18 +555,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     "На QRZ.ru позывного ${qso.call} нет"
                 } else {
                     val pos = info.position
-                    val lat = qso.lat ?: pos?.lat
-                    val lon = qso.lon ?: pos?.lon
+                    // A region-centre position from HamQTH gives way to the station's own one.
+                    val approx = qso.approxPosition && pos != null
+                    val lat = if (approx) pos!!.lat else qso.lat ?: pos?.lat
+                    val lon = if (approx) pos!!.lon else qso.lon ?: pos?.lon
                     val me = Geo.locatorToLatLon(qso.myLocator) ?: settings.myPosition
                     val them = if (lat != null && lon != null) LatLon(lat, lon) else null
                     val updated = qso.copy(
                         name = qso.name.ifBlank { info.fullName },
-                        qth = qso.qth.ifBlank { info.city },
+                        qth = if (approx) info.city.ifBlank { qso.qth } else qso.qth.ifBlank { info.city },
                         country = qso.country.ifBlank { info.country },
                         locator = qso.locator.ifBlank { info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) }.orEmpty() } },
                         lat = lat, lon = lon,
-                        distanceKm = qso.distanceKm ?: if (me != null && them != null) Geo.distanceKm(me, them) else null,
-                        bearing = qso.bearing ?: if (me != null && them != null) Geo.bearing(me, them) else null,
+                        distanceKm = (if (approx) null else qso.distanceKm) ?: if (me != null && them != null) Geo.distanceKm(me, them) else null,
+                        bearing = (if (approx) null else qso.bearing) ?: if (me != null && them != null) Geo.bearing(me, them) else null,
+                        adif = if (approx) qso.adif - HamQth.POSITION_FIELD else qso.adif,
                         pendingLookup = false,
                         updatedAt = System.currentTimeMillis(),
                     )
@@ -576,9 +623,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
         if (f.removedAudio.isNotBlank() && f.removedAudio != f.audio) voice.delete(f.removedAudio)
         // QRZ.ru did not answer (no internet, error, still waiting): keep a mark so the log can retry later.
-        val lookupMissed = settings.qrzLogin.isNotBlank() && !f.infoFromQrz &&
-            (lookup is Lookup.Failed || lookup is Lookup.Loading)
-        val finalQso = qso.copy(pendingLookup = if (f.infoFromQrz) false else lookupMissed || (!f.isNew && f.pendingLookup))
+        val l = lookup
+        val lookupMissed = settings.qrzLogin.isNotBlank() &&
+            (!f.infoFromQrz && (l is Lookup.Failed || l is Lookup.Loading) || (l is Lookup.Approx && l.qrzProblem != null))
+        val finalQso = qso.copy(pendingLookup = lookupMissed || (!f.isNew && f.pendingLookup && !(f.infoFromQrz && l is Lookup.Found)))
         prefs.lastBand = f.band
         prefs.lastMode = f.mode
         prefs.lastFreq = f.freq
@@ -586,6 +634,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) { db.save(finalQso) }
             reload()
+            if (f.isNew) newSavedTick++
             val note = if (finalQso.pendingLookup) ". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе" else ""
             _messages.send(Message((if (f.isNew) "Связь с ${f.call} записана" else "Изменения сохранены") + note))
         }

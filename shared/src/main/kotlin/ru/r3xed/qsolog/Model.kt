@@ -60,6 +60,8 @@ data class Form(
     val position: LatLon?
         get() = if (lat != null && lon != null) LatLon(lat, lon) else Geo.locatorToLatLon(locator)
     val isNew get() = id == 0L
+    /** The position is the centre of the region from HamQTH, not the station's own QTH. */
+    val approxPosition get() = adif[ru.r3xed.qsolog.data.HamQth.POSITION_FIELD] == ru.r3xed.qsolog.data.HamQth.POSITION_REGION
 }
 
 sealed interface Lookup {
@@ -67,6 +69,11 @@ sealed interface Lookup {
     data object Loading : Lookup
     data object NotFound : Lookup
     data class Found(val info: QrzInfo) : Lookup
+    /**
+     * QRZ.ru gave nothing (no account, no such callsign, or an error in [qrzProblem]); country, region and an approximate
+     * position came from HamQTH by the prefix.
+     */
+    data class Approx(val dxcc: ru.r3xed.qsolog.data.DxccInfo, val qrzProblem: String? = null) : Lookup
     /** [noAccount]: no QRZ.ru login in the settings, so the card offers to open them instead of retrying. */
     data class Failed(val message: String, val noAccount: Boolean = false) : Lookup
 }

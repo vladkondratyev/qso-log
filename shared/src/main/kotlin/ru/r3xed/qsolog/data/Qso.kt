@@ -34,6 +34,9 @@ data class Qso(
     val updatedAt: Long = System.currentTimeMillis(),
 )
 
+/** Distance of this record is from the region centre (HamQTH), not from the station's QTH. */
+val Qso.approxPosition get() = adif[HamQth.POSITION_FIELD] == HamQth.POSITION_REGION
+
 /** How many times we worked a station and when the most recent contact was. */
 data class CallHistory(val count: Int, val last: Qso?)
 

@@ -161,6 +161,23 @@ fun SettingsScreen(
             }
 
             // Station defaults: copied into each new contact, where they stay as that record's own values.
+            SettingsBlock("Второй источник: HamQTH", if (vm.hamqthEnabled) "включён · без учётной записи" else "выключен") {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
+                        .toggleable(value = vm.hamqthEnabled, role = Role.Switch, onValueChange = vm::setHamqth)
+                        .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Страна и область по позывному", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Switch(checked = vm.hamqthEnabled, onCheckedChange = null)
+                }
+                Note(
+                    "Если учётной записи QRZ.ru нет, позывного там нет или QRZ.ru не отвечает, программа спросит бесплатный " +
+                        "справочник HamQTH.com. Он по префиксу даёт страну, область, зоны CQ и ITU и центр области — " +
+                        "расстояние тогда примерное, со знаком ≈. Имени и точного QTH там нет. Учётная запись не нужна.",
+                )
+            }
+
             SettingsBlock(
                 "Моя станция для новых записей",
                 listOfNotNull(s.power.takeIf { it.isNotBlank() }?.let { "$it Вт" }, s.station["MY_RIG"], s.station["MY_ANTENNA"]).joinToString(" · ").ifBlank { "не заполнено" },
