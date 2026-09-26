@@ -145,7 +145,8 @@ private fun unwrapped(points: List<LatLon>): List<LatLon> {
 }
 
 /** A labelled point on the map; [onClick] makes it clickable. */
-class MapMarker(val pos: LatLon, val label: String, val color: Color, val onClick: (() -> Unit)? = null)
+/** [home]: my own station, drawn larger as a target. */
+class MapMarker(val pos: LatLon, val label: String, val color: Color, val onClick: (() -> Unit)? = null, val home: Boolean = false)
 
 /** Zoom level and centre in world pixels, kept by the caller to return to the same view. */
 data class MapCamera(val zoom: Int, val cx: Double, val cy: Double)
@@ -328,8 +329,13 @@ fun MarkerMap(
 
             markers.forEach { mk ->
                 val s = screen(mk.pos)
-                drawCircle(Color.White, radius = 9.dp.toPx(), center = s)
-                drawCircle(mk.color, radius = 6.5.dp.toPx(), center = s)
+                val r = if (mk.home) 10.dp.toPx() else 6.5.dp.toPx()
+                drawCircle(Color.White, radius = r + 2.5.dp.toPx(), center = s)
+                drawCircle(mk.color, radius = r, center = s)
+                if (mk.home) {
+                    drawCircle(Color.White, radius = r * 0.62f, center = s)
+                    drawCircle(mk.color, radius = r * 0.34f, center = s)
+                }
                 if (mk.label.isNotBlank()) {
                     val text = measurer.measure(mk.label, labelStyle.copy(color = if (filledLabels) Color.White else Color(0xFF14202B)))
                     val pad = 5.dp.toPx()

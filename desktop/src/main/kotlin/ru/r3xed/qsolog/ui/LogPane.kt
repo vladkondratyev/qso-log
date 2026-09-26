@@ -79,6 +79,9 @@ import ru.r3xed.qsolog.TIME_FMT
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.utc
+import ru.r3xed.qsolog.data.approxPosition
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -112,7 +115,7 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
             }
             Spacer(Modifier.width(8.dp))
             Tip("Настройки") {
-                FilledTonalIconButton(onClick = { state.pane = Pane.Settings }, modifier = Modifier.size(52.dp)) {
+                FilledTonalIconButton(onClick = { state.openSettings() }, modifier = Modifier.size(52.dp)) {
                     Icon(Icons.Filled.Settings, contentDescription = "Настройки", modifier = Modifier.size(28.dp))
                 }
             }
@@ -136,10 +139,9 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
             ),
         )
 
-        AddQsoButton(state, shortcut, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
 
         if (state.qsos.isEmpty()) {
-            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (state.query.isNotBlank()) {
                     Text("Ничего не найдено", style = MaterialTheme.typography.titleLarge)
                     Text("Проверьте написание или очистите поиск.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
@@ -158,7 +160,9 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
             val listState = rememberLazyListState()
             // A new order starts from the top, not from wherever the old one was scrolled to.
             LaunchedEffect(state.sortBy, state.sortDesc) { listState.scrollToItem(0) }
-            Box(Modifier.fillMaxSize()) {
+            // A just-saved contact is shown: with the date sort it is the first row.
+            LaunchedEffect(state.newSavedTick) { if (state.newSavedTick > 0) listState.animateScrollToItem(0) }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
                 LazyColumn(
                     Modifier.fillMaxSize().padding(end = 8.dp),
                     state = listState,
@@ -175,6 +179,9 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                 VerticalScrollbar(rememberScrollbarAdapter(listState), Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(vertical = 4.dp))
             }
         }
+
+        // At the bottom, like on the phone; holding it records a voice note.
+        AddQsoButton(state, shortcut, Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp))
     }
 }
 
@@ -222,48 +229,35 @@ private fun groupAndSort(list: List<Qso>, by: SortBy, desc: Boolean): List<Group
     }
 }
 
-/** Four sort buttons in one row, icon over label; the selected one shows the direction arrow. */
+/** Four compact sort chips sized to their labels; with a large system font the row scrolls sideways instead of cutting words. */
 @Composable
 private fun SortBar(state: AppState) {
     val x = LocalExtra.current
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).height(IntrinsicSize.Min),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         SortBy.entries.forEach { by ->
             val selected = state.sortBy == by
             val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-            Column(
-                Modifier.weight(1f).fillMaxHeight()
-                    .clip(RoundedCornerShape(14.dp))
+            Row(
+                Modifier.height(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
                     .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
                     .clickable(onClickLabel = "Сортировать: ${by.label}") { state.sort(by) }
-                    .padding(vertical = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                    .padding(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(by.label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1, softWrap = false)
+                if (selected) {
                     Icon(
-                        when (by) {
-                            SortBy.DATE -> Icons.Filled.CalendarMonth
-                            SortBy.DISTANCE -> Icons.Filled.Straighten
-                            SortBy.CALL -> Icons.Filled.SortByAlpha
-                            SortBy.BAND -> Icons.Filled.GraphicEq
-                        },
-                        null,
-                        Modifier.size(22.dp),
+                        if (state.sortDesc) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
+                        if (state.sortDesc) "по убыванию" else "по возрастанию",
+                        Modifier.size(16.dp),
                         tint = fg,
                     )
-                    if (selected) {
-                        Icon(
-                            if (state.sortDesc) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
-                            if (state.sortDesc) "по убыванию" else "по возрастанию",
-                            Modifier.size(18.dp),
-                            tint = fg,
-                        )
-                    }
                 }
-                Text(by.label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
             }
         }
     }
@@ -374,20 +368,15 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
                 qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null },
                 qso.mode.ifBlank { null },
                 if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent} / ${qso.rstRcvd}" else null,
-                qso.distanceKm?.let { formatKm(it) },
+                qso.distanceKm?.let { (if (qso.approxPosition) "≈ " else "") + formatKm(it) },
             ).joinToString("  ·  ")
             if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-            val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ")
+            val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ").ifBlank { qso.country }
             if (who.isNotEmpty()) Text(who, style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             else if (qso.pendingLookup) Text("Данные QRZ.ru не получены", style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1)
         }
-        if (!selecting) {
-            Tip("Удалить") {
-                IconButton(onClick = { state.delete(qso) }) { Icon(Icons.Filled.DeleteOutline, "Удалить связь с ${qso.call}", tint = x.muted) }
-            }
-        } else {
-            Spacer(Modifier.width(10.dp))
-        }
+        // Deleting is only possible from the card ("Удалить" there), never from the list.
+        Spacer(Modifier.width(10.dp))
     }
 }
 

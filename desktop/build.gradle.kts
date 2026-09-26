@@ -12,7 +12,7 @@ kotlin {
 // -Ptarget=windows / linux builds the jar with that system's graphics libraries (bundles for them are made on a Mac).
 val target = (findProperty("target") as String?) ?: "current"
 
-val appVersion = "1.2.0"
+val appVersion = "1.3.0"
 
 // APP_VERSION for the settings pane, the ADIF header and the HTTP User-Agent.
 val generateBuildInfo by tasks.registering {

@@ -307,12 +307,15 @@ class Settings {
         get() = props.getProperty("enabled_modes")?.let(::splitSet) ?: DEFAULT_MODES.toSet()
         set(v) = put("enabled_modes", v.joinToString(","))
 
-    var sortBy: String
-        get() = get("sort_by", "DATE")
-        set(v) = put("sort_by", v)
-    var sortDesc: Boolean
-        get() = get("sort_desc", "true") == "true"
-        set(v) = put("sort_desc", v.toString())
+    /** Second lookup source: country and region by prefix from HamQTH (free, no account). On by default. */
+    var hamqthEnabled: Boolean
+        get() = get("hamqth_enabled", "true") == "true"
+        set(v) = put("hamqth_enabled", v.toString())
+
+    /** Colour theme: "system" (follow the OS), "light" or "dark". */
+    var theme: String
+        get() = get("theme", "system")
+        set(v) = put("theme", v)
 
     private fun splitSet(s: String) = s.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 

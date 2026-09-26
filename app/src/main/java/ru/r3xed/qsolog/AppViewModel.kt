@@ -329,6 +329,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Closes the card without saving; a voice note recorded for an unsaved contact is deleted. */
     fun closeEditor() {
+        lookupJob?.cancel() // a lookup for another card must not land in this one
         val f = form
         if (f.isNew) {
             if (f.audio.isNotBlank()) voice.delete(f.audio)
@@ -338,6 +339,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun newQso(audio: String = "") {
+        lookupJob?.cancel() // a lookup for another card must not land in this one
         val now = LocalDateTime.now(ZoneOffset.UTC)
         // Mode, band and frequency of the most recent contact in the log: usually the next one is on the same.
         // An empty log falls back to what the last saved card had.
@@ -366,6 +368,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun edit(qso: Qso, from: Screen = Screen.Log) {
+        lookupJob?.cancel() // a lookup for another card must not land in this one
         val t = utc(qso.timeUtc)
         form = Form(
             id = qso.id, call = qso.call,

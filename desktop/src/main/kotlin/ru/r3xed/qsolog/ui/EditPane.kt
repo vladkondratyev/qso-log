@@ -1,14 +1,27 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import ru.r3xed.qsolog.data.defaultRst
+import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
@@ -47,7 +60,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,6 +67,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +81,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.r3xed.qsolog.AppState
+import ru.r3xed.qsolog.Pane
 import ru.r3xed.qsolog.SAVE_SHORTCUT
 import ru.r3xed.qsolog.DATE_FMT
 import ru.r3xed.qsolog.Lookup
@@ -78,39 +92,51 @@ import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.utc
 
-@OptIn(ExperimentalLayoutApi::class)
+
 @Composable
 fun EditPane(vm: AppState) {
     val f = vm.form
     val x = LocalExtra.current
     var showMap by remember(vm.editSession) { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    var more by remember(vm.editSession) { mutableStateOf(!f.isNew) }
+    val error = vm.formError
+    // A new contact gets the current UTC time on its own: show it as one line, the fields open on ✎.
+    var editTime by remember(vm.editSession) { mutableStateOf(!f.isNew) }
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val callFocus = remember { FocusRequester() }
+    val freqFocus = remember { FocusRequester() }
+    val rstFocus = remember { FocusRequester() }
+    val rstRcvdFocus = remember { FocusRequester() }
+
+    // Closing a card with typed data asks first (Esc does the same, see Main.kt).
+    val close = vm::requestClose
 
     val me = vm.myPositionFor(vm.form)
     val them = f.position
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = vm::closeEditor, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Filled.Close, "Закрыть без сохранения (Esc)", Modifier.size(30.dp))
+            IconButton(onClick = close, modifier = Modifier.size(56.dp)) {
+                Icon(Icons.Filled.Close, "Закрыть (Esc)", Modifier.size(30.dp))
             }
             Text(if (f.isNew) "Новый QSO" else "Запись QSO", style = MaterialTheme.typography.headlineSmall)
         }
 
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
+            Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // --- callsign ---
-            val focus = remember { FocusRequester() }
             // IntrinsicSize.Min: the play button takes the height of the field; top padding skips the floating label.
             Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = f.call,
                     onValueChange = vm::setCall,
-                    modifier = Modifier.weight(1f).focusRequester(focus),
+                    modifier = Modifier.weight(1f).focusRequester(callFocus),
                     label = { Text("Позывной абонента", fontSize = 16.sp) },
+                    isError = error == CALL_ERROR,
+                    supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
                     textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 1.sp),
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
@@ -118,65 +144,95 @@ fun EditPane(vm: AppState) {
                         capitalization = KeyboardCapitalization.Characters,
                         autoCorrect = false,
                         keyboardType = KeyboardType.Ascii,
-                        imeAction = ImeAction.Done,
+                        imeAction = ImeAction.Next,
                     ),
+                    // "Далее" goes to what is usually typed next: the frequency, or the report if it is already there.
+                    keyboardActions = KeyboardActions(onNext = { if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus() }),
                     colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
                 )
                 if (f.audio.isNotBlank()) {
-                    AudioPlayButton(vm.voice.file(f.audio), onDelete = vm::removeAudio, modifier = Modifier.fillMaxHeight().padding(top = 8.dp))
+                    AudioPlayButton(
+                        vm.voice.file(f.audio),
+                        onDelete = vm::removeAudio,
+                        onShare = {
+                            val form = vm.form
+                            exportVoiceNote(vm.voice.file(form.audio), qsoText(form, vm.myPositionFor(form)), form, vm::say)
+                        },
+                        modifier = Modifier.fillMaxHeight().padding(top = 8.dp),
+                    )
                 }
             }
-            LaunchedEffect(vm.editSession) { if (f.isNew) focus.requestFocus() }
+            LaunchedEffect(vm.editSession) { if (f.isNew) callFocus.requestFocus() }
 
             StationCard(vm)
             HistoryCard(vm)
 
             // --- date/time ---
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Field("Дата UTC", f.date, { vm.update(f.copy(date = it)) }, Modifier.weight(1.3f), KeyboardType.Number, mono = true)
-                Field("Время UTC", f.time, { vm.update(f.copy(time = it)) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
-                IconButton(onClick = vm::setNow, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Refresh, "Текущее время") }
+            if (editTime) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Field("Дата UTC", f.date, { vm.update(f.copy(date = it)) }, Modifier.weight(1.3f), KeyboardType.Number, mono = true)
+                    Field("Время UTC", f.time, { vm.update(f.copy(time = it)) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
+                    IconButton(onClick = vm::setNow, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Refresh, "Текущее время") }
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
+                        .clickable(onClickLabel = "Изменить дату и время") { editTime = true }
+                        .padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Schedule, null, Modifier.size(22.dp), tint = x.muted)
+                    Spacer(Modifier.width(10.dp))
+                    // Time first (what changes), then the date; wraps to a second line with a large system font.
+                    Text(
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp)) { append(f.time) }
+                            withStyle(SpanStyle(fontSize = 14.sp, color = x.muted)) { append(" UTC   ") }
+                            withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp)) { append(f.date) }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = vm::setNow) { Icon(Icons.Filled.Refresh, "Текущее время") }
+                    IconButton(onClick = { editTime = true }) { Icon(Icons.Filled.Edit, "Изменить дату и время") }
+                }
             }
 
-            // Buttons: what is switched on in the settings, plus the record's own value if that one is switched off.
-            Label("Диапазон", f.band)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                BANDS.filter { it in vm.enabledBands || it == f.band }.forEach { b -> Chip(b, f.band == b) { vm.setBand(b) } }
-                if (f.band.isNotBlank() && f.band !in BANDS) Chip(f.band, true) {}
-            }
+            // Frequency first: typing it picks the band below by itself.
+            Field("Частота, МГц", f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
+
+            // One scrolling row each: what is switched on in the settings, plus the record's own value if that one is off.
             Label("Вид связи", f.mode)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                MODES.filter { it in vm.enabledModes || it == f.mode }.forEach { m -> Chip(m, f.mode == m) { vm.setMode(m) } }
-                if (f.mode.isNotBlank() && f.mode !in MODES) Chip(f.mode, true) {}
-            }
+            ChipRow(MODES.filter { it in vm.enabledModes || it == f.mode } + listOfNotNull(f.mode.takeIf { it.isNotBlank() && it !in MODES }), f.mode, vm::setMode)
+            Label("Диапазон", f.band)
+            ChipRow(BANDS.filter { it in vm.enabledBands || it == f.band } + listOfNotNull(f.band.takeIf { it.isNotBlank() && it !in BANDS }), f.band, vm::setBand)
 
-            Field("Частота, МГц", f.freq, vm::setFreq, Modifier.fillMaxWidth(), KeyboardType.Decimal, mono = true)
+            // Reports: the usual values one tap away, digits keyboard unless the mode reports in dB.
+            val quick = quickReports(f.mode)
+            val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field("RST отправлен", f.rstSent, { vm.update(f.copy(rstSent = it)) }, Modifier.weight(1f), KeyboardType.Text, mono = true)
-                Field("RST принят", f.rstRcvd, { vm.update(f.copy(rstRcvd = it)) }, Modifier.weight(1f), KeyboardType.Text, mono = true)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RstField("RST отправлен", f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                    QuickValues(quick, f.rstSent) { vm.update(vm.form.copy(rstSent = it)) }
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RstField("RST принят", f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus), rstKeyboard, onNext = null)
+                    QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
+                }
             }
 
             // --- distance & map ---
             DistanceCard(vm, onOpenMap = { showMap = true })
 
-            // --- more fields ---
-            Surface(
-                onClick = { more = !more },
-                shape = RoundedCornerShape(12.dp),
-                color = x.field,
+            // --- all fields: each group opens on its own, the header says how many fields are filled ---
+            Label("Все поля ADIF")
+            val filled = { keys: Collection<String> -> keys.count { !f.adif[it].isNullOrBlank() } }
+            // Name, QTH, country and locator are edited in the card at the top; only fields found nowhere else here.
+            FieldGroup("Абонент", filled(AdifLabels.THEM.keys)) { AdifFields(vm, AdifLabels.THEM) }
+            // End time and receive band/frequency are filled from the main fields, see AdifLabels.DERIVED.
+            FieldGroup(
+                "Связь",
+                filled(AdifLabels.CONTACT.keys) + listOf(f.power.isNotBlank(), f.qslSent, f.qslRcvd, f.comment.isNotBlank()).count { it },
             ) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Все поля: абонент, связь, моя станция, ADIF", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                    Icon(if (more) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
-                }
-            }
-            if (more) {
-                // Name, QTH, country and locator are edited in the card at the top; only fields found nowhere else here.
-                Group("Абонент")
-                AdifFields(vm, AdifLabels.THEM)
-
-                // End time and receive band/frequency are filled from the main fields, see AdifLabels.DERIVED.
-                Group("Связь")
                 Field("Мощность, Вт", f.power, { vm.update(f.copy(power = it)) }, Modifier.fillMaxWidth(), KeyboardType.Number, mono = true)
                 AdifFields(vm, AdifLabels.CONTACT)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -191,31 +247,25 @@ fun EditPane(vm: AppState) {
                     modifier = Modifier.fillMaxWidth(), label = { Text("Комментарий") },
                     textStyle = MaterialTheme.typography.bodyLarge, minLines = 2, shape = RoundedCornerShape(12.dp),
                 )
-
-                Group("Моя станция")
+            }
+            FieldGroup("Моя станция", filled(AdifLabels.MINE.keys) + listOf(f.myCall, f.myLocator).count { it.isNotBlank() }) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Field("Мой позывной", f.myCall, { vm.update(f.copy(myCall = it.uppercase())) }, Modifier.weight(1f), mono = true)
                     Field("Мой локатор", f.myLocator, { vm.update(f.copy(myLocator = it)) }, Modifier.weight(1f), mono = true)
                 }
                 AdifFields(vm, AdifLabels.MINE)
-
-                Group("Прохождение")
-                AdifFields(vm, AdifLabels.SPACE_WEATHER, perRow = 3)
-
-                // Anything else the imported log carried, shown under its ADIF name.
-                val other = f.adif.keys.filter { it !in AdifLabels.KNOWN }
-                if (other.isNotEmpty()) {
-                    Group("Другие поля ADIF")
-                    AdifFields(vm, other.associateWith { it })
-                }
             }
+            FieldGroup("Прохождение", filled(AdifLabels.SPACE_WEATHER.keys)) { AdifFields(vm, AdifLabels.SPACE_WEATHER, perRow = 3) }
+            // Anything else the imported log carried, shown under its ADIF name.
+            val other = f.adif.keys.filter { it !in AdifLabels.KNOWN }
+            if (other.isNotEmpty()) FieldGroup("Другие поля ADIF", filled(other)) { AdifFields(vm, other.associateWith { it }) }
             Spacer(Modifier.height(8.dp))
         }
 
         // --- bottom bar ---
         HorizontalDivider(color = x.line)
         Column(Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) {
-            vm.formError?.let {
+            error?.takeIf { it != CALL_ERROR }?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 8.dp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -229,7 +279,14 @@ fun EditPane(vm: AppState) {
                     ) { Text("Удалить", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
                 }
                 Button(
-                    onClick = vm::trySave,
+                    onClick = {
+                        val error = vm.trySave()
+                        when {
+                            // Show the problem where it is: the callsign at the top, the date/time fields opened.
+                            error == CALL_ERROR -> { scope.launch { scroll.animateScrollTo(0) }; callFocus.requestFocus() }
+                            error != null -> editTime = true
+                        }
+                    },
                     modifier = Modifier.weight(1f).height(60.dp),
                     shape = RoundedCornerShape(16.dp),
                 ) {
@@ -242,6 +299,23 @@ fun EditPane(vm: AppState) {
     }
 
     if (showMap && me != null && them != null) MapOverlay(vm, onClose = { showMap = false })
+
+    if (vm.confirmClose) {
+        AlertDialog(
+            onDismissRequest = { vm.confirmClose = false },
+            title = { Text("Закрыть без сохранения?") },
+            text = {
+                Text(
+                    if (f.isNew && f.audio.isNotBlank()) "Введённые данные и голосовая заметка будут потеряны." else "Введённые изменения не сохранятся.",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.confirmClose = false; vm.closeEditor() }) { Text("Закрыть", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { Button(onClick = { vm.confirmClose = false }) { Text("Продолжить ввод") } },
+        )
+    }
 
     if (confirmDelete) {
         val when_ = "${f.date}, ${f.time} UTC"
@@ -270,7 +344,7 @@ private fun StationCard(vm: AppState) {
     // The only place to edit name, QTH, country and locator: tap the pencil, the card turns into fields.
     var editing by remember(f.id, f.createdAt) { mutableStateOf(false) }
 
-    val hasInfo = f.name.isNotBlank() || f.qth.isNotBlank() || f.locator.isNotBlank()
+    val hasInfo = f.name.isNotBlank() || f.qth.isNotBlank() || f.country.isNotBlank() || f.locator.isNotBlank()
     Column(
         Modifier.fillMaxWidth()
             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
@@ -314,9 +388,25 @@ private fun StationCard(vm: AppState) {
                 Text("Ищу на QRZ.ru…", fontSize = 18.sp, color = ink)
             }
             Lookup.NotFound -> if (!hasInfo) Text("На QRZ.ru такого позывного нет", fontSize = 18.sp, color = ink)
+            // Country and region by prefix from HamQTH; say where the data came from and why QRZ.ru did not help.
+            is Lookup.Approx -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("≈ Страна и область по позывному (HamQTH)", fontSize = 16.sp, color = ink.copy(alpha = 0.8f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        lookup.qrzProblem ?: if (vm.settings.qrzLogin.isBlank()) "Имя и точный QTH — с учётной записью QRZ.ru" else "На QRZ.ru такого позывного нет",
+                        fontSize = 16.sp, color = ink.copy(alpha = 0.8f), modifier = Modifier.weight(1f),
+                    )
+                    when {
+                        lookup.qrzProblem != null -> TextButton(onClick = vm::retryLookup) { Text("Повторить") }
+                        vm.settings.qrzLogin.isBlank() -> TextButton(onClick = { vm.openSettings(from = Pane.Edit) }) { Text("Настройки") }
+                    }
+                }
+            }
             is Lookup.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(lookup.message, fontSize = 17.sp, color = ink, modifier = Modifier.weight(1f))
-                TextButton(onClick = vm::retryLookup) { Text("Повторить") }
+                // Without an account retrying cannot help: go to the settings, the card waits and looks up on return.
+                if (lookup.noAccount) TextButton(onClick = { vm.openSettings(from = Pane.Edit) }) { Text("Настройки") }
+                else TextButton(onClick = vm::retryLookup) { Text("Повторить") }
             }
             else -> if (!hasInfo && !editing) Text("Данные появятся здесь. Ввести вручную: ✎ справа", fontSize = 18.sp, color = x.muted)
         }
@@ -382,8 +472,12 @@ private fun DistanceCard(vm: AppState, onOpenMap: () -> Unit) {
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(formatKm(km), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 30.sp)
-                        Text("азимут ${az.toInt()}°", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                        val approx = vm.form.approxPosition
+                        Text((if (approx) "≈ " else "") + formatKm(km), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+                        Text(
+                            "азимут ${az.toInt()}°" + if (approx) " · до центра области" else "",
+                            style = MaterialTheme.typography.bodyLarge, color = x.muted,
+                        )
                     }
                     OutlinedButton(onClick = onOpenMap, shape = RoundedCornerShape(12.dp)) {
                         Icon(Icons.Filled.Map, null)
@@ -423,7 +517,7 @@ private fun MapOverlay(vm: AppState, onClose: () -> Unit) {
         ) {
             val az = Geo.bearing(me, them)
             val back = Geo.bearing(them, me)
-            Text(formatKm(Geo.distanceKm(me, them)), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 36.sp)
+            Text((if (vm.form.approxPosition) "≈ " else "") + formatKm(Geo.distanceKm(me, them)), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 36.sp)
             Pair("Азимут на абонента", "${az.toInt()}°")
             Pair("Обратный азимут", "${back.toInt()}°")
             Pair("Локаторы", "${vm.form.myLocator.ifBlank { vm.settings.myLocator }} → ${vm.form.locator.ifBlank { Geo.latLonToLocator(them) }}")
@@ -448,17 +542,6 @@ private fun Hint(text: String) {
         style = MaterialTheme.typography.bodyLarge,
         color = LocalExtra.current.muted,
         modifier = Modifier.fillMaxWidth().background(LocalExtra.current.field, RoundedCornerShape(12.dp)).padding(14.dp),
-    )
-}
-
-/** Section heading inside the expanded card. */
-@Composable
-private fun Group(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 10.dp),
     )
 }
 
@@ -490,6 +573,89 @@ private fun Label(text: String, value: String? = null) {
     }
 }
 
+private const val CALL_ERROR = "Введите позывной"
+
+/** Reports most often given in this mode, offered as one-tap buttons under the RST fields. */
+private fun quickReports(mode: String): List<String> = when (defaultRst(mode)) {
+    "599" -> listOf("599", "579", "559")
+    "-10" -> listOf("-05", "-10", "-15")
+    else -> listOf("59", "57", "55")
+}
+
+@Composable
+private fun QuickValues(values: List<String>, current: String, onPick: (String) -> Unit) {
+    val x = LocalExtra.current
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        values.forEach { v ->
+            val on = v == current
+            Box(
+                Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp))
+                    .background(if (on) MaterialTheme.colorScheme.primary else x.field)
+                    .clickable(onClickLabel = "Отчёт $v") { onPick(v) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(v, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+}
+
+/**
+ * Report field that selects its whole value on focus, so typing replaces the default "59" instead of appending to it.
+ * [onNext] null: last field, the keyboard shows "Готово".
+ */
+@Composable
+private fun RstField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier, keyboard: KeyboardType, onNext: (() -> Unit)?) {
+    var tfv by remember { mutableStateOf(TextFieldValue(value)) }
+    // A quick button or a mode change can set the value from outside; then show it with the cursor at the end.
+    val shown = if (tfv.text == value) tfv else TextFieldValue(value, TextRange(value.length))
+    OutlinedTextField(
+        value = shown,
+        onValueChange = { tfv = it; if (it.text != value) onChange(it.text) },
+        modifier = modifier.onFocusChanged { if (it.isFocused) tfv = TextFieldValue(value, TextRange(0, value.length)) },
+        label = { Text(label) },
+        singleLine = true,
+        textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+        shape = RoundedCornerShape(12.dp),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = if (onNext == null) ImeAction.Done else ImeAction.Next),
+        keyboardActions = if (onNext != null) KeyboardActions(onNext = { onNext() }) else KeyboardActions.Default,
+    )
+}
+
+/** Chips in one horizontally scrolling row; the selected one is scrolled into view. */
+@Composable
+private fun ChipRow(items: List<String>, selected: String, onPick: (String) -> Unit) {
+    val state = rememberLazyListState()
+    LaunchedEffect(selected, items) {
+        val i = items.indexOf(selected)
+        if (i >= 0) state.animateScrollToItem((i - 1).coerceAtLeast(0))
+    }
+    LazyRow(state = state, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        items(items) { item -> Chip(item, item == selected) { onPick(item) } }
+    }
+}
+
+/** A group of the "all fields" section: header with the number of filled fields, opens and closes on its own. */
+@Composable
+private fun FieldGroup(title: String, filledCount: Int, content: @Composable () -> Unit) {
+    val x = LocalExtra.current
+    var open by rememberSaveable(title) { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
+            .clickable(onClickLabel = if (open) "Свернуть" else "Развернуть") { open = !open }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        Text(
+            if (filledCount > 0) "  · заполнено $filledCount" else "  · пусто",
+            style = MaterialTheme.typography.bodyMedium, color = x.muted, modifier = Modifier.weight(1f),
+        )
+        Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
+    }
+    if (open) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
+}
+
 @Composable
 private fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
     FilterChip(
@@ -514,6 +680,10 @@ fun Field(
     keyboard: KeyboardType = KeyboardType.Text,
     mono: Boolean = false,
     capitalize: Boolean = false,
+    /** Where "Далее" on the keyboard goes; by default the next field in layout order. */
+    onNext: (() -> Unit)? = null,
+    /** The last field of a sequence: the keyboard shows "Готово" and closes. */
+    last: Boolean = false,
 ) {
     OutlinedTextField(
         value = value,
@@ -527,7 +697,8 @@ fun Field(
         keyboardOptions = KeyboardOptions(
             keyboardType = keyboard,
             capitalization = if (capitalize) KeyboardCapitalization.Characters else KeyboardCapitalization.Sentences,
-            imeAction = ImeAction.Next,
+            imeAction = if (last) ImeAction.Done else ImeAction.Next,
         ),
+        keyboardActions = if (onNext != null) KeyboardActions(onNext = { onNext() }) else KeyboardActions.Default,
     )
 }

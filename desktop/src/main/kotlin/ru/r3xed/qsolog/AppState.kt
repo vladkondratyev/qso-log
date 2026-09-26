@@ -18,6 +18,8 @@ import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.CallHistory
 import ru.r3xed.qsolog.data.Csv
 import ru.r3xed.qsolog.data.Geo
+import ru.r3xed.qsolog.data.HamQth
+import ru.r3xed.qsolog.data.approxPosition
 import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzException
@@ -37,6 +39,23 @@ import java.time.LocalTime
 import java.time.ZoneOffset
 
 enum class Pane { Empty, Edit, Settings, Map }
+
+/** Callsign length at which the QRZ.ru / HamQTH lookup starts. */
+const val MIN_LOOKUP_LENGTH = 4
+
+enum class ThemeMode(val label: String) {
+    SYSTEM("Как в системе"),
+    LIGHT("Светлая"),
+    DARK("Тёмная"),
+}
+
+sealed interface UpdateState {
+    data object Idle : UpdateState
+    data object Checking : UpdateState
+    data object UpToDate : UpdateState
+    data class Available(val release: DesktopRelease) : UpdateState
+    data class Failed(val message: String) : UpdateState
+}
 
 enum class SortBy(val label: String, val defaultDesc: Boolean) {
     DATE("Дата", true),
@@ -92,14 +111,13 @@ class AppState {
         prefs.enabledModes = enabledModes
     }
 
-    var sortBy by mutableStateOf(runCatching { SortBy.valueOf(prefs.sortBy) }.getOrDefault(SortBy.DATE)); private set
-    var sortDesc by mutableStateOf(prefs.sortDesc); private set
+    // The log always opens by date, newest on top; another sort lasts only until the app is closed.
+    var sortBy by mutableStateOf(SortBy.DATE); private set
+    var sortDesc by mutableStateOf(true); private set
 
     /** A click on the current sort flips its direction; a click on another one selects it with its natural direction. */
     fun sort(by: SortBy) {
         if (by == sortBy) sortDesc = !sortDesc else { sortBy = by; sortDesc = by.defaultDesc }
-        prefs.sortBy = by.name
-        prefs.sortDesc = sortDesc
     }
 
     /** Last view of the QSO map, kept while the app runs so returning from a card shows the same place. */
@@ -110,6 +128,77 @@ class AppState {
 
     /** Recording started by holding "Новый QSO"; the value is the start time. */
     var recordingSince by mutableStateOf<Long?>(null); private set
+
+    /** Bumped when a new contact is saved; the log scrolls to the top to show it. */
+    var newSavedTick by mutableStateOf(0); private set
+
+    var hamqthEnabled by mutableStateOf(prefs.hamqthEnabled); private set
+
+    fun setHamqth(on: Boolean) {
+        hamqthEnabled = on
+        prefs.hamqthEnabled = on
+    }
+
+    var themeMode by mutableStateOf(runCatching { ThemeMode.valueOf(prefs.theme.uppercase()) }.getOrDefault(ThemeMode.SYSTEM)); private set
+
+    fun setTheme(mode: ThemeMode) {
+        themeMode = mode
+        prefs.theme = mode.name.lowercase()
+    }
+
+    /** Result of "Проверить обновления" in the about block of the settings. */
+    var update by mutableStateOf<UpdateState>(UpdateState.Idle); private set
+
+    fun checkUpdate() {
+        if (update == UpdateState.Checking) return
+        update = UpdateState.Checking
+        scope.launch {
+            update = try {
+                val r = withContext(Dispatchers.IO) { DesktopUpdates.latest() }
+                if (DesktopUpdates.isNewer(r.version, APP_VERSION)) UpdateState.Available(r) else UpdateState.UpToDate
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                UpdateState.Failed(
+                    if (e is java.net.UnknownHostException) "Нет интернета: не удаётся связаться с GitHub"
+                    else "Не удалось проверить: ${e.message ?: e.javaClass.simpleName}"
+                )
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        update = UpdateState.Idle
+    }
+
+    /** Where "Назад" in the settings returns: the empty pane, or the card that sent the user there. */
+    private var settingsReturn = Pane.Empty
+
+    fun openSettings(from: Pane = Pane.Empty) {
+        settingsReturn = from
+        pane = Pane.Settings
+    }
+
+    fun closeSettings() {
+        pane = settingsReturn
+        settingsReturn = Pane.Empty
+        // Coming back to a card after entering the QRZ.ru account: look the callsign up now.
+        if (pane == Pane.Edit && form.call.length >= MIN_LOOKUP_LENGTH && (lookup as? Lookup.Failed)?.noAccount == true) retryLookup()
+    }
+
+    /** The card as it was opened, to tell whether closing it would lose something. */
+    private var formOriginal: Form? = null
+
+    val hasUnsavedChanges: Boolean
+        get() = pane == Pane.Edit && formOriginal.let { it != null && form != it }
+
+    /** "Закрыть без сохранения?" is on screen (from ✕ or Esc). */
+    var confirmClose by mutableStateOf(false)
+
+    /** Closing a card with typed data asks first; an untouched one closes at once. */
+    fun requestClose() {
+        if (hasUnsavedChanges) confirmClose = true else closeEditor()
+    }
 
     /** Records whose QRZ.ru data is being fetched again right now (spinner instead of the button). */
     var refreshing by mutableStateOf<Set<Long>>(emptySet()); private set
@@ -142,7 +231,7 @@ class AppState {
         }
     }
 
-    private fun say(text: String, undo: (() -> Unit)? = null) {
+    fun say(text: String, undo: (() -> Unit)? = null) {
         scope.launch { _messages.send(Message(text, undo)) }
     }
 
@@ -238,6 +327,7 @@ class AppState {
 
     /** Closes the card without saving; a voice note recorded for an unsaved contact is deleted. */
     fun closeEditor() {
+        lookupJob?.cancel() // a lookup for another card must not land in this one
         val f = form
         if (f.isNew) {
             if (f.audio.isNotBlank()) voice.delete(f.audio)
@@ -247,15 +337,19 @@ class AppState {
     }
 
     fun newQso(audio: String = "") {
+        lookupJob?.cancel() // a lookup for another card must not land in this one
         if (pane == Pane.Edit && form.isNew) closeEditor()
         val now = LocalDateTime.now(ZoneOffset.UTC)
-        val mode = prefs.lastMode
+        // Mode, band and frequency of the most recent contact in the log: usually the next one is on the same.
+        // An empty log falls back to what the last saved card had.
+        val latest = allQsos.maxByOrNull { it.timeUtc }
+        val mode = latest?.mode?.ifBlank { null } ?: prefs.lastMode
         form = Form(
             date = DATE_FMT.format(now),
             time = TIME_FMT.format(now),
-            band = prefs.lastBand,
+            band = latest?.band?.ifBlank { null } ?: prefs.lastBand,
             mode = mode,
-            freq = prefs.lastFreq,
+            freq = if (latest != null) latest.freqMhz else prefs.lastFreq,
             rstSent = defaultRst(mode),
             rstRcvd = defaultRst(mode),
             power = settings.power.ifBlank { prefs.lastPower },
@@ -265,6 +359,7 @@ class AppState {
             myLocator = settings.myLocator,
             adif = settings.station,
         )
+        formOriginal = form
         history = CallHistory(0, null)
         lookup = Lookup.Idle
         formError = null
@@ -274,6 +369,7 @@ class AppState {
     }
 
     fun edit(qso: Qso, from: Pane = Pane.Empty) {
+        lookupJob?.cancel() // a lookup for another card must not land in this one
         if (pane == Pane.Edit && form.isNew) closeEditor()
         val t = utc(qso.timeUtc)
         form = Form(
@@ -297,6 +393,7 @@ class AppState {
             distanceKm = qso.distanceKm, bearing = qso.bearing,
             createdAt = qso.createdAt,
         )
+        formOriginal = form
         lookup = Lookup.Idle
         formError = null
         editSession++
@@ -351,18 +448,20 @@ class AppState {
     }
 
     fun setLocator(loc: String) {
-        form = form.copy(locator = loc, lat = null, lon = null, infoFromQrz = false)
+        form = form.copy(locator = loc, lat = null, lon = null, infoFromQrz = false, adif = form.adif - HamQth.POSITION_FIELD)
     }
 
     fun setCall(raw: String) {
         val call = raw.uppercase().filter { it.isLetterOrDigit() || it == '/' }
+        if (formError == "Введите позывной") formError = null
         val f = form
         form = if (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank())) {
-            f.copy(call = call, name = "", qth = "", country = "", locator = "", lat = null, lon = null, infoFromQrz = false)
+            f.copy(call = call, name = "", qth = "", country = "", locator = "", lat = null, lon = null, infoFromQrz = false, adif = f.adif - HamQth.POSITION_FIELD)
         } else f.copy(call = call)
         loadHistory(call)
         lookupJob?.cancel()
-        if (call.length < 3) {
+        // Searching starts from the 4th character: shorter prefixes only waste the QRZ.ru request limit.
+        if (call.length < MIN_LOOKUP_LENGTH) {
             lookup = Lookup.Idle
             return
         }
@@ -377,21 +476,27 @@ class AppState {
         lookupJob = scope.launch { runLookup(form.call) }
     }
 
+    /**
+     * QRZ.ru first (full data: name, QTH, locator). Without an account, when it does not know the callsign or fails,
+     * HamQTH's free prefix search fills country, region, zones and an approximate position, if switched on.
+     */
     private suspend fun runLookup(call: String) {
+        lookup = Lookup.Loading
         if (settings.qrzLogin.isBlank()) {
-            lookup = Lookup.Failed("Укажите учётную запись QRZ.ru в настройках", noAccount = true)
+            lookup = hamqthFallback(call, qrzProblem = null)
+                ?: Lookup.Failed("Укажите учётную запись QRZ.ru в настройках", noAccount = true)
             return
         }
-        lookup = Lookup.Loading
         lookup = try {
             val info = qrz.lookup(call) { form.call == call }
-            if (info == null) Lookup.NotFound else {
+            if (info == null) hamqthFallback(call, qrzProblem = null) ?: Lookup.NotFound else {
                 val f = form
                 if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
                     form = f.copy(
                         name = info.fullName, qth = info.city, country = info.country,
                         locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
                         lat = info.lat, lon = info.lon, infoFromQrz = true,
+                        adif = f.adif - HamQth.POSITION_FIELD,
                     )
                 }
                 Lookup.Found(info)
@@ -399,10 +504,36 @@ class AppState {
         } catch (e: CancellationException) {
             throw e
         } catch (e: QrzException) {
-            Lookup.Failed(e.message ?: "Ошибка QRZ.ru")
+            val msg = e.message ?: "Ошибка QRZ.ru"
+            hamqthFallback(call, qrzProblem = msg) ?: Lookup.Failed(msg)
         } catch (e: Exception) {
-            Lookup.Failed(networkError(e))
+            val msg = networkError(e)
+            hamqthFallback(call, qrzProblem = msg) ?: Lookup.Failed(msg)
         }
+    }
+
+    /** HamQTH prefix search into the card; null when switched off, unknown or unreachable. */
+    private suspend fun hamqthFallback(call: String, qrzProblem: String?): Lookup? {
+        if (!hamqthEnabled) return null
+        val d = try {
+            withContext(Dispatchers.IO) { HamQth.dxcc(call) } ?: return null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return null
+        }
+        val f = form
+        if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
+            // Zones and DXCC go to their ADIF fields unless the card already has them.
+            val extra = mapOf("CQZ" to d.cqZone, "ITUZ" to d.ituZone, "DXCC" to d.dxcc, "CONT" to d.continent)
+                .filter { (k, v) -> v.isNotBlank() && f.adif[k].isNullOrBlank() }
+            form = f.copy(
+                name = "", qth = d.region, country = d.country, locator = "",
+                lat = d.lat, lon = d.lon, infoFromQrz = true,
+                adif = f.adif + extra + if (d.position != null) mapOf(HamQth.POSITION_FIELD to HamQth.POSITION_REGION) else emptyMap(),
+            )
+        }
+        return Lookup.Approx(d, qrzProblem)
     }
 
     private fun networkError(e: Exception) = when (e) {
@@ -420,8 +551,10 @@ class AppState {
         }
     }
 
-    fun trySave() {
+    /** Returns the error shown under the form, or null when saved. */
+    fun trySave(): String? {
         formError = save()
+        return formError
     }
 
     /** Retries the QRZ.ru lookup for a contact saved offline; fills only fields that are still empty. */
@@ -436,18 +569,21 @@ class AppState {
                     "На QRZ.ru позывного ${qso.call} нет"
                 } else {
                     val pos = info.position
-                    val lat = qso.lat ?: pos?.lat
-                    val lon = qso.lon ?: pos?.lon
+                    // A region-centre position from HamQTH gives way to the station's own one.
+                    val approx = qso.approxPosition && pos != null
+                    val lat = if (approx) pos!!.lat else qso.lat ?: pos?.lat
+                    val lon = if (approx) pos!!.lon else qso.lon ?: pos?.lon
                     val me = Geo.locatorToLatLon(qso.myLocator) ?: settings.myPosition
                     val them = if (lat != null && lon != null) LatLon(lat, lon) else null
                     val updated = qso.copy(
                         name = qso.name.ifBlank { info.fullName },
-                        qth = qso.qth.ifBlank { info.city },
+                        qth = if (approx) info.city.ifBlank { qso.qth } else qso.qth.ifBlank { info.city },
                         country = qso.country.ifBlank { info.country },
                         locator = qso.locator.ifBlank { info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) }.orEmpty() } },
                         lat = lat, lon = lon,
-                        distanceKm = qso.distanceKm ?: if (me != null && them != null) Geo.distanceKm(me, them) else null,
-                        bearing = qso.bearing ?: if (me != null && them != null) Geo.bearing(me, them) else null,
+                        distanceKm = (if (approx) null else qso.distanceKm) ?: if (me != null && them != null) Geo.distanceKm(me, them) else null,
+                        bearing = (if (approx) null else qso.bearing) ?: if (me != null && them != null) Geo.bearing(me, them) else null,
+                        adif = if (approx) qso.adif - HamQth.POSITION_FIELD else qso.adif,
                         pendingLookup = false,
                         updatedAt = System.currentTimeMillis(),
                     )
@@ -502,9 +638,10 @@ class AppState {
         )
         if (f.removedAudio.isNotBlank() && f.removedAudio != f.audio) voice.delete(f.removedAudio)
         // QRZ.ru did not answer (no internet, error, still waiting): keep a mark so the log can retry later.
-        val lookupMissed = settings.qrzLogin.isNotBlank() && !f.infoFromQrz &&
-            (lookup is Lookup.Failed || lookup is Lookup.Loading)
-        val finalQso = qso.copy(pendingLookup = if (f.infoFromQrz) false else lookupMissed || (!f.isNew && f.pendingLookup))
+        val l = lookup
+        val lookupMissed = settings.qrzLogin.isNotBlank() &&
+            (!f.infoFromQrz && (l is Lookup.Failed || l is Lookup.Loading) || (l is Lookup.Approx && l.qrzProblem != null))
+        val finalQso = qso.copy(pendingLookup = lookupMissed || (!f.isNew && f.pendingLookup && !(f.infoFromQrz && l is Lookup.Found)))
         prefs.lastBand = f.band
         prefs.lastMode = f.mode
         prefs.lastFreq = f.freq
@@ -514,6 +651,7 @@ class AppState {
             withContext(Dispatchers.IO) { db.save(finalQso) }
             reload()
             val note = if (finalQso.pendingLookup) ". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе" else ""
+            if (f.isNew) newSavedTick++
             say((if (f.isNew) "Связь с ${f.call} записана" else "Изменения сохранены") + note)
         }
         pane = editReturn

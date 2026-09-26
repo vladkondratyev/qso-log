@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -68,7 +69,8 @@ fun main() {
             onPreviewKeyEvent = { e ->
                 if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) when {
                     state.selecting -> { state.clearSelection(); true }
-                    state.pane == Pane.Edit -> { state.closeEditor(); true }
+                    state.pane == Pane.Edit -> { if (state.confirmClose) state.confirmClose = false else state.requestClose(); true }
+                    state.pane == Pane.Settings -> { state.closeSettings(); true }
                     state.pane != Pane.Empty -> { state.pane = Pane.Empty; true }
                     else -> false
                 } else false
@@ -108,14 +110,20 @@ fun main() {
                     Item("Импорт лога из CSV…", onClick = importCsv)
                     Separator()
                     Item("Карта QSO", shortcut = shortcut(Key.M), onClick = state::openMap)
-                    Item("Настройки", shortcut = shortcut(Key.Comma), onClick = { state.pane = Pane.Settings })
+                    Item("Настройки", shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
                     if (!IS_MAC) {
                         Separator()
                         Item("Выход", onClick = { state.flushSettings(); exitApplication() })
                     }
                 }
             }
-            QsoTheme { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected)) }
+            // Theme from the settings; "system" follows the OS (macOS, Windows).
+            val dark = when (state.themeMode) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            QsoTheme(dark) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected)) }
         }
     }
 }

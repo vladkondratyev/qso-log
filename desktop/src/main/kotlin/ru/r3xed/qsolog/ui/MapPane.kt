@@ -43,11 +43,12 @@ fun MapPane(vm: AppState) {
     val myCall = vm.settings.myCall
     val markers = remember(stations, myPos, myCall) {
         buildList {
-            myPos?.let { add(MapMarker(it, myCall.ifBlank { "Я" }, MyColor)) }
             stations.forEach { (q, count) ->
                 val label = if (count > 1) "${q.call} ×$count" else q.call
-                add(MapMarker(LatLon(q.lat!!, q.lon!!), label, StationColor) { vm.edit(q, from = Pane.Map) })
+                add(MapMarker(LatLon(q.lat!!, q.lon!!), label, StationColor, onClick = { vm.edit(q, from = Pane.Map) }))
             }
+            // My station last, so it is drawn on top of the stations around it.
+            myPos?.let { add(MapMarker(it, myCall.ifBlank { "Я" }, MyColor, home = true)) }
         }
     }
 
