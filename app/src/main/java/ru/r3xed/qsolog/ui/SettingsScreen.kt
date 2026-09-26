@@ -189,10 +189,10 @@ fun SettingsScreen(
             }
 
             SettingsBlock("Диапазоны и виды связи", "диапазонов: ${vm.enabledBands.size} · видов: ${vm.enabledModes.size}") {
-                Section("Диапазоны в карточке связи")
+                Section("Диапазоны")
                 ToggleGrid(BANDS, vm.enabledBands, vm::setBandEnabled)
                 Note("Включённые диапазоны показываются кнопками при добавлении связи.")
-                Section("Виды связи в карточке")
+                Section("Вид связи")
                 ToggleGrid(MODES, vm.enabledModes, vm::setModeEnabled)
                 Note("Если у записи диапазон или вид, который здесь выключен, кнопка для него в её карточке всё равно видна.")
             }

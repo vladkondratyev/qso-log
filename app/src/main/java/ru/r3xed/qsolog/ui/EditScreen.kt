@@ -212,10 +212,13 @@ fun EditScreen(vm: AppViewModel) {
             Field("Частота, МГц", f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
 
             // One scrolling row each: what is switched on in the settings, plus the record's own value if that one is off.
+            // Nothing to choose from (one value on, and the record has it) — the label alone shows it.
+            val modes = MODES.filter { it in vm.enabledModes || it == f.mode } + listOfNotNull(f.mode.takeIf { it.isNotBlank() && it !in MODES })
+            val bands = BANDS.filter { it in vm.enabledBands || it == f.band } + listOfNotNull(f.band.takeIf { it.isNotBlank() && it !in BANDS })
             Label("Вид связи", f.mode)
-            ChipRow(MODES.filter { it in vm.enabledModes || it == f.mode } + listOfNotNull(f.mode.takeIf { it.isNotBlank() && it !in MODES }), f.mode, vm::setMode)
+            if (modes != listOf(f.mode)) ChipRow(modes, f.mode, vm::setMode)
             Label("Диапазон", f.band)
-            ChipRow(BANDS.filter { it in vm.enabledBands || it == f.band } + listOfNotNull(f.band.takeIf { it.isNotBlank() && it !in BANDS }), f.band, vm::setBand)
+            if (bands != listOf(f.band)) ChipRow(bands, f.band, vm::setBand)
 
             // Reports: the usual values one tap away, digits keyboard unless the mode reports in dB.
             val quick = quickReports(f.mode)

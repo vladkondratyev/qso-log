@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.r3xed.qsolog.data.Adif
+import ru.r3xed.qsolog.data.BANDS
+import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.CallHistory
 import ru.r3xed.qsolog.data.Cabrillo
@@ -125,12 +127,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var enabledBands by mutableStateOf(prefs.enabledBands); private set
     var enabledModes by mutableStateOf(prefs.enabledModes); private set
 
+    // At least one band and one mode stay on: the card needs something to pick. The switch simply does not move.
     fun setBandEnabled(band: String, on: Boolean) {
+        if (!on && enabledBands.count { it in BANDS && it != band } == 0) {
+            say("Должен быть включён хотя бы один диапазон")
+            return
+        }
         enabledBands = if (on) enabledBands + band else enabledBands - band
         prefs.enabledBands = enabledBands
     }
 
     fun setModeEnabled(mode: String, on: Boolean) {
+        if (!on && enabledModes.count { it in MODES && it != mode } == 0) {
+            say("Должен быть включён хотя бы один вид связи")
+            return
+        }
         enabledModes = if (on) enabledModes + mode else enabledModes - mode
         prefs.enabledModes = enabledModes
     }
@@ -492,13 +503,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Mode, band and frequency of the most recent contact in the log: usually the next one is on the same.
         // An empty log falls back to what the last saved card had.
         val latest = allQsos.maxByOrNull { it.timeUtc }
-        val mode = latest?.mode?.ifBlank { null } ?: prefs.lastMode
+        // Only one mode or band switched on in the settings: that one, whatever the last contact had.
+        val onlyMode = MODES.filter { it in enabledModes }.singleOrNull()
+        val onlyBand = BANDS.filter { it in enabledBands }.singleOrNull()
+        val mode = onlyMode ?: latest?.mode?.ifBlank { null } ?: prefs.lastMode
+        val band = latest?.band?.ifBlank { null } ?: prefs.lastBand
+        val freq = if (latest != null) latest.freqMhz else prefs.lastFreq
         form = Form(
             date = DATE_FMT.format(now),
             time = TIME_FMT.format(now),
-            band = latest?.band?.ifBlank { null } ?: prefs.lastBand,
+            band = onlyBand ?: band,
             mode = mode,
-            freq = if (latest != null) latest.freqMhz else prefs.lastFreq,
+            // The last frequency belongs to another band than the only one allowed: leave it empty.
+            freq = if (onlyBand == null || onlyBand == band) freq else "",
             rstSent = defaultRst(mode),
             rstRcvd = defaultRst(mode),
             power = settings.power.ifBlank { prefs.lastPower },

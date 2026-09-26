@@ -56,10 +56,10 @@ class Settings(context: Context) {
         set(v) = prefs.edit().putString("last_freq", v).apply()
     /** Bands and modes shown as buttons in the contact card. */
     var enabledBands: Set<String>
-        get() = prefs.getStringSet("enabled_bands", null)?.toSet() ?: DEFAULT_BANDS.toSet()
+        get() = prefs.getStringSet("enabled_bands", null)?.toSet()?.takeIf { s -> s.any { it in BANDS } } ?: DEFAULT_BANDS.toSet()
         set(v) = prefs.edit().putStringSet("enabled_bands", v).apply()
     var enabledModes: Set<String>
-        get() = prefs.getStringSet("enabled_modes", null)?.toSet() ?: DEFAULT_MODES.toSet()
+        get() = prefs.getStringSet("enabled_modes", null)?.toSet()?.takeIf { s -> s.any { it in MODES } } ?: DEFAULT_MODES.toSet()
         set(v) = prefs.edit().putStringSet("enabled_modes", v).apply()
 
     /** Second lookup source: country and region by prefix from HamQTH (free, no account). On by default. */
