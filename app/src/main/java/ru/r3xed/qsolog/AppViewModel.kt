@@ -135,7 +135,41 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private var lookupJob: Job? = null
 
+    /** The "hold to record" line under the add button: only for the first few starts, then the mic icon is enough. */
+    val showRecordHint: Boolean
+
+    /** One gentle slide of the top row, so the swipe-to-delete gesture is discoverable. */
+    var swipeHintPending by mutableStateOf(!prefs.swipeHintShown); private set
+
+    fun swipeHintDone() {
+        swipeHintPending = false
+        prefs.swipeHintShown = true
+    }
+
+    /** Where "Назад" in the settings returns: the log, or the card that sent the user there. */
+    private var settingsReturn: Screen = Screen.Log
+
+    fun openSettings(from: Screen = Screen.Log) {
+        settingsReturn = from
+        screen = Screen.Settings
+    }
+
+    fun closeSettings() {
+        screen = settingsReturn
+        settingsReturn = Screen.Log
+        // Coming back to a card after entering the QRZ.ru account: look the callsign up now.
+        if (screen == Screen.Edit && form.call.length >= 3 && (lookup as? Lookup.Failed)?.noAccount == true) retryLookup()
+    }
+
+    /** The card as it was opened, to tell whether closing it would lose something. */
+    private var formOriginal: Form? = null
+
+    val hasUnsavedChanges: Boolean
+        get() = formOriginal.let { it != null && form != it }
+
     init {
+        prefs.launchCount = prefs.launchCount + 1
+        showRecordHint = prefs.launchCount <= 5
         reload()
         if (settings.myCall.isBlank()) screen = Screen.Settings
         viewModelScope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
@@ -267,6 +301,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             myLocator = settings.myLocator,
             adif = settings.station,
         )
+        formOriginal = form
         history = CallHistory(0, null)
         lookup = Lookup.Idle
         editReturn = Screen.Log
@@ -298,6 +333,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             bearing = qso.bearing,
             createdAt = qso.createdAt,
         )
+        formOriginal = form
         lookup = Lookup.Idle
         loadHistory(qso.call)
         editReturn = from
@@ -358,7 +394,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun runLookup(call: String) {
         if (settings.qrzLogin.isBlank()) {
-            lookup = Lookup.Failed("Укажите учётную запись QRZ.ru в настройках")
+            lookup = Lookup.Failed("Укажите учётную запись QRZ.ru в настройках", noAccount = true)
             return
         }
         lookup = Lookup.Loading

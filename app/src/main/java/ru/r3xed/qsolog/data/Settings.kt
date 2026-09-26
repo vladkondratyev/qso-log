@@ -68,6 +68,14 @@ class Settings(context: Context) {
     var sortDesc: Boolean
         get() = prefs.getBoolean("sort_desc", true)
         set(v) = prefs.edit().putBoolean("sort_desc", v).apply()
+    /** App starts so far; the "hold to record" hint under the add button shows only on the first few. */
+    var launchCount: Int
+        get() = prefs.getInt("launch_count", 0)
+        set(v) = prefs.edit().putInt("launch_count", v).apply()
+    /** The log has shown once how a row slides aside to reveal "Удалить". */
+    var swipeHintShown: Boolean
+        get() = prefs.getBoolean("swipe_hint_shown", false)
+        set(v) = prefs.edit().putBoolean("swipe_hint_shown", v).apply()
     var lastPower: String
         get() = prefs.getString("last_power", "") ?: ""
         set(v) = prefs.edit().putString("last_power", v).apply()

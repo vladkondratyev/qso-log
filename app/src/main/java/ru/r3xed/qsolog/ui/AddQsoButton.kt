@@ -79,6 +79,17 @@ fun AddQsoButton(
     val permissionRequest by rememberUpdatedState(requestMicPermission)
 
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        // The button sits at the bottom, so the hint goes above it: while recording, and on the first few starts.
+        if (recording || vm.showRecordHint) {
+            Text(
+                if (recording) "Отпустите кнопку, чтобы открыть карточку" else "Удерживайте кнопку, чтобы записать голос",
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (recording) RecordRed else LocalExtra.current.muted,
+                fontWeight = if (recording) FontWeight.Bold else FontWeight.Normal,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            )
+        }
         Box(
             Modifier
                 .fillMaxWidth()
@@ -131,16 +142,11 @@ fun AddQsoButton(
                 Icon(Icons.Filled.Add, null, Modifier.size(32.dp), tint = onBg)
                 Spacer(Modifier.width(10.dp))
                 Text("Добавить QSO", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = onBg)
+                // Reminder that holding records a voice note, once the text hint is gone.
+                Spacer(Modifier.width(12.dp))
+                Icon(Icons.Filled.Mic, null, Modifier.size(22.dp), tint = onBg.copy(alpha = 0.7f))
             }
         }
-        Text(
-            if (recording) "Отпустите кнопку, чтобы открыть карточку" else "Удерживайте кнопку, чтобы записать голос",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (recording) RecordRed else LocalExtra.current.muted,
-            fontWeight = if (recording) FontWeight.Bold else FontWeight.Normal,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
-        )
     }
 }
 

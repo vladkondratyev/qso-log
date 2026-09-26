@@ -115,17 +115,18 @@ private fun StationsMap(vm: AppViewModel, stations: List<Station>) {
     AndroidView(factory = { map }, modifier = Modifier.fillMaxSize().clipToBounds(), update = { v ->
         v.overlays.clear()
         val points = mutableListOf<GeoPoint>()
-        vm.settings.myPosition?.let { me ->
-            val p = GeoPoint(me.lat, me.lon)
-            points += p
-            v.overlays.add(labelMarker(v, p, vm.settings.myCall.ifBlank { "Я" }, dark) { true })
-        }
         stations.forEach { st ->
             val q = st.latest
             val p = GeoPoint(q.lat!!, q.lon!!)
             points += p
             val label = if (st.count > 1) "${q.call} ×${st.count}" else q.call
             v.overlays.add(labelMarker(v, p, label, accent) { vm.edit(q, from = Screen.Map); true })
+        }
+        // My station last, so it is drawn on top of the stations around it.
+        vm.settings.myPosition?.let { me ->
+            val p = GeoPoint(me.lat, me.lon)
+            points += p
+            v.overlays.add(labelMarker(v, p, vm.settings.myCall.ifBlank { "Я" }, dark, home = true) { true })
         }
         val saved = vm.mapPosition
         if (saved != null) {
@@ -143,11 +144,11 @@ private fun StationsMap(vm: AppViewModel, stations: List<Station>) {
     })
 }
 
-private fun labelMarker(map: MapView, p: GeoPoint, label: String, color: Int, onClick: () -> Boolean) =
+private fun labelMarker(map: MapView, p: GeoPoint, label: String, color: Int, home: Boolean = false, onClick: () -> Boolean) =
     Marker(map).apply {
         position = p
         title = label
-        val (drawable, dotY) = labelIcon(map.context, label, color)
+        val (drawable, dotY) = labelIcon(map.context, label, color, home)
         icon = drawable
         // Anchor on the dot, not on the label, so the point is exactly on the QTH.
         setAnchor(Marker.ANCHOR_CENTER, dotY)
@@ -157,9 +158,10 @@ private fun labelMarker(map: MapView, p: GeoPoint, label: String, color: Int, on
 
 /**
  * Callsign in a rounded label above a dot, drawn large enough to read outdoors.
+ * [home]: my own station, drawn as a larger target (rings) so it stands out from the stations worked.
  * Returns the icon and the dot's vertical position as a fraction of the icon height.
  */
-private fun labelIcon(context: Context, text: String, color: Int): Pair<BitmapDrawable, Float> {
+private fun labelIcon(context: Context, text: String, color: Int, home: Boolean = false): Pair<BitmapDrawable, Float> {
     val d = context.resources.displayMetrics.density
     val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         this.color = android.graphics.Color.WHITE
@@ -172,7 +174,7 @@ private fun labelIcon(context: Context, text: String, color: Int): Pair<BitmapDr
     val fm = textPaint.fontMetrics
     val labelH = (fm.descent - fm.ascent) + 2 * padV
     val gap = 4 * d
-    val dotR = 7 * d
+    val dotR = (if (home) 11 else 7) * d
     val w = (textW + 2 * padH).coerceAtLeast(2 * dotR + 4 * d)
     val h = labelH + gap + 2 * dotR + 2 * d
     val bmp = Bitmap.createBitmap(w.toInt() + 2, h.toInt() + 2, Bitmap.Config.ARGB_8888)
@@ -184,5 +186,9 @@ private fun labelIcon(context: Context, text: String, color: Int): Pair<BitmapDr
     val cy = labelH + gap + dotR
     c.drawCircle(w / 2 + 1f, cy, dotR + 2 * d, white)
     c.drawCircle(w / 2 + 1f, cy, dotR, fill)
+    if (home) {
+        c.drawCircle(w / 2 + 1f, cy, dotR * 0.62f, white)
+        c.drawCircle(w / 2 + 1f, cy, dotR * 0.34f, fill)
+    }
     return BitmapDrawable(context.resources, bmp) to cy / bmp.height
 }

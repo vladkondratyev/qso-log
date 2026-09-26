@@ -1,8 +1,15 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.delay
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -31,13 +38,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
@@ -45,8 +50,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SortByAlpha
-import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -127,7 +130,7 @@ fun LogScreen(
                     Icon(Icons.Filled.Map, contentDescription = "Карта QSO", modifier = Modifier.size(30.dp))
                 }
                 Spacer(Modifier.width(10.dp))
-                FilledTonalIconButton(onClick = { vm.screen = ru.r3xed.qsolog.Screen.Settings }, modifier = Modifier.size(56.dp)) {
+                FilledTonalIconButton(onClick = { vm.openSettings() }, modifier = Modifier.size(56.dp)) {
                     Icon(Icons.Filled.Settings, contentDescription = "Настройки", modifier = Modifier.size(30.dp))
                 }
             }
@@ -151,28 +154,33 @@ fun LogScreen(
                 ),
             )
 
-            AddQsoButton(vm, hasMicPermission, requestMicPermission, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-
             if (vm.qsos.isEmpty()) {
-                EmptyLog(vm)
+                Box(Modifier.weight(1f)) { EmptyLog(vm) }
             } else {
                 SortBar(vm)
                 val groups = remember(vm.qsos, vm.sortBy, vm.sortDesc) { groupAndSort(vm.qsos, vm.sortBy, vm.sortDesc) }
                 val listState = rememberLazyListState()
                 // A new order starts from the top, not from wherever the old one was scrolled to.
                 LaunchedEffect(vm.sortBy, vm.sortDesc) { listState.scrollToItem(0) }
+                // The first row of the log demonstrates the swipe once, see SwipeRow.
+                val firstId = groups.firstOrNull()?.items?.firstOrNull()?.id
                 LazyColumn(
-                    Modifier.fillMaxSize(),
+                    Modifier.weight(1f).fillMaxWidth(),
                     state = listState,
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     groups.forEach { g ->
                         if (g.title != null) stickyHeader(key = "h" + g.key) { GroupHeader(g.title, g.items.size) }
-                        items(g.items, key = { it.id }) { qso -> SwipeRow(qso, vm, showDate = vm.sortBy != SortBy.DATE, modifier = Modifier.animateItem()) }
+                        items(g.items, key = { it.id }) { qso ->
+                            SwipeRow(qso, vm, showDate = vm.sortBy != SortBy.DATE, peek = vm.swipeHintPending && qso.id == firstId, modifier = Modifier.animateItem())
+                        }
                     }
                 }
             }
+
+            // At the bottom, under the thumb; holding it records a voice note.
+            AddQsoButton(vm, hasMicPermission, requestMicPermission, Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp))
         }
     }
 }
@@ -238,48 +246,35 @@ private fun groupAndSort(list: List<Qso>, by: SortBy, desc: Boolean): List<Group
     }
 }
 
-/** Four sort buttons in one row, icon over label; the selected one shows the direction arrow. */
+/** Four compact sort chips sized to their labels; with a large system font the row scrolls sideways instead of cutting words. */
 @Composable
 private fun SortBar(vm: AppViewModel) {
     val x = LocalExtra.current
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).height(IntrinsicSize.Min),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         SortBy.entries.forEach { by ->
             val selected = vm.sortBy == by
             val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-            Column(
-                Modifier.weight(1f).fillMaxHeight()
-                    .clip(RoundedCornerShape(14.dp))
+            Row(
+                Modifier.height(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
                     .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
                     .clickable(onClickLabel = "Сортировать: ${by.label}") { vm.sort(by) }
-                    .padding(vertical = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                    .padding(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(by.label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1, softWrap = false)
+                if (selected) {
                     Icon(
-                        when (by) {
-                            SortBy.DATE -> Icons.Filled.CalendarMonth
-                            SortBy.DISTANCE -> Icons.Filled.Straighten
-                            SortBy.CALL -> Icons.Filled.SortByAlpha
-                            SortBy.BAND -> Icons.Filled.GraphicEq
-                        },
-                        null,
-                        Modifier.size(22.dp),
+                        if (vm.sortDesc) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
+                        if (vm.sortDesc) "по убыванию" else "по возрастанию",
+                        Modifier.size(16.dp),
                         tint = fg,
                     )
-                    if (selected) {
-                        Icon(
-                            if (vm.sortDesc) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
-                            if (vm.sortDesc) "по убыванию" else "по возрастанию",
-                            Modifier.size(18.dp),
-                            tint = fg,
-                        )
-                    }
                 }
-                Text(by.label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
             }
         }
     }
@@ -298,7 +293,18 @@ private fun GroupHeader(title: String, count: Int) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SwipeRow(qso: Qso, vm: AppViewModel, showDate: Boolean, modifier: Modifier = Modifier) {
+private fun SwipeRow(qso: Qso, vm: AppViewModel, showDate: Boolean, peek: Boolean = false, modifier: Modifier = Modifier) {
+    // Shown once: the row slides a little to the left and back, uncovering the red "Удалить" underneath.
+    val peekOffset = remember { Animatable(0f) }
+    val density = LocalDensity.current
+    if (peek) LaunchedEffect(Unit) {
+        delay(900)
+        val dx = with(density) { -96.dp.toPx() }
+        peekOffset.animateTo(dx, tween(450))
+        delay(700)
+        peekOffset.animateTo(0f, tween(350))
+        vm.swipeHintDone()
+    }
     // confirmValueChange can fire more than once for one swipe; delete only once.
     var deleted by remember(qso.id) { mutableStateOf(false) }
     val state = rememberSwipeToDismissBoxState(confirmValueChange = {
@@ -331,6 +337,7 @@ private fun SwipeRow(qso: Qso, vm: AppViewModel, showDate: Boolean, modifier: Mo
     ) {
         QsoRow(
             qso,
+            modifier = Modifier.graphicsLayer { translationX = peekOffset.value },
             showDate = showDate,
             selecting = vm.selecting,
             selected = qso.id in vm.selected,
@@ -371,6 +378,7 @@ private fun SelectionBar(vm: AppViewModel, onExport: () -> Unit) {
 @Composable
 private fun QsoRow(
     qso: Qso,
+    modifier: Modifier = Modifier,
     showDate: Boolean,
     selecting: Boolean,
     selected: Boolean,
@@ -383,7 +391,7 @@ private fun QsoRow(
     val haptic = LocalHapticFeedback.current
     val shape = RoundedCornerShape(14.dp)
     Column(
-        Modifier.fillMaxWidth()
+        modifier.fillMaxWidth()
             .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape)
             .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else x.line, shape)
             .combinedClickable(

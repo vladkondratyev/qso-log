@@ -67,7 +67,8 @@ sealed interface Lookup {
     data object Loading : Lookup
     data object NotFound : Lookup
     data class Found(val info: QrzInfo) : Lookup
-    data class Failed(val message: String) : Lookup
+    /** [noAccount]: no QRZ.ru login in the settings, so the card offers to open them instead of retrying. */
+    data class Failed(val message: String, val noAccount: Boolean = false) : Lookup
 }
 
 val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")

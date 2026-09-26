@@ -379,7 +379,7 @@ class AppState {
 
     private suspend fun runLookup(call: String) {
         if (settings.qrzLogin.isBlank()) {
-            lookup = Lookup.Failed("Укажите учётную запись QRZ.ru в настройках")
+            lookup = Lookup.Failed("Укажите учётную запись QRZ.ru в настройках", noAccount = true)
             return
         }
         lookup = Lookup.Loading
