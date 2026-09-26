@@ -1,6 +1,9 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -51,7 +54,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -106,18 +111,16 @@ fun LogScreen(
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.Bottom) {
                         QsoLogo()
-                        Text(
-                            "v" + BuildConfig.VERSION_NAME,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = x.muted,
-                            modifier = Modifier.padding(start = 8.dp, bottom = 6.dp),
-                        )
+                        Box(Modifier.weight(1f, fill = false).padding(start = 8.dp, bottom = 6.dp)) {
+                            ProvideTextStyle(MaterialTheme.typography.labelMedium) {
+                                OneLineText("v" + BuildConfig.VERSION_NAME, maxSize = 14.sp, minSize = 9.sp, color = x.muted)
+                            }
+                        }
                     }
                     val me = vm.settings.myCall
-                    Text(
-                        (if (me.isNotBlank()) "$me · " else "") + "записей: ${vm.total}",
-                        style = MaterialTheme.typography.bodyMedium, color = x.muted,
-                    )
+                    ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
+                        OneLineText((if (me.isNotBlank()) "$me · " else "") + "записей: ${vm.total}", maxSize = 16.sp, minSize = 11.sp, color = x.muted)
+                    }
                 }
                 FilledTonalIconButton(onClick = vm::openMap, modifier = Modifier.size(56.dp)) {
                     Icon(Icons.Filled.Map, contentDescription = "Карта QSO", modifier = Modifier.size(30.dp))
@@ -132,7 +135,8 @@ fun LogScreen(
                 value = vm.query,
                 onValueChange = vm::search,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Поиск: позывной, имя, город", style = MaterialTheme.typography.bodyLarge) },
+                // One line on narrow phones and with a large system font: smaller than the typed text, never wrapped.
+                placeholder = { OneLineText("Поиск: позывной, имя, город", maxSize = 16.sp, minSize = 11.sp) },
                 leadingIcon = { Icon(Icons.Filled.Search, null) },
                 trailingIcon = {
                     if (vm.query.isNotEmpty()) IconButton(onClick = { vm.search("") }) { Icon(Icons.Filled.Clear, "Очистить поиск") }
@@ -401,3 +405,26 @@ private fun QsoRow(
         else if (qso.pendingLookup) Text("Данные QRZ.ru не получены", style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1)
     }
 }
+
+/**
+ * Text that always stays on one line: the font steps down from [maxSize] to [minSize] until it fits the width
+ * (narrow phones, large system font). Only below [minSize] is it cut with an ellipsis.
+ */
+@Composable
+private fun OneLineText(text: String, maxSize: TextUnit, minSize: TextUnit, color: Color = Color.Unspecified) {
+    val measurer = rememberTextMeasurer()
+    // Measured with the style the text is drawn with (the text field's placeholder style: font, letter spacing).
+    val base = LocalTextStyle.current
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val width = constraints.maxWidth
+        val size = remember(text, width, maxSize, minSize, base) {
+            var sp = maxSize.value
+            while (sp > minSize.value &&
+                measurer.measure(text, base.copy(fontSize = sp.sp), maxLines = 1, softWrap = false).size.width > width
+            ) sp -= 0.5f
+            sp.sp
+        }
+        Text(text, style = base.copy(fontSize = size), color = color, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+    }
+}
+
