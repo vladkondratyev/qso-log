@@ -70,6 +70,8 @@ class VoiceNotes(private val context: Context) {
             file?.delete()
             return null
         }
+        // MediaRecorder cannot set it: the Artist tag ("Recorded in QSO-LOG") is written into the file afterwards.
+        Mp4Tags.tagFile(file)
         return file.name
     }
 
