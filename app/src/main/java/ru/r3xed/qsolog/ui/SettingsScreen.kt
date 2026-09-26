@@ -1,6 +1,7 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import ru.r3xed.qsolog.ThemeMode
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.selection.selectable
@@ -105,7 +106,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Each block opens on its own; the header sums up what is set. A first start opens what must be filled.
-            SettingsBlock("Моя станция", listOf(s.myCall, s.myLocator).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "не заполнено" }, open = s.myCall.isBlank() || s.myLocator.isBlank()) {
+            SettingsBlock("Моя станция", listOfNotNull(s.myCall.ifBlank { null }, s.myLocator.ifBlank { null }, s.power.ifBlank { null }?.let { "$it Вт" }, s.station["MY_RIG"]?.ifBlank { null }).joinToString(" · ").ifBlank { "не заполнено" }, open = s.myCall.isBlank() || s.myLocator.isBlank()) {
                 SettingField("Мой позывной", s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
                 val locOk = s.myLocator.isBlank() || Geo.isLocator(s.myLocator)
                 SettingField(
@@ -115,6 +116,13 @@ fun SettingsScreen(
                 SettingField("Город / адрес QTH", s.myQth, { vm.updateSettings(s.copy(myQth = it)) })
                 ActionButton("Определить локатор", Icons.Filled.MyLocation, vm::findMyLocator)
                 Note("Расстояние и азимут считаются от QTH-локатора. Если вы сменили город, нажмите «Определить локатор»: кнопка возьмёт координаты из вашей карточки на QRZ.ru, а если их там нет, найдёт по городу.")
+                // Station defaults: copied into each new contact, where they stay as that record's own values.
+                Text("Для новых записей", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                SettingField("Мощность, Вт", s.power, { vm.updateSettings(s.copy(power = it)) }, mono = true)
+                AdifLabels.MINE.forEach { (key, label) ->
+                    SettingField(label, s.station[key].orEmpty(), { vm.updateSettings(s.copy(station = s.station + (key to it))) })
+                }
+                Note("Эти значения попадают в каждую новую связь и хранятся в ней. Если позже их поменять, старые записи не изменятся.")
             }
 
             SettingsBlock(
@@ -157,6 +165,7 @@ fun SettingsScreen(
                         Text(status, color = color, style = MaterialTheme.typography.titleSmall)
                     }
             }
+            QrzApiHelp(expandedByDefault = s.qrzLogin.isBlank())
             ActionButton("Проверить подключение", null, vm::testQrz)
             }
 
@@ -177,18 +186,6 @@ fun SettingsScreen(
                         "расстояние тогда примерное, со знаком ≈. Имени и точного QTH там нет. Учётная запись не нужна.",
                 )
             }
-
-            SettingsBlock(
-                "Моя станция для новых записей",
-                listOfNotNull(s.power.takeIf { it.isNotBlank() }?.let { "$it Вт" }, s.station["MY_RIG"], s.station["MY_ANTENNA"]).joinToString(" · ").ifBlank { "не заполнено" },
-            ) {
-                SettingField("Мощность, Вт", s.power, { vm.updateSettings(s.copy(power = it)) }, mono = true)
-                AdifLabels.MINE.forEach { (key, label) ->
-                    SettingField(label, s.station[key].orEmpty(), { vm.updateSettings(s.copy(station = s.station + (key to it))) })
-            }
-            Note("Эти значения попадают в каждую новую связь и хранятся в ней. Если позже их поменять, старые записи не изменятся.")
-            }
-
 
             SettingsBlock("Диапазоны и виды связи", "диапазонов: ${vm.enabledBands.size} · видов: ${vm.enabledModes.size}") {
                 Section("Диапазоны в карточке связи")
@@ -330,6 +327,65 @@ private fun UpdateCheck(vm: AppViewModel) {
             },
             dismissButton = { TextButton(onClick = vm::dismissUpdate) { Text("Позже") } },
         )
+    }
+}
+
+private const val QRZ_API_REQUEST_URL = "https://www.qrz.ru/personal/settings/apiuser"
+private const val QRZ_API_HELP_URL = "https://www.qrz.ru/help/api/xml"
+
+/**
+ * How to get XML API access on QRZ.ru, from their help page. Open right away while no login is entered;
+ * afterwards folded into one "Как получить доступ?" line.
+ */
+@Composable
+private fun QrzApiHelp(expandedByDefault: Boolean) {
+    val x = LocalExtra.current
+    val uri = LocalUriHandler.current
+    var open by rememberSaveable(expandedByDefault) { mutableStateOf(expandedByDefault) }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().clickable(onClickLabel = if (open) "Свернуть" else "Развернуть") { open = !open }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Как получить доступ?", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
+        }
+        if (open) Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(
+                "Войдите на qrz.ru. Ваш позывной должен быть в Callbook QRZ.ru.",
+                "Откройте «Личные данные» → внизу раздел «XML API» → «Создать аккаунт».",
+                "Укажите свой позывной и программу: QSO-LOG.",
+                "Логин и пароль для XML API придут через некоторое время. Это не пароль от сайта.",
+            ).forEachIndexed { i, step ->
+                Row {
+                    Text("${i + 1}.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
+                    Text(step, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Text(
+                "Доступ дают только на постоянные позывные радиолюбителей и наблюдателей, только для личного аппаратного журнала.",
+                style = MaterialTheme.typography.bodyMedium, color = x.muted,
+            )
+            OutlinedButton(
+                onClick = { uri.openUri(QRZ_API_REQUEST_URL) },
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp).heightIn(min = 50.dp),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.OpenInNew, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Запросить доступ на QRZ.ru", fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+            Text(
+                "Подробнее: qrz.ru/help/api/xml",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable(onClickLabel = "Открыть справку QRZ.ru") { uri.openUri(QRZ_API_HELP_URL) }.padding(vertical = 4.dp),
+            )
+        }
     }
 }
 
