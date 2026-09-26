@@ -89,7 +89,8 @@ class MainActivity : ComponentActivity() {
                 }
                 val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
                     vm.say(
-                        if (granted) "Микрофон разрешён. Удерживайте «Добавить QSO», чтобы записать голос"
+                        if (granted && vm.screen == Screen.Edit) "Микрофон разрешён. Нажмите значок микрофона ещё раз"
+                        else if (granted) "Микрофон разрешён. Удерживайте «Добавить QSO», чтобы записать голос"
                         else "Без доступа к микрофону голосовые заметки недоступны. Разрешить можно в настройках Android"
                     )
                 }
@@ -117,7 +118,13 @@ class MainActivity : ComponentActivity() {
                                 onExportSelected = { exportSelectedAdif.launch(vm.selectedAdifFileName()) },
                             )
                             Screen.Map -> MapScreen(vm)
-                            Screen.Edit -> EditScreen(vm)
+                            Screen.Edit -> EditScreen(
+                                vm,
+                                hasMicPermission = {
+                                    ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                                },
+                                requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
+                            )
                             Screen.Settings -> SettingsScreen(
                                 vm,
                                 onExportCsv = { export.launch(vm.csvFileName()) },

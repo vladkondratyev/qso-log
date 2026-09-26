@@ -339,6 +339,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        cardRecordingSince = null
         voice.stopAndDiscard()
     }
 
@@ -480,6 +481,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         voice.stopAndDiscard()
     }
 
+    /** Recording started from the card's header (🎤): runs until ■ or "Сохранить". */
+    var cardRecordingSince by mutableStateOf<Long?>(null); private set
+
+    fun startCardRecording() {
+        try {
+            voice.start()
+            cardRecordingSince = System.currentTimeMillis()
+        } catch (e: Exception) {
+            cardRecordingSince = null
+            say("Не удалось включить микрофон: ${e.message ?: e.javaClass.simpleName}")
+        }
+    }
+
+    /** Stops the card recording and attaches it to the form. */
+    fun stopCardRecording() {
+        if (cardRecordingSince == null) return
+        cardRecordingSince = null
+        val name = voice.stop()
+        if (name == null) say("Запись слишком короткая, аудио не сохранено")
+        else form = form.copy(audio = name)
+    }
+
+    /** Leaving the card without saving: the recording goes with it. */
+    private fun discardCardRecording() {
+        if (cardRecordingSince == null) return
+        cardRecordingSince = null
+        voice.stopAndDiscard()
+    }
+
     // ---------- form ----------
 
     fun openMap() {
@@ -489,6 +519,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Closes the card without saving; a voice note recorded for an unsaved contact is deleted. */
     fun closeEditor() {
         lookupJob?.cancel() // a lookup for another card must not land in this one
+        discardCardRecording()
         val f = form
         if (f.isNew) {
             if (f.audio.isNotBlank()) voice.delete(f.audio)
@@ -764,6 +795,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Returns an error message, or null when saved. */
     fun save(): String? {
+        stopCardRecording()
         val f = form
         if (f.call.length < 3) return "Введите позывной"
         val date = try { LocalDate.parse(f.date.trim(), DATE_FMT) } catch (e: Exception) { return "Дата в формате ДД.ММ.ГГГГ" }

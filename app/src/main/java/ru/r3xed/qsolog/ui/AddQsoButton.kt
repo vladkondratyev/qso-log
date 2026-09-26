@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import ru.r3xed.qsolog.AppViewModel
 
-private val RecordRed = Color(0xFFC62828)
+internal val RecordRed = Color(0xFFC62828)
 
 /**
  * "Добавить QSO". A tap opens an empty card.
