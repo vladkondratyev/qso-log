@@ -2,6 +2,9 @@ package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.ui.platform.LocalContext
@@ -278,13 +281,14 @@ fun EditScreen(vm: AppViewModel) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (!f.isNew) {
-                    OutlinedButton(
+                    // Bin icon only; the confirmation dialog still asks before anything is deleted.
+                    OutlinedIconButton(
                         onClick = { confirmDelete = true },
-                        modifier = Modifier.height(60.dp),
+                        modifier = Modifier.size(60.dp),
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) { Text("Удалить", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                        colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) { Icon(Icons.Filled.DeleteOutline, "Удалить связь", Modifier.size(28.dp)) }
                     // Saved records only: send the contact to another app, with its voice note if there is one.
                     val context = LocalContext.current
                     FilledTonalIconButton(
