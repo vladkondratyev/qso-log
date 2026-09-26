@@ -472,7 +472,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (recordingSince == null) return
         recordingSince = null
         val name = voice.stop()
-        newQso(audio = name.orEmpty())
+        addQso(audio = name.orEmpty())
         if (name == null) viewModelScope.launch { _messages.send(Message("Запись слишком короткая, аудио не сохранено")) }
     }
 
@@ -528,8 +528,46 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         screen = editReturn
     }
 
+    /**
+     * "Добавить QSO". When the log search has narrowed down to one station (or the query is exactly its callsign),
+     * the card opens for that station: its data from the last contact, then refreshed from QRZ.ru.
+     */
+    fun addQso(audio: String = "") {
+        val last = searchedStation()
+        if (last == null) newQso(audio) else newQsoFromLog(last, audio)
+    }
+
+    private fun searchedStation(): Qso? {
+        if (query.isBlank()) return null
+        val q = query.trim().uppercase()
+        val calls = qsos.map { it.call }.distinct()
+        val call = calls.firstOrNull { it == q } ?: calls.singleOrNull() ?: return null
+        return allQsos.filter { it.call == call }.maxByOrNull { it.timeUtc }
+    }
+
+    /** The card was filled from the log: a fresh QRZ.ru answer updates it, HamQTH's rough region must not replace it. */
+    private var cardFromLog = false
+
+    private fun newQsoFromLog(last: Qso, audio: String) {
+        newQso(audio)
+        form = form.copy(
+            call = last.call, name = last.name, qth = last.qth, country = last.country, locator = last.locator,
+            lat = last.lat, lon = last.lon, infoFromQrz = true,
+            // What else is known about the station: region, zones, QSL via… (and the "≈ region" mark if it was approximate).
+            adif = form.adif + last.adif.filterKeys { it in AdifLabels.THEM || it == HamQth.POSITION_FIELD },
+        )
+        formOriginal = form
+        cardFromLog = true
+        loadHistory(last.call)
+        query = ""
+        reload()
+        // Without an account there is nothing to update: the card keeps what the log had.
+        if (settings.qrzLogin.isNotBlank()) lookupJob = viewModelScope.launch { runLookup(last.call) }
+    }
+
     fun newQso(audio: String = "") {
         lookupJob?.cancel() // a lookup for another card must not land in this one
+        cardFromLog = false
         val now = LocalDateTime.now(ZoneOffset.UTC)
         // Mode, band and frequency of the most recent contact in the log: usually the next one is on the same.
         // An empty log falls back to what the last saved card had.
@@ -565,6 +603,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun edit(qso: Qso, from: Screen = Screen.Log) {
         lookupJob?.cancel() // a lookup for another card must not land in this one
+        cardFromLog = false
         val t = utc(qso.timeUtc)
         form = Form(
             id = qso.id, call = qso.call,
@@ -628,6 +667,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setCall(raw: String) {
         val call = raw.uppercase().filter { it.isLetterOrDigit() || it == '/' }
         val f = form
+        if (call != f.call) cardFromLog = false
         form = if (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank())) {
             f.copy(call = call, name = "", qth = "", country = "", locator = "", lat = null, lon = null, infoFromQrz = false, adif = f.adif - HamQth.POSITION_FIELD)
         } else f.copy(call = call)
@@ -664,7 +704,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val info = qrz.lookup(call) { form.call == call }
             if (info == null) hamqthFallback(call, qrzProblem = null) ?: Lookup.NotFound else {
                 val f = form
-                if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
+                if (f.call == call && cardFromLog) {
+                    // Filled from the log: QRZ.ru's values win, but what it leaves blank keeps the log's.
+                    val pos = info.position
+                    form = f.copy(
+                        name = info.fullName.ifBlank { f.name }, qth = info.city.ifBlank { f.qth }, country = info.country.ifBlank { f.country },
+                        locator = info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) } ?: f.locator },
+                        lat = if (pos != null) info.lat else f.lat, lon = if (pos != null) info.lon else f.lon,
+                        adif = if (pos != null || info.locator.isNotBlank()) f.adif - HamQth.POSITION_FIELD else f.adif,
+                    )
+                } else if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
                     form = f.copy(
                         name = info.fullName, qth = info.city, country = info.country,
                         locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
@@ -687,7 +736,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** HamQTH prefix search into the card; null when switched off, unknown or unreachable. */
     private suspend fun hamqthFallback(call: String, qrzProblem: String?): Lookup? {
-        if (!hamqthEnabled) return null
+        if (!hamqthEnabled || cardFromLog) return null
         val d = try {
             withContext(Dispatchers.IO) { HamQth.dxcc(call) } ?: return null
         } catch (e: kotlinx.coroutines.CancellationException) {

@@ -100,7 +100,7 @@ fun AddQsoButton(
                 .semantics {
                     role = Role.Button
                     contentDescription = "Добавить QSO. Удерживайте, чтобы записать голос"
-                    onClick("Добавить QSO") { vm.newQso(); true }
+                    onClick("Добавить QSO") { vm.addQso(); true }
                     onLongClick("Записать голос") { false }
                 }
                 .pointerInput(Unit) {
@@ -114,7 +114,7 @@ fun AddQsoButton(
                         }
                         when {
                             cancelled -> return@awaitEachGesture
-                            released -> { vm.newQso(); return@awaitEachGesture }
+                            released -> { vm.addQso(); return@awaitEachGesture }
                         }
                         // Held long enough: record while the finger stays down.
                         if (!permissionCheck()) {
