@@ -1,5 +1,8 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.I18n
+import ru.r3xed.qsolog.Lang
+import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import ru.r3xed.qsolog.ThemeMode
 import androidx.compose.ui.text.style.TextAlign
@@ -97,70 +100,70 @@ fun SettingsPane(
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = vm::closeSettings, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад (Esc)", Modifier.size(30.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Назад (Esc)"), Modifier.size(30.dp))
             }
-            Text("Настройки", style = MaterialTheme.typography.headlineSmall)
+            Text(tr("Настройки"), style = MaterialTheme.typography.headlineSmall)
         }
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).widthIn(max = 720.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Each block opens on its own; the header sums up what is set. A first start opens what must be filled.
-            SettingsBlock("Моя станция", listOfNotNull(s.myCall.ifBlank { null }, s.myLocator.ifBlank { null }, s.power.ifBlank { null }?.let { "$it Вт" }, s.station["MY_RIG"]?.ifBlank { null }).joinToString(" · ").ifBlank { "не заполнено" }, open = s.myCall.isBlank() || s.myLocator.isBlank()) {
-                SettingField("Мой позывной", s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
+            SettingsBlock(tr("Моя станция"), listOfNotNull(s.myCall.ifBlank { null }, s.myLocator.ifBlank { null }, s.power.ifBlank { null }?.let { tr("%s Вт", it) }, s.station["MY_RIG"]?.ifBlank { null }).joinToString(" · ").ifBlank { tr("не заполнено") }, open = s.myCall.isBlank() || s.myLocator.isBlank()) {
+                SettingField(tr("Мой позывной"), s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
                 val locOk = s.myLocator.isBlank() || Geo.isLocator(s.myLocator)
                 SettingField(
-                    "QTH-локатор (например KO84ab)", s.myLocator, { vm.updateSettings(s.copy(myLocator = it.trim())) },
-                    mono = true, error = if (locOk) null else "Локатор: 2 буквы, 2 цифры, 2 буквы",
+                    tr("QTH-локатор (например KO84ab)"), s.myLocator, { vm.updateSettings(s.copy(myLocator = it.trim())) },
+                    mono = true, error = if (locOk) null else tr("Локатор: 2 буквы, 2 цифры, 2 буквы"),
                 )
-                SettingField("Город / адрес QTH", s.myQth, { vm.updateSettings(s.copy(myQth = it)) })
-                ActionButton("Определить локатор", Icons.Filled.MyLocation, vm::findMyLocator)
-                Note("Расстояние и азимут считаются от QTH-локатора. Если вы сменили город, нажмите «Определить локатор»: кнопка возьмёт координаты из вашей карточки на QRZ.ru, а если их там нет, найдёт по городу.")
+                SettingField(tr("Город / адрес QTH"), s.myQth, { vm.updateSettings(s.copy(myQth = it)) })
+                ActionButton(tr("Определить локатор"), Icons.Filled.MyLocation, vm::findMyLocator)
+                Note(tr("Расстояние и азимут считаются от QTH-локатора. Если вы сменили город, нажмите «Определить локатор»: кнопка возьмёт координаты из вашей карточки на QRZ.ru, а если их там нет, найдёт по городу."))
                 // Station defaults: copied into each new contact, where they stay as that record's own values.
-                Text("Для новых записей", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
-                SettingField("Мощность, Вт", s.power, { vm.updateSettings(s.copy(power = it)) }, mono = true)
+                Text(tr("Для новых записей"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                SettingField(tr("Мощность, Вт"), s.power, { vm.updateSettings(s.copy(power = it)) }, mono = true)
                 AdifLabels.MINE.forEach { (key, label) ->
-                    SettingField(label, s.station[key].orEmpty(), { vm.updateSettings(s.copy(station = s.station + (key to it))) })
+                    SettingField(tr(label), s.station[key].orEmpty(), { vm.updateSettings(s.copy(station = s.station + (key to it))) })
                 }
-                Note("Эти значения попадают в каждую новую связь и хранятся в ней. Если позже их поменять, старые записи не изменятся.")
+                Note(tr("Эти значения попадают в каждую новую связь и хранятся в ней. Если позже их поменять, старые записи не изменятся."))
             }
 
             // Where callsign data comes from, in the order it is asked: XML API → the site → HamQTH.
             SettingsBlock(
-                "Источники данных об абоненте",
+                tr("Источники данных об абоненте"),
                 listOf(
                     "XML API: " + when {
-                        s.qrzLogin.isBlank() -> "нет"
-                        vm.qrzOk == true -> "подключено"
-                        vm.qrzOk == false -> "ошибка"
-                        else -> "указан"
+                        s.qrzLogin.isBlank() -> tr("нет")
+                        vm.qrzOk == true -> tr("подключено")
+                        vm.qrzOk == false -> tr("ошибка")
+                        else -> tr("указан")
                     },
-                    "сайт: " + when {
-                        s.qrzSiteEmail.isBlank() -> "нет"
-                        vm.qrzSiteOk == true -> "вход выполнен"
-                        vm.qrzSiteOk == false -> "ошибка"
-                        else -> "указан"
+                    tr("сайт: ") + when {
+                        s.qrzSiteEmail.isBlank() -> tr("нет")
+                        vm.qrzSiteOk == true -> tr("вход выполнен")
+                        vm.qrzSiteOk == false -> tr("ошибка")
+                        else -> tr("указан")
                     },
-                    "HamQTH: " + if (vm.hamqthEnabled) "вкл" else "выкл",
+                    "HamQTH: " + if (vm.hamqthEnabled) tr("вкл") else tr("выкл"),
                 ).joinToString(" · "),
                 open = s.qrzLogin.isBlank() && s.qrzSiteEmail.isBlank(),
             ) {
-                Note("Данные абонента ищутся по порядку: 1) XML API QRZ.ru — основной и правильный способ; 2) сайт QRZ.ru по вашим e-mail и паролю — запасной, если XML API не указан или не ответил; 3) HamQTH — только страна и область, если QRZ.ru ничего не дал.")
-                Section("1. QRZ.ru — XML API (основной)")
-                SettingField("Логин", s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)
+                Note(tr("Данные абонента ищутся по порядку: 1) XML API QRZ.ru — основной и правильный способ; 2) сайт QRZ.ru по вашим e-mail и паролю — запасной, если XML API не указан или не ответил; 3) HamQTH — только страна и область, если QRZ.ru ничего не дал."))
+                Section(tr("1. QRZ.ru — XML API (основной)"))
+                SettingField(tr("Логин"), s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)
                 var show by remember { mutableStateOf(false) }
                 OutlinedTextField(
                     value = s.qrzPassword,
                     onValueChange = { vm.updateSettings(s.copy(qrzPassword = it)) },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Пароль") },
+                    label = { Text(tr("Пароль")) },
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
                     visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     trailingIcon = {
                         IconButton(onClick = { show = !show }) {
-                            Icon(if (show) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (show) "Скрыть пароль" else "Показать пароль")
+                            Icon(if (show) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (show) tr("Скрыть пароль") else tr("Показать пароль"))
                         }
                     },
                     shape = RoundedCornerShape(12.dp),
@@ -178,31 +181,31 @@ fun SettingsPane(
                     }
             }
             QrzApiHelp(expandedByDefault = s.qrzLogin.isBlank())
-            ActionButton("Проверить подключение", null, vm::testQrz)
+            ActionButton(tr("Проверить подключение"), null, vm::testQrz)
             Note(
                 when {
-                    IS_MAC -> "Пароль хранится в Связке ключей macOS."
-                    IS_WINDOWS -> "Пароль хранится в Диспетчере учётных данных Windows."
-                    else -> "Пароль хранится в связке ключей (GNOME Keyring или KWallet). Если её нет, пароль записывается в файл настроек в домашней папке."
+                    IS_MAC -> tr("Пароль хранится в Связке ключей macOS.")
+                    IS_WINDOWS -> tr("Пароль хранится в Диспетчере учётных данных Windows.")
+                    else -> tr("Пароль хранится в связке ключей (GNOME Keyring или KWallet). Если её нет, пароль записывается в файл настроек в домашней папке.")
                 },
             )
-            Note("Это основной и правильный способ подключения: XML API — официальный интерфейс QRZ.ru для программ-журналов. Если указаны и эта учётная запись, и учётная запись сайта ниже, данные берутся через XML API.")
-                Section("2. Сайт QRZ.ru (запасной)")
-                Note("Запасной способ, если доступа к XML API нет. Правильнее подключаться через XML API (блок выше): это официальный интерфейс для программ. Здесь программа входит на сайт qrz.ru с вашими e-mail и паролем и читает страницу позывного (www.qrz.ru/db/ПОЗЫВНОЙ): имя, город, область, RDA и то, что сайт показывает после входа.")
-                SettingField("E-mail на qrz.ru", s.qrzSiteEmail, { vm.updateSettings(s.copy(qrzSiteEmail = it.trim())) }, mono = true)
+            Note(tr("Это основной и правильный способ подключения: XML API — официальный интерфейс QRZ.ru для программ-журналов. Если указаны и эта учётная запись, и учётная запись сайта ниже, данные берутся через XML API."))
+                Section(tr("2. Сайт QRZ.ru (запасной)"))
+                Note(tr("Запасной способ, если доступа к XML API нет. Правильнее подключаться через XML API (блок выше): это официальный интерфейс для программ. Здесь программа входит на сайт qrz.ru с вашими e-mail и паролем и читает страницу позывного (www.qrz.ru/db/ПОЗЫВНОЙ): имя, город, область, RDA и то, что сайт показывает после входа."))
+                SettingField(tr("E-mail на qrz.ru"), s.qrzSiteEmail, { vm.updateSettings(s.copy(qrzSiteEmail = it.trim())) }, mono = true)
                 var showSite by remember { mutableStateOf(false) }
                 OutlinedTextField(
                     value = s.qrzSitePassword,
                     onValueChange = { vm.updateSettings(s.copy(qrzSitePassword = it)) },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Пароль от сайта") },
+                    label = { Text(tr("Пароль от сайта")) },
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
                     visualTransformation = if (showSite) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     trailingIcon = {
                         IconButton(onClick = { showSite = !showSite }) {
-                            Icon(if (showSite) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (showSite) "Скрыть пароль" else "Показать пароль")
+                            Icon(if (showSite) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (showSite) tr("Скрыть пароль") else tr("Показать пароль"))
                         }
                     },
                     shape = RoundedCornerShape(12.dp),
@@ -219,50 +222,69 @@ fun SettingsPane(
                         Text(status, color = color, style = MaterialTheme.typography.titleSmall)
                     }
                 }
-                ActionButton("Проверить вход", null, vm::testQrzSite)
-                Note("Ограничения: страница сайта — не интерфейс для программ, после изменений на сайте поиск может перестать работать; каждый запрос добавляет абоненту «Просмотр»; правила сайта могут запрещать автоматические запросы. Если указана и учётная запись XML API, данные берутся через неё, а сайт — только когда XML API не ответил.")
-                Section("3. HamQTH — страна и область")
+                ActionButton(tr("Проверить вход"), null, vm::testQrzSite)
+                Note(tr("Ограничения: страница сайта — не интерфейс для программ, после изменений на сайте поиск может перестать работать; каждый запрос добавляет абоненту «Просмотр»; правила сайта могут запрещать автоматические запросы. Если указана и учётная запись XML API, данные берутся через неё, а сайт — только когда XML API не ответил."))
+                Section(tr("3. HamQTH — страна и область"))
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                         .toggleable(value = vm.hamqthEnabled, role = Role.Switch, onValueChange = vm::setHamqth)
                         .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Страна и область по позывному", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(tr("Страна и область по позывному"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     Switch(checked = vm.hamqthEnabled, onCheckedChange = null)
                 }
                 Note(
-                    "Если учётной записи QRZ.ru нет, позывного там нет или QRZ.ru не отвечает, программа спросит бесплатный " +
-                        "справочник HamQTH.com. Он по префиксу даёт страну, область, зоны CQ и ITU и центр области — " +
-                        "расстояние тогда примерное, со знаком ≈. Имени и точного QTH там нет. Учётная запись не нужна.",
+                    tr("Если учётной записи QRZ.ru нет, позывного там нет или QRZ.ru не отвечает, программа спросит бесплатный справочник HamQTH.com. Он по префиксу даёт страну, область, зоны CQ и ITU и центр области — расстояние тогда примерное, со знаком ≈. Имени и точного QTH там нет. Учётная запись не нужна."),
                 )
             }
 
 
-            SettingsBlock("Ввод связи", if (vm.timeOnSave) "время — при сохранении" else "время — при открытии карточки") {
+            SettingsBlock(tr("Ввод связи"), if (vm.timeOnSave) tr("время — при сохранении") else tr("время — при открытии карточки")) {
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                         .toggleable(value = vm.timeOnSave, role = Role.Switch, onValueChange = vm::changeTimeOnSave)
                         .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Время связи — при сохранении", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(tr("Время связи — при сохранении"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     Switch(checked = vm.timeOnSave, onCheckedChange = null)
                 }
-                Note("Выключено: время связи — момент, когда открыта карточка «Новый QSO». Включено: время ставится при нажатии «Сохранить» (если вы не меняли его вручную) — удобно для долгих связей.")
+                Note(tr("Выключено: время связи — момент, когда открыта карточка «Новый QSO». Включено: время ставится при нажатии «Сохранить» (если вы не меняли его вручную) — удобно для долгих связей."))
             }
 
-            SettingsBlock("Диапазоны и виды связи", "диапазонов: ${vm.enabledBands.size} · видов: ${vm.enabledModes.size}") {
-                Section("Диапазоны")
+            SettingsBlock(tr("Диапазоны и виды связи"), tr("диапазонов: %s · видов: %s", vm.enabledBands.size, vm.enabledModes.size)) {
+                Section(tr("Диапазоны"))
                 ToggleGrid(BANDS, vm.enabledBands, vm::setBandEnabled)
-                Note("Включённые диапазоны показываются кнопками при добавлении связи.")
-                Section("Вид связи")
+                Note(tr("Включённые диапазоны показываются кнопками при добавлении связи."))
+                Section(tr("Вид связи"))
                 ToggleGrid(MODES, vm.enabledModes, vm::setModeEnabled)
-                Note("Если у записи диапазон или вид, который здесь выключен, кнопка для него в её карточке всё равно видна.")
+                Note(tr("Если у записи диапазон или вид, который здесь выключен, кнопка для него в её карточке всё равно видна."))
             }
 
-            SettingsBlock("Оформление", "тема: ${vm.themeMode.label.lowercase()}") {
-                Text("Тема", style = MaterialTheme.typography.titleSmall)
+            SettingsBlock(tr("Язык / Language"), if (vm.language == Lang.SYSTEM) tr("как в системе") + " · " + I18n.current.title else vm.language.title) {
+                // Same row of options as the theme; the chosen one is filled.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Lang.entries.forEach { l ->
+                        val on = vm.language == l
+                        Box(
+                            Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
+                                .background(if (on) MaterialTheme.colorScheme.primary else x.field)
+                                .selectable(selected = on, role = Role.RadioButton) { vm.changeLanguage(l) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                if (l == Lang.SYSTEM) tr("Как в системе") else l.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                                color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+                Note(tr("Язык интерфейса") + ": Русский / English. " + tr("«Как в системе» — русский, если язык системы русский, украинский или белорусский, иначе английский."))
+            }
+
+            SettingsBlock(tr("Оформление"), tr("тема: %s", vm.themeMode.label.lowercase())) {
+                Text(tr("Тема"), style = MaterialTheme.typography.titleSmall)
                 // Three options in one row; the chosen one is filled.
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ThemeMode.entries.forEach { mode ->
@@ -280,18 +302,18 @@ fun SettingsPane(
                         }
                     }
                 }
-                Note("«Как в системе» переключается вместе с тёмной темой системы (в macOS и Windows; в Linux — светлая).")
+                Note(tr("«Как в системе» переключается вместе с тёмной темой системы (в macOS и Windows; в Linux — светлая)."))
             }
-            SettingsBlock("Журнал связей", "записей: ${vm.total} · ADIF, CSV, ЕРМАК") {
-                ActionButton("Экспорт в ADIF", Icons.Filled.FileUpload, onExportAdif)
-                ActionButton("Импорт из ADIF", Icons.Filled.FileDownload, onImportAdif)
-                Note("ADIF (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com. Файл сохраняется в кодировке Windows-1251, как у LogHX. При импорте кодировка определяется сама (Windows-1251 или UTF-8). Все поля файла сохраняются в карточке.")
-                ActionButton("Экспорт в CSV", Icons.Filled.FileUpload, onExportCsv)
-                ActionButton("Импорт из CSV", Icons.Filled.FileDownload, onImportCsv)
-                Note("CSV открывается в Excel: разделитель «;», все поля каждой связи, включая дополнительные поля ADIF. При любом импорте повторы пропускаются.")
-                ActionButton("Экспорт в ЕРМАК / Cabrillo", Icons.Filled.FileUpload) { vm.openContestExport(selectedOnly = false) }
-                ActionButton("Импорт из ЕРМАК / Cabrillo", Icons.Filled.FileDownload, onImportContest)
-                Note("Отчёты для соревнований. ЕРМАК — российский формат (ermak.srr.ru), Cabrillo 3.0 — международный. Перед сохранением программа спросит код соревнования и категорию. Чтобы выгрузить только часть журнала, выберите записи (долгое нажатие или ⌘/Ctrl-щелчок) и нажмите «Экспорт».")
+            SettingsBlock(tr("Журнал связей"), tr("записей: %s · ADIF, CSV, ЕРМАК", vm.total)) {
+                ActionButton(tr("Экспорт в ADIF"), Icons.Filled.FileUpload, onExportAdif)
+                ActionButton(tr("Импорт из ADIF"), Icons.Filled.FileDownload, onImportAdif)
+                Note(tr("ADIF (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com. Файл сохраняется в кодировке Windows-1251, как у LogHX. При импорте кодировка определяется сама (Windows-1251 или UTF-8). Все поля файла сохраняются в карточке."))
+                ActionButton(tr("Экспорт в CSV"), Icons.Filled.FileUpload, onExportCsv)
+                ActionButton(tr("Импорт из CSV"), Icons.Filled.FileDownload, onImportCsv)
+                Note(tr("CSV открывается в Excel: разделитель «;», все поля каждой связи, включая дополнительные поля ADIF. При любом импорте повторы пропускаются."))
+                ActionButton(tr("Экспорт в ЕРМАК / Cabrillo"), Icons.Filled.FileUpload) { vm.openContestExport(selectedOnly = false) }
+                ActionButton(tr("Импорт из ЕРМАК / Cabrillo"), Icons.Filled.FileDownload, onImportContest)
+                Note(tr("Отчёты для соревнований. ЕРМАК — российский формат (ermak.srr.ru), Cabrillo 3.0 — международный. Перед сохранением программа спросит код соревнования и категорию. Чтобы выгрузить только часть журнала, выберите записи (долгое нажатие или ⌘/Ctrl-щелчок) и нажмите «Экспорт»."))
 
                 var confirmDeleteAll by remember { mutableStateOf(false) }
                 Button(
@@ -303,17 +325,16 @@ fun SettingsPane(
                 ) {
                     Icon(Icons.Filled.DeleteForever, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Удалить всю историю QSO", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Удалить всю историю QSO"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
                 if (confirmDeleteAll) {
                     AlertDialog(
                         onDismissRequest = { confirmDeleteAll = false },
                         icon = { Icon(Icons.Filled.DeleteForever, null, tint = MaterialTheme.colorScheme.error) },
-                        title = { Text("Удалить всю историю QSO?") },
+                        title = { Text(tr("Удалить всю историю QSO?")) },
                         text = {
                             Text(
-                                "Будут удалены все связи (${vm.total}) и голосовые заметки. Отменить это нельзя. " +
-                                    "Если нужна копия, сначала сделайте экспорт в ADIF или CSV.",
+                                tr("Будут удалены все связи (%s) и голосовые заметки. Отменить это нельзя. Если нужна копия, сначала сделайте экспорт в ADIF или CSV.", vm.total),
                                 style = MaterialTheme.typography.bodyLarge,
                             )
                         },
@@ -321,22 +342,22 @@ fun SettingsPane(
                             Button(
                                 onClick = { confirmDeleteAll = false; vm.deleteAll() },
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
-                            ) { Text("Удалить всё") }
+                            ) { Text(tr("Удалить всё")) }
                         },
-                        dismissButton = { TextButton(onClick = { confirmDeleteAll = false }) { Text("Отмена") } },
+                        dismissButton = { TextButton(onClick = { confirmDeleteAll = false }) { Text(tr("Отмена")) } },
                     )
                 }
             }
             // About: version, tap to open the project page.
                     Column(
                 Modifier.fillMaxWidth().padding(top = 28.dp)
-                    .clickable(onClickLabel = "Открыть страницу проекта на GitHub") { openUrl(PROJECT_URL) }
+                    .clickable(onClickLabel = tr("Открыть страницу проекта на GitHub")) { openUrl(PROJECT_URL) }
                     .padding(vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 QsoLogo(fontSize = 22.sp)
-                Text("Версия ${APP_VERSION}", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                Text(tr("Версия %s", APP_VERSION), style = MaterialTheme.typography.bodyLarge, color = x.muted)
                 Text(
                     PROJECT_URL.removePrefix("https://"),
                     style = MaterialTheme.typography.bodyLarge,
@@ -367,10 +388,10 @@ private fun UpdateCheck(vm: AppState) {
             if (state == UpdateState.Checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             else Icon(Icons.Filled.SystemUpdate, null)
             Spacer(Modifier.width(8.dp))
-            Text(if (state == UpdateState.Checking) "Проверяю…" else "Проверить обновления", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text(if (state == UpdateState.Checking) tr("Проверяю…") else tr("Проверить обновления"), fontSize = 17.sp, fontWeight = FontWeight.Bold)
         }
         when (state) {
-            UpdateState.UpToDate -> Text("У вас последняя версия ${APP_VERSION}", style = MaterialTheme.typography.bodyLarge, color = x.ok)
+            UpdateState.UpToDate -> Text(tr("У вас последняя версия %s", APP_VERSION), style = MaterialTheme.typography.bodyLarge, color = x.ok)
             is UpdateState.Failed -> Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
             else -> {}
         }
@@ -380,18 +401,18 @@ private fun UpdateCheck(vm: AppState) {
         AlertDialog(
             onDismissRequest = vm::dismissUpdate,
             icon = { Icon(Icons.Filled.SystemUpdate, null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("Доступна версия ${r.version}") },
+            title = { Text(tr("Доступна версия %s", r.version)) },
             text = {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Установлена ${APP_VERSION}. Что нового:", style = MaterialTheme.typography.titleSmall)
-                    Text(r.notes.ifBlank { "Описание изменений есть на странице релиза." }, style = MaterialTheme.typography.bodyLarge)
+                    Text(tr("Установлена %s. Что нового:", APP_VERSION), style = MaterialTheme.typography.titleSmall)
+                    Text(r.notes.ifBlank { tr("Описание изменений есть на странице релиза.") }, style = MaterialTheme.typography.bodyLarge)
                 }
             },
             confirmButton = {
                 // The file for this system (DMG, ZIP or DEB) downloads in the browser; install it over the current version.
-                Button(onClick = { openUrl(r.downloadUrl); vm.dismissUpdate() }) { Text("Скачать") }
+                Button(onClick = { openUrl(r.downloadUrl); vm.dismissUpdate() }) { Text(tr("Скачать")) }
             },
-            dismissButton = { TextButton(onClick = vm::dismissUpdate) { Text("Позже") } },
+            dismissButton = { TextButton(onClick = vm::dismissUpdate) { Text(tr("Позже")) } },
         )
     }
 }
@@ -411,19 +432,19 @@ private fun QrzApiHelp(expandedByDefault: Boolean) {
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field),
     ) {
         Row(
-            Modifier.fillMaxWidth().clickable(onClickLabel = if (open) "Свернуть" else "Развернуть") { open = !open }
+            Modifier.fillMaxWidth().clickable(onClickLabel = if (open) tr("Свернуть") else tr("Развернуть")) { open = !open }
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Как получить доступ?", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(tr("Как получить доступ?"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
         }
         if (open) Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(
-                "Войдите на qrz.ru. Ваш позывной должен быть в Callbook QRZ.ru.",
-                "Откройте «Личные данные» → внизу раздел «XML API» → «Создать аккаунт».",
-                "Укажите свой позывной и программу: QSO-LOG.",
-                "Логин и пароль для XML API придут через некоторое время. Это не пароль от сайта.",
+                tr("Войдите на qrz.ru. Ваш позывной должен быть в Callbook QRZ.ru."),
+                tr("Откройте «Личные данные» → внизу раздел «XML API» → «Создать аккаунт»."),
+                tr("Укажите свой позывной и программу: QSO-LOG."),
+                tr("Логин и пароль для XML API придут через некоторое время. Это не пароль от сайта."),
             ).forEachIndexed { i, step ->
                 Row {
                     Text("${i + 1}.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
@@ -431,7 +452,7 @@ private fun QrzApiHelp(expandedByDefault: Boolean) {
                 }
             }
             Text(
-                "Доступ дают только на постоянные позывные радиолюбителей и наблюдателей, только для личного аппаратного журнала.",
+                tr("Доступ дают только на постоянные позывные радиолюбителей и наблюдателей, только для личного аппаратного журнала."),
                 style = MaterialTheme.typography.bodyMedium, color = x.muted,
             )
             OutlinedButton(
@@ -441,14 +462,14 @@ private fun QrzApiHelp(expandedByDefault: Boolean) {
             ) {
                 Icon(Icons.AutoMirrored.Filled.OpenInNew, null)
                 Spacer(Modifier.width(8.dp))
-                Text("Запросить доступ на QRZ.ru", fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(tr("Запросить доступ на QRZ.ru"), fontWeight = FontWeight.Bold, maxLines = 1)
             }
             Text(
-                "Подробнее: qrz.ru/help/api/xml",
+                tr("Подробнее: qrz.ru/help/api/xml"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
                 textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable(onClickLabel = "Открыть справку QRZ.ru") { openUrl(QRZ_API_HELP_URL) }.padding(vertical = 4.dp),
+                modifier = Modifier.clickable(onClickLabel = tr("Открыть справку QRZ.ru")) { openUrl(QRZ_API_HELP_URL) }.padding(vertical = 4.dp),
             )
         }
     }
@@ -465,7 +486,7 @@ private fun SettingsBlock(title: String, summary: String, open: Boolean = false,
     ) {
         Row(
             Modifier.fillMaxWidth().background(x.field)
-                .clickable(onClickLabel = if (expanded) "Свернуть" else "Развернуть") { expanded = !expanded }
+                .clickable(onClickLabel = if (expanded) tr("Свернуть") else tr("Развернуть")) { expanded = !expanded }
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.tr
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.LocalContentColor
@@ -182,15 +183,15 @@ fun EditPane(vm: AppState) {
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = close, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Filled.Close, "Закрыть (Esc)", Modifier.size(30.dp))
+                Icon(Icons.Filled.Close, tr("Закрыть (Esc)"), Modifier.size(30.dp))
             }
-            Text(if (f.isNew) "Новый QSO" else "Запись QSO", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            Text(if (f.isNew) tr("Новый QSO") else tr("Запись QSO"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
             // A voice note for a card typed by hand: offered once QRZ.ru has found the station, runs until ■ or "Сохранить".
             val since = vm.cardRecordingSince
             if (since != null) CardRecording(since, onStop = vm::stopCardRecording)
             else if (f.isNew && f.audio.isBlank() && vm.lookup is Lookup.Found) {
                 IconButton(onClick = vm::startCardRecording, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Filled.Mic, "Записать голосовую заметку", Modifier.size(28.dp), tint = x.muted.copy(alpha = 0.6f))
+                    Icon(Icons.Filled.Mic, tr("Записать голосовую заметку"), Modifier.size(28.dp), tint = x.muted.copy(alpha = 0.6f))
                 }
             }
         }
@@ -206,7 +207,7 @@ fun EditPane(vm: AppState) {
                     value = f.call,
                     onValueChange = vm::setCall,
                     modifier = Modifier.weight(1f).focusRequester(callFocus),
-                    label = { Text("Позывной абонента", fontSize = 16.sp) },
+                    label = { Text(tr("Позывной абонента"), fontSize = 16.sp) },
                     isError = error == CALL_ERROR,
                     supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
                     textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 1.sp),
@@ -248,14 +249,14 @@ fun EditPane(vm: AppState) {
             // --- date/time ---
             if (editTime) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Field("Дата UTC", f.date, { vm.update(f.copy(date = it)) }, Modifier.weight(1.3f), KeyboardType.Number, mono = true)
-                    Field("Время UTC", f.time, { vm.update(f.copy(time = it)) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
-                    IconButton(onClick = vm::setNow, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Refresh, "Текущее время") }
+                    Field(tr("Дата UTC"), f.date, { vm.update(f.copy(date = it)) }, Modifier.weight(1.3f), KeyboardType.Number, mono = true)
+                    Field(tr("Время UTC"), f.time, { vm.update(f.copy(time = it)) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
+                    IconButton(onClick = vm::setNow, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Refresh, tr("Текущее время")) }
                 }
             } else {
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
-                        .clickable(onClickLabel = "Изменить дату и время") { editTime = true }
+                        .clickable(onClickLabel = tr("Изменить дату и время")) { editTime = true }
                         .padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -270,21 +271,21 @@ fun EditPane(vm: AppState) {
                         },
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(onClick = vm::setNow) { Icon(Icons.Filled.Refresh, "Текущее время") }
-                    IconButton(onClick = { editTime = true }) { Icon(Icons.Filled.Edit, "Изменить дату и время") }
+                    IconButton(onClick = vm::setNow) { Icon(Icons.Filled.Refresh, tr("Текущее время")) }
+                    IconButton(onClick = { editTime = true }) { Icon(Icons.Filled.Edit, tr("Изменить дату и время")) }
                 }
             }
 
             // Frequency first: typing it picks the band below by itself.
-            Field("Частота, МГц", f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
+            Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
 
             // One scrolling row each: what is switched on in the settings, plus the record's own value if that one is off.
             // Nothing to choose from (one value on, and the record has it) — the label alone shows it.
             val modes = MODES.filter { it in vm.enabledModes || it == f.mode } + listOfNotNull(f.mode.takeIf { it.isNotBlank() && it !in MODES })
             val bands = BANDS.filter { it in vm.enabledBands || it == f.band } + listOfNotNull(f.band.takeIf { it.isNotBlank() && it !in BANDS })
-            Label("Вид связи", f.mode)
+            Label(tr("Вид связи"), f.mode)
             if (modes != listOf(f.mode)) ChipRow(modes, f.mode, vm::setMode)
-            Label("Диапазон", f.band)
+            Label(tr("Диапазон"), f.band)
             if (bands != listOf(f.band)) ChipRow(bands, f.band, vm::setBand)
 
             // Reports: the usual values one tap away, digits keyboard unless the mode reports in dB.
@@ -292,11 +293,11 @@ fun EditPane(vm: AppState) {
             val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RstField("RST отправлен", f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
                     QuickValues(quick, f.rstSent) { vm.update(vm.form.copy(rstSent = it)) }
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RstField("RST принят", f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
+                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
                     QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
                 }
             }
@@ -305,41 +306,41 @@ fun EditPane(vm: AppState) {
             DistanceCard(vm, onOpenMap = { showMap = true })
 
             // --- all fields: each group opens on its own, the header says how many fields are filled ---
-            Label("Все поля ADIF")
+            Label(tr("Все поля ADIF"))
             val filled = { keys: Collection<String> -> keys.count { !f.adif[it].isNullOrBlank() } }
             // Name, QTH, country and locator are edited in the card at the top; only fields found nowhere else here.
-            FieldGroup("Абонент", filled(AdifLabels.THEM.keys)) { AdifFields(vm, AdifLabels.THEM) }
+            FieldGroup(tr("Абонент"), filled(AdifLabels.THEM.keys)) { AdifFields(vm, AdifLabels.THEM) }
             // End time and receive band/frequency are filled from the main fields, see AdifLabels.DERIVED.
             FieldGroup(
-                "Связь",
+                tr("Связь"),
                 filled(AdifLabels.CONTACT.keys) + listOf(f.power.isNotBlank(), f.qslSent, f.qslRcvd, f.comment.isNotBlank()).count { it },
             ) {
-                Field("Мощность, Вт", f.power, { vm.update(f.copy(power = it)) }, Modifier.fillMaxWidth(), KeyboardType.Number, mono = true)
+                Field(tr("Мощность, Вт"), f.power, { vm.update(f.copy(power = it)) }, Modifier.fillMaxWidth(), KeyboardType.Number, mono = true)
                 AdifFields(vm, AdifLabels.CONTACT)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(f.qslSent, { vm.update(f.copy(qslSent = it)) })
-                    Text("QSL отправлена", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.clickable { vm.update(f.copy(qslSent = !f.qslSent)) })
+                    Text(tr("QSL отправлена"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.clickable { vm.update(f.copy(qslSent = !f.qslSent)) })
                     Spacer(Modifier.width(16.dp))
                     Checkbox(f.qslRcvd, { vm.update(f.copy(qslRcvd = it)) })
-                    Text("QSL получена", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.clickable { vm.update(f.copy(qslRcvd = !f.qslRcvd)) })
+                    Text(tr("QSL получена"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.clickable { vm.update(f.copy(qslRcvd = !f.qslRcvd)) })
                 }
                 OutlinedTextField(
                     value = f.comment, onValueChange = { vm.update(f.copy(comment = it)) },
-                    modifier = Modifier.fillMaxWidth(), label = { Text("Комментарий") },
+                    modifier = Modifier.fillMaxWidth(), label = { Text(tr("Комментарий")) },
                     textStyle = MaterialTheme.typography.bodyLarge, minLines = 2, shape = RoundedCornerShape(12.dp),
                 )
             }
-            FieldGroup("Моя станция", filled(AdifLabels.MINE.keys) + listOf(f.myCall, f.myLocator).count { it.isNotBlank() }) {
+            FieldGroup(tr("Моя станция"), filled(AdifLabels.MINE.keys) + listOf(f.myCall, f.myLocator).count { it.isNotBlank() }) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Field("Мой позывной", f.myCall, { vm.update(f.copy(myCall = it.uppercase())) }, Modifier.weight(1f), mono = true)
-                    Field("Мой локатор", f.myLocator, { vm.update(f.copy(myLocator = it)) }, Modifier.weight(1f), mono = true)
+                    Field(tr("Мой позывной"), f.myCall, { vm.update(f.copy(myCall = it.uppercase())) }, Modifier.weight(1f), mono = true)
+                    Field(tr("Мой локатор"), f.myLocator, { vm.update(f.copy(myLocator = it)) }, Modifier.weight(1f), mono = true)
                 }
                 AdifFields(vm, AdifLabels.MINE)
             }
-            FieldGroup("Прохождение", filled(AdifLabels.SPACE_WEATHER.keys)) { AdifFields(vm, AdifLabels.SPACE_WEATHER, perRow = 3) }
+            FieldGroup(tr("Прохождение"), filled(AdifLabels.SPACE_WEATHER.keys)) { AdifFields(vm, AdifLabels.SPACE_WEATHER, perRow = 3) }
             // Anything else the imported log carried, shown under its ADIF name.
             val other = f.adif.keys.filter { it !in AdifLabels.KNOWN }
-            if (other.isNotEmpty()) FieldGroup("Другие поля ADIF", filled(other)) { AdifFields(vm, other.associateWith { it }) }
+            if (other.isNotEmpty()) FieldGroup(tr("Другие поля ADIF"), filled(other)) { AdifFields(vm, other.associateWith { it }) }
             Spacer(Modifier.height(8.dp))
         }
 
@@ -358,7 +359,7 @@ fun EditPane(vm: AppState) {
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
                         colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) { Icon(Icons.Filled.DeleteOutline, "Удалить связь", Modifier.size(28.dp)) }
+                    ) { Icon(Icons.Filled.DeleteOutline, tr("Удалить связь"), Modifier.size(28.dp)) }
                     // Saved records only: the contact as text (clipboard), with its voice note saved next to a .txt if there is one.
                     FilledTonalIconButton(
                         onClick = {
@@ -367,7 +368,7 @@ fun EditPane(vm: AppState) {
                         },
                         modifier = Modifier.size(60.dp),
                         shape = RoundedCornerShape(16.dp),
-                    ) { Icon(Icons.Filled.Share, "Отправить QSO", Modifier.size(28.dp)) }
+                    ) { Icon(Icons.Filled.Share, tr("Отправить QSO"), Modifier.size(28.dp)) }
                 }
                 // New card: "＋ Следующая" saves and opens the next card on the same band, mode and frequency.
                 if (f.isNew) FilledTonalButton(
@@ -377,7 +378,7 @@ fun EditPane(vm: AppState) {
                 ) {
                     Icon(Icons.Filled.Add, null, Modifier.size(24.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Следующая", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Следующая"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(8.dp))
                     Text(NEXT_SHORTCUT, fontSize = 13.sp, color = LocalContentColor.current.copy(alpha = 0.7f))
                 }
@@ -386,7 +387,7 @@ fun EditPane(vm: AppState) {
                     modifier = Modifier.weight(1f).height(60.dp),
                     shape = RoundedCornerShape(16.dp),
                 ) {
-                    Text("Сохранить", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Сохранить"), fontSize = 21.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(10.dp))
                     Text(SAVE_SHORTCUT, fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f))
                 }
@@ -399,17 +400,17 @@ fun EditPane(vm: AppState) {
     if (vm.confirmClose) {
         AlertDialog(
             onDismissRequest = { vm.confirmClose = false },
-            title = { Text("Закрыть без сохранения?") },
+            title = { Text(tr("Закрыть без сохранения?")) },
             text = {
                 Text(
-                    if (f.isNew && f.audio.isNotBlank()) "Введённые данные и голосовая заметка будут потеряны." else "Введённые изменения не сохранятся.",
+                    if (f.isNew && f.audio.isNotBlank()) tr("Введённые данные и голосовая заметка будут потеряны.") else tr("Введённые изменения не сохранятся."),
                     style = MaterialTheme.typography.bodyLarge,
                 )
             },
             confirmButton = {
-                TextButton(onClick = { vm.confirmClose = false; vm.closeEditor() }) { Text("Закрыть", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { vm.confirmClose = false; vm.closeEditor() }) { Text(tr("Закрыть"), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { Button(onClick = { vm.confirmClose = false }) { Text("Продолжить ввод") } },
+            dismissButton = { Button(onClick = { vm.confirmClose = false }) { Text(tr("Продолжить ввод")) } },
         )
     }
 
@@ -417,15 +418,15 @@ fun EditPane(vm: AppState) {
         val when_ = "${f.date}, ${f.time} UTC"
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Удалить связь с ${f.call}?") },
-            text = { Text("$when_, ${f.band} ${f.mode}. Запись пропадёт из лога.", style = MaterialTheme.typography.bodyLarge) },
+            title = { Text(tr("Удалить связь с %s?", f.call)) },
+            text = { Text(tr("%s, %s %s. Запись пропадёт из лога.", when_, f.band, f.mode), style = MaterialTheme.typography.bodyLarge) },
             confirmButton = {
                 Button(
                     onClick = { confirmDelete = false; vm.deleteCurrent() },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
-                ) { Text("Удалить") }
+                ) { Text(tr("Удалить")) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Отмена")) } },
         )
     }
 }
@@ -449,18 +450,18 @@ private fun StationCard(vm: AppState) {
     ) {
         val ink = MaterialTheme.colorScheme.onPrimaryContainer
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Абонент", style = MaterialTheme.typography.labelLarge, color = ink.copy(alpha = 0.75f), modifier = Modifier.weight(1f))
+            Text(tr("Абонент"), style = MaterialTheme.typography.labelLarge, color = ink.copy(alpha = 0.75f), modifier = Modifier.weight(1f))
             IconButton(onClick = { editing = !editing }) {
-                Icon(if (editing) Icons.Filled.Check else Icons.Filled.Edit, if (editing) "Готово" else "Изменить данные абонента", tint = ink)
+                Icon(if (editing) Icons.Filled.Check else Icons.Filled.Edit, if (editing) tr("Готово") else tr("Изменить данные абонента"), tint = ink)
             }
         }
         if (editing) {
             Column(Modifier.padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field("Имя", f.name, { vm.update(f.copy(name = it, infoFromQrz = false)) }, Modifier.fillMaxWidth())
-                Field("QTH (город)", f.qth, { vm.update(f.copy(qth = it, infoFromQrz = false)) }, Modifier.fillMaxWidth())
+                Field(tr("Имя"), f.name, { vm.update(f.copy(name = it, infoFromQrz = false)) }, Modifier.fillMaxWidth())
+                Field(tr("QTH (город)"), f.qth, { vm.update(f.copy(qth = it, infoFromQrz = false)) }, Modifier.fillMaxWidth())
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Field("Страна", f.country, { vm.update(f.copy(country = it, infoFromQrz = false)) }, Modifier.weight(1f))
-                    Field("QTH-локатор", f.locator, vm::setLocator, Modifier.weight(1f), mono = true)
+                    Field(tr("Страна"), f.country, { vm.update(f.copy(country = it, infoFromQrz = false)) }, Modifier.weight(1f))
+                    Field(tr("QTH-локатор"), f.locator, vm::setLocator, Modifier.weight(1f), mono = true)
                 }
             }
         } else if (hasInfo) {
@@ -469,7 +470,7 @@ private fun StationCard(vm: AppState) {
             if (place.isNotBlank()) Text(place, fontSize = 24.sp, lineHeight = 30.sp, color = ink)
             if (f.locator.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                    Text("Локатор", fontSize = 18.sp, color = ink, modifier = Modifier.padding(end = 10.dp))
+                    Text(tr("Локатор"), fontSize = 18.sp, color = ink, modifier = Modifier.padding(end = 10.dp))
                     Text(
                         f.locator, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 28.sp, color = ink,
                         modifier = Modifier.border(2.dp, ink.copy(alpha = 0.5f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 2.dp),
@@ -481,30 +482,30 @@ private fun StationCard(vm: AppState) {
             Lookup.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = ink)
                 Spacer(Modifier.width(10.dp))
-                Text("Ищу на QRZ.ru…", fontSize = 18.sp, color = ink)
+                Text(tr("Ищу на QRZ.ru…"), fontSize = 18.sp, color = ink)
             }
-            Lookup.NotFound -> if (!hasInfo) Text("На QRZ.ru такого позывного нет", fontSize = 18.sp, color = ink)
+            Lookup.NotFound -> if (!hasInfo) Text(tr("На QRZ.ru такого позывного нет"), fontSize = 18.sp, color = ink)
             // Country and region by prefix from HamQTH; say where the data came from and why QRZ.ru did not help.
             is Lookup.Approx -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("≈ Страна и область по позывному (HamQTH)", fontSize = 16.sp, color = ink.copy(alpha = 0.8f))
+                Text(tr("≈ Страна и область по позывному (HamQTH)"), fontSize = 16.sp, color = ink.copy(alpha = 0.8f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        lookup.qrzProblem ?: if (!vm.hasQrzAccount) "Имя и точный QTH — с учётной записью QRZ.ru" else "На QRZ.ru такого позывного нет",
+                        lookup.qrzProblem ?: if (!vm.hasQrzAccount) tr("Имя и точный QTH — с учётной записью QRZ.ru") else tr("На QRZ.ru такого позывного нет"),
                         fontSize = 16.sp, color = ink.copy(alpha = 0.8f), modifier = Modifier.weight(1f),
                     )
                     when {
-                        lookup.qrzProblem != null -> TextButton(onClick = vm::retryLookup) { Text("Повторить") }
-                        !vm.hasQrzAccount -> TextButton(onClick = { vm.openSettings(from = Pane.Edit) }) { Text("Настройки") }
+                        lookup.qrzProblem != null -> TextButton(onClick = vm::retryLookup) { Text(tr("Повторить")) }
+                        !vm.hasQrzAccount -> TextButton(onClick = { vm.openSettings(from = Pane.Edit) }) { Text(tr("Настройки")) }
                     }
                 }
             }
             is Lookup.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(lookup.message, fontSize = 17.sp, color = ink, modifier = Modifier.weight(1f))
                 // Without an account retrying cannot help: go to the settings, the card waits and looks up on return.
-                if (lookup.noAccount) TextButton(onClick = { vm.openSettings(from = Pane.Edit) }) { Text("Настройки") }
-                else TextButton(onClick = vm::retryLookup) { Text("Повторить") }
+                if (lookup.noAccount) TextButton(onClick = { vm.openSettings(from = Pane.Edit) }) { Text(tr("Настройки")) }
+                else TextButton(onClick = vm::retryLookup) { Text(tr("Повторить")) }
             }
-            else -> if (!hasInfo && !editing) Text("Данные появятся здесь. Ввести вручную: ✎ справа", fontSize = 18.sp, color = x.muted)
+            else -> if (!hasInfo && !editing) Text(tr("Данные появятся здесь. Ввести вручную: ✎ справа"), fontSize = 18.sp, color = x.muted)
         }
     }
 }
@@ -522,7 +523,7 @@ private fun HistoryCard(vm: AppState) {
             Modifier.fillMaxWidth().background(x.okBg, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Новый позывной: связей ещё не было", color = x.ok, style = MaterialTheme.typography.titleMedium)
+            Text(tr("Новый позывной: связей ещё не было"), color = x.ok, style = MaterialTheme.typography.titleMedium)
         }
         return
     }
@@ -538,9 +539,9 @@ private fun HistoryCard(vm: AppState) {
         Text("${h.count}", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 40.sp, color = x.hlInk)
         Spacer(Modifier.width(14.dp))
         Column {
-            Text(if (vm.form.isNew) "Уже работали: ${h.count} QSO" else "Других QSO: ${h.count}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = x.hlInk)
+            Text(if (vm.form.isNew) tr("Уже работали: %s QSO", h.count) else tr("Других QSO: %s", h.count), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = x.hlInk)
             Text(
-                "Последняя ${DATE_FMT.format(t)} ${TIME_FMT.format(t)} UTC",
+                tr("Последняя %s %s UTC", DATE_FMT.format(t), TIME_FMT.format(t)),
                 fontSize = 17.sp, color = x.hlInk,
             )
             val det = listOf(last.band, last.mode).filter { it.isNotBlank() }.joinToString(" ")
@@ -555,8 +556,8 @@ private fun DistanceCard(vm: AppState, onOpenMap: () -> Unit) {
     val me = vm.myPositionFor(vm.form)
     val them = vm.form.position
     when {
-        me == null -> Hint("Укажите свой QTH-локатор в настройках, чтобы видеть расстояние до абонента.")
-        them == null -> if (vm.form.call.length >= 3) Hint("Нет координат абонента. Впишите его QTH-локатор в карточке «Абонент» (✎).")
+        me == null -> Hint(tr("Укажите свой QTH-локатор в настройках, чтобы видеть расстояние до абонента."))
+        them == null -> if (vm.form.call.length >= 3) Hint(tr("Нет координат абонента. Впишите его QTH-локатор в карточке «Абонент» (✎)."))
         else -> {
             val km = Geo.distanceKm(me, them)
             val az = Geo.bearing(me, them)
@@ -571,14 +572,14 @@ private fun DistanceCard(vm: AppState, onOpenMap: () -> Unit) {
                         val approx = vm.form.approxPosition
                         Text((if (approx) "≈ " else "") + formatKm(km), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 30.sp)
                         Text(
-                            "азимут ${az.toInt()}°" + if (approx) " · до центра области" else "",
+                            tr("азимут %s°", az.toInt()) + if (approx) tr(" · до центра области") else "",
                             style = MaterialTheme.typography.bodyLarge, color = x.muted,
                         )
                     }
                     OutlinedButton(onClick = onOpenMap, shape = RoundedCornerShape(12.dp)) {
                         Icon(Icons.Filled.Map, null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Карта")
+                        Text(tr("Карта"))
                     }
                 }
             }
@@ -600,7 +601,7 @@ private fun MapOverlay(vm: AppState, onClose: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onClose, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад", Modifier.size(28.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Назад"), Modifier.size(28.dp))
             }
             Text("${vm.form.myCall.ifBlank { vm.settings.myCall }} → ${vm.form.call}", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp)
         }
@@ -614,9 +615,9 @@ private fun MapOverlay(vm: AppState, onClose: () -> Unit) {
             val az = Geo.bearing(me, them)
             val back = Geo.bearing(them, me)
             Text((if (vm.form.approxPosition) "≈ " else "") + formatKm(Geo.distanceKm(me, them)), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 36.sp)
-            Pair("Азимут на абонента", "${az.toInt()}°")
-            Pair("Обратный азимут", "${back.toInt()}°")
-            Pair("Локаторы", "${vm.form.myLocator.ifBlank { vm.settings.myLocator }} → ${vm.form.locator.ifBlank { Geo.latLonToLocator(them) }}")
+            Pair(tr("Азимут на абонента"), "${az.toInt()}°")
+            Pair(tr("Обратный азимут"), "${back.toInt()}°")
+            Pair(tr("Локаторы"), "${vm.form.myLocator.ifBlank { vm.settings.myLocator }} → ${vm.form.locator.ifBlank { Geo.latLonToLocator(them) }}")
         }
     }
 }
@@ -629,7 +630,7 @@ private fun Pair(label: String, value: String) {
     }
 }
 
-fun formatKm(km: Double): String = "%,d км".format(km.toInt()).replace(',', ' ')
+fun formatKm(km: Double): String = "%,d ".format(km.toInt()).replace(',', ' ') + tr("км")
 
 @Composable
 private fun Hint(text: String) {
@@ -647,7 +648,7 @@ private fun AdifFields(vm: AppState, labels: Map<String, String>, perRow: Int = 
     labels.entries.chunked(perRow).forEach { row ->
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             row.forEach { (key, label) ->
-                Field(label, vm.form.adif[key].orEmpty(), { vm.setAdif(key, it) }, Modifier.weight(1f))
+                Field(tr(label), vm.form.adif[key].orEmpty(), { vm.setAdif(key, it) }, Modifier.weight(1f))
             }
             repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
         }
@@ -661,7 +662,7 @@ private fun Label(text: String, value: String? = null) {
         // The value the buttons below have written into the form.
         if (value != null) {
             Text(
-                "  " + value.ifBlank { "не выбран" },
+                "  " + value.ifBlank { tr("не выбран") },
                 fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp,
                 color = if (value.isBlank()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             )
@@ -669,7 +670,7 @@ private fun Label(text: String, value: String? = null) {
     }
 }
 
-private const val CALL_ERROR = "Введите позывной"
+private val CALL_ERROR get() = tr("Введите позывной")
 
 /** Reports most often given in this mode, offered as one-tap buttons under the RST fields. */
 private fun quickReports(mode: String): List<String> = when (defaultRst(mode)) {
@@ -687,7 +688,7 @@ private fun QuickValues(values: List<String>, current: String, onPick: (String) 
             Box(
                 Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp))
                     .background(if (on) MaterialTheme.colorScheme.primary else x.field)
-                    .clickable(onClickLabel = "Отчёт $v") { onPick(v) },
+                    .clickable(onClickLabel = tr("Отчёт %s", v)) { onPick(v) },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(v, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
@@ -738,13 +739,13 @@ private fun FieldGroup(title: String, filledCount: Int, content: @Composable () 
     var open by rememberSaveable(title) { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
-            .clickable(onClickLabel = if (open) "Свернуть" else "Развернуть") { open = !open }
+            .clickable(onClickLabel = if (open) tr("Свернуть") else tr("Развернуть")) { open = !open }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         Text(
-            if (filledCount > 0) "  · заполнено $filledCount" else "  · пусто",
+            if (filledCount > 0) tr("  · заполнено %s", filledCount) else tr("  · пусто"),
             style = MaterialTheme.typography.bodyMedium, color = x.muted, modifier = Modifier.weight(1f),
         )
         Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
@@ -814,15 +815,15 @@ private fun CardRecording(since: Long, onStop: () -> Unit) {
     val secs = ((now - since) / 1000).coerceAtLeast(0)
     Row(
         Modifier.padding(end = 8.dp).clip(RoundedCornerShape(28.dp)).background(RecordRed)
-            .clickable(onClickLabel = "Остановить запись", onClick = onStop)
+            .clickable(onClickLabel = tr("Остановить запись"), onClick = onStop)
             .padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.Mic, "Идёт запись", Modifier.size(22.dp).alpha(a), tint = Color.White)
+        Icon(Icons.Filled.Mic, tr("Идёт запись"), Modifier.size(22.dp).alpha(a), tint = Color.White)
         Spacer(Modifier.width(6.dp))
         Text("%d:%02d".format(secs / 60, secs % 60), fontFamily = Mono, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.width(8.dp))
-        Icon(Icons.Filled.Stop, "Остановить запись", Modifier.size(26.dp), tint = Color.White)
+        Icon(Icons.Filled.Stop, tr("Остановить запись"), Modifier.size(26.dp), tint = Color.White)
     }
 }
 
@@ -835,7 +836,7 @@ private fun CallSuggestions(vm: AppState, onPick: (String) -> Unit) {
     val list = remember(call, vm.allQsos) { vm.callSuggestions(call) }
     if (list.isEmpty()) return
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("Из журнала:", style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
+        Text(tr("Из журнала:"), style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
         list.forEach { c ->
             SuggestionChip(
                 onClick = { onPick(c) },
@@ -859,10 +860,10 @@ private fun DupeCard(vm: AppState) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Повтор", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+        Text(tr("Повтор"), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.width(12.dp))
         Text(
-            "${dupe.band} ${dupe.mode} — уже было ${if (today) "сегодня" else DATE_FMT.format(t)} в ${TIME_FMT.format(t)} UTC",
+            tr("%s %s — уже было %s в %s UTC", dupe.band, dupe.mode, if (today) tr("сегодня") else DATE_FMT.format(t), TIME_FMT.format(t)),
             fontSize = 17.sp, color = MaterialTheme.colorScheme.onErrorContainer,
         )
     }

@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.tr
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -60,12 +61,12 @@ fun MapScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.screen = Screen.Log }, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад", Modifier.size(30.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Назад"), Modifier.size(30.dp))
             }
             Column {
-                Text("Карта QSO", style = MaterialTheme.typography.headlineSmall)
+                Text(tr("Карта QSO"), style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "позывных на карте: ${stations.size}" + if (withoutPosition > 0) " · без координат: $withoutPosition" else "",
+                    tr("позывных на карте: %s", stations.size) + if (withoutPosition > 0) tr(" · без координат: %s", withoutPosition) else "",
                     style = MaterialTheme.typography.bodyMedium, color = x.muted,
                 )
             }
@@ -73,7 +74,7 @@ fun MapScreen(vm: AppViewModel) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (stations.isEmpty()) {
                 Text(
-                    "В логе пока нет связей с известным QTH. Точки появятся, когда QRZ.ru вернёт координаты абонента или вы впишете его локатор.",
+                    tr("В логе пока нет связей с известным QTH. Точки появятся, когда QRZ.ru вернёт координаты абонента или вы впишете его локатор."),
                     style = MaterialTheme.typography.bodyLarge, color = x.muted,
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
                 )
@@ -126,7 +127,7 @@ private fun StationsMap(vm: AppViewModel, stations: List<Station>) {
         vm.settings.myPosition?.let { me ->
             val p = GeoPoint(me.lat, me.lon)
             points += p
-            v.overlays.add(labelMarker(v, p, vm.settings.myCall.ifBlank { "Я" }, dark, home = true) { true })
+            v.overlays.add(labelMarker(v, p, vm.settings.myCall.ifBlank { tr("Я") }, dark, home = true) { true })
         }
         val saved = vm.mapPosition
         if (saved != null) {

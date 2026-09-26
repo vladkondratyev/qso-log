@@ -50,10 +50,13 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-enum class ThemeMode(val label: String) {
-    SYSTEM("Как в системе"),
-    LIGHT("Светлая"),
-    DARK("Тёмная"),
+enum class ThemeMode(private val ru: String) {
+    SYSTEM("Как в системе"), // no-tr
+    LIGHT("Светлая"), // no-tr
+    DARK("Тёмная"), // no-tr
+    ;
+
+    val label: String get() = tr(ru)
 }
 
 /** Callsign length at which the QRZ.ru / HamQTH lookup starts. */
@@ -81,17 +84,23 @@ sealed interface UpdateState {
     data class Failed(val message: String) : UpdateState
 }
 
-enum class LogFilter(val label: String) {
-    TODAY("Сегодня"),
-    BAND("Этот диапазон"),
-    PENDING("Без данных QRZ"),
+enum class LogFilter(private val ru: String) {
+    TODAY("Сегодня"), // no-tr
+    BAND("Этот диапазон"), // no-tr
+    PENDING("Без данных QRZ"), // no-tr
+    ;
+
+    val label: String get() = tr(ru)
 }
 
-enum class SortBy(val label: String, val defaultDesc: Boolean) {
-    DATE("Дата", true),
-    DISTANCE("Км", true),
-    CALL("Позывной", false),
-    BAND("Диапазон", false),
+enum class SortBy(private val ru: String, val defaultDesc: Boolean) {
+    DATE("Дата", true), // no-tr
+    DISTANCE("Км", true), // no-tr
+    CALL("Позывной", false), // no-tr
+    BAND("Диапазон", false), // no-tr
+    ;
+
+    val label: String get() = tr(ru)
 }
 
 sealed interface Screen {
@@ -105,6 +114,15 @@ sealed interface Screen {
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val db = QsoDb(app)
     private val prefs = Settings(app)
+
+    /** Interface language, set before anything builds a text. Changing it re-creates the screen (key in the root). */
+    var language by mutableStateOf(I18n.fromCode(prefs.language).also { I18n.chosen = it }); private set
+
+    fun changeLanguage(l: Lang) {
+        I18n.chosen = l
+        prefs.language = l.code
+        language = l
+    }
     val voice = VoiceNotes(app)
 
     var settings by mutableStateOf(prefs.load()); private set
@@ -138,7 +156,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (problem == null) problem = e
             }
         }
-        throw problem ?: QrzException(403, "Укажите учётную запись QRZ.ru в настройках")
+        throw problem ?: QrzException(403, tr("Укажите учётную запись QRZ.ru в настройках"))
     }
 
     /** Region and RDA that only the site page gives, into ADIF STATE / CNTY unless the card has them. */
@@ -175,7 +193,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // At least one band and one mode stay on: the card needs something to pick. The switch simply does not move.
     fun setBandEnabled(band: String, on: Boolean) {
         if (!on && enabledBands.count { it in BANDS && it != band } == 0) {
-            say("Должен быть включён хотя бы один диапазон")
+            say(tr("Должен быть включён хотя бы один диапазон"))
             return
         }
         enabledBands = if (on) enabledBands + band else enabledBands - band
@@ -184,7 +202,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setModeEnabled(mode: String, on: Boolean) {
         if (!on && enabledModes.count { it in MODES && it != mode } == 0) {
-            say("Должен быть включён хотя бы один вид связи")
+            say(tr("Должен быть включён хотя бы один вид связи"))
             return
         }
         enabledModes = if (on) enabledModes + mode else enabledModes - mode
@@ -280,9 +298,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     list.size
                 }
-                "Экспортировано в ${h.format.title}: $count"
+                tr("Экспортировано в %s: %s", h.format.title, count)
             } catch (e: Exception) {
-                "Не удалось сохранить файл: ${e.message}"
+                tr("Не удалось сохранить файл: %s", e.message)
             }
             _messages.send(Message(msg))
         }
@@ -298,14 +316,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     Triple(added, rows.size - added, r)
                 }
                 buildString {
-                    append("Импортировано из отчёта")
+                    append(tr("Импортировано из отчёта"))
                     if (r.contest.isNotBlank()) append(" ${r.contest}")
                     append(": $added")
-                    if (dup > 0) append(", повторов пропущено: $dup")
-                    if (r.skipped > 0) append(", строк с ошибками: ${r.skipped}")
+                    if (dup > 0) append(tr(", повторов пропущено: %s", dup))
+                    if (r.skipped > 0) append(tr(", строк с ошибками: %s", r.skipped))
                 }
             } catch (e: Exception) {
-                "Не удалось прочитать файл: ${e.message}"
+                tr("Не удалось прочитать файл: %s", e.message)
             }
             reload()
             _messages.send(Message(msg))
@@ -351,8 +369,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Exception) {
                 UpdateState.Failed(
-                    if (e is java.net.UnknownHostException) "Нет интернета: не удаётся связаться с GitHub"
-                    else "Не удалось проверить: ${e.message ?: e.javaClass.simpleName}"
+                    if (e is java.net.UnknownHostException) tr("Нет интернета: не удаётся связаться с GitHub")
+                    else tr("Не удалось проверить: %s", e.message ?: e.javaClass.simpleName)
                 )
             }
         }
@@ -470,7 +488,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: QrzException) {
-                SearchLookup.Failed(e.message ?: "Ошибка QRZ.ru")
+                SearchLookup.Failed(e.message ?: tr("Ошибка QRZ.ru"))
             } catch (e: Exception) {
                 SearchLookup.Failed(networkError(e))
             }
@@ -511,8 +529,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val t = utc(qso.timeUtc)
             // Date and time say which contact went: the log may hold several with the same callsign.
             val left = allQsos.count { it.call == qso.call }
-            val tail = if (left > 0) ". Других связей с ${qso.call}: $left" else ""
-            _messages.send(Message("Удалена связь с ${qso.call} ${DATE_FMT.format(t)} ${TIME_FMT.format(t)}$tail") { restore(qso) })
+            val tail = if (left > 0) tr(". Других связей с %s: %s", qso.call, left) else ""
+            _messages.send(Message(tr("Удалена связь с %s %s %s%s", qso.call, DATE_FMT.format(t), TIME_FMT.format(t), tail)) { restore(qso) })
         }
     }
 
@@ -525,7 +543,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 n
             }
             reload()
-            _messages.send(Message("История QSO удалена: $n записей"))
+            _messages.send(Message(tr("История QSO удалена: %s записей", n)))
         }
     }
 
@@ -550,7 +568,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             true
         } catch (e: Exception) {
             recordingSince = null
-            viewModelScope.launch { _messages.send(Message("Не удалось включить микрофон: ${e.message ?: e.javaClass.simpleName}")) }
+            viewModelScope.launch { _messages.send(Message(tr("Не удалось включить микрофон: %s", e.message ?: e.javaClass.simpleName))) }
             false
         }
     }
@@ -561,7 +579,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         recordingSince = null
         val name = voice.stop()
         addQso(audio = name.orEmpty())
-        if (name == null) viewModelScope.launch { _messages.send(Message("Запись слишком короткая, аудио не сохранено")) }
+        if (name == null) viewModelScope.launch { _messages.send(Message(tr("Запись слишком короткая, аудио не сохранено"))) }
     }
 
     fun cancelRecording() {
@@ -578,7 +596,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             cardRecordingSince = System.currentTimeMillis()
         } catch (e: Exception) {
             cardRecordingSince = null
-            say("Не удалось включить микрофон: ${e.message ?: e.javaClass.simpleName}")
+            say(tr("Не удалось включить микрофон: %s", e.message ?: e.javaClass.simpleName))
         }
     }
 
@@ -587,7 +605,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (cardRecordingSince == null) return
         cardRecordingSince = null
         val name = voice.stop()
-        if (name == null) say("Запись слишком короткая, аудио не сохранено")
+        if (name == null) say(tr("Запись слишком короткая, аудио не сохранено"))
         else form = form.copy(audio = name)
     }
 
@@ -788,7 +806,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         lookup = Lookup.Loading
         if (!hasQrzAccount) {
             lookup = hamqthFallback(call, qrzProblem = null)
-                ?: Lookup.Failed("Укажите учётную запись QRZ.ru в настройках", noAccount = true)
+                ?: Lookup.Failed(tr("Укажите учётную запись QRZ.ru в настройках"), noAccount = true)
             return
         }
         lookup = try {
@@ -817,7 +835,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: QrzException) {
-            val msg = e.message ?: "Ошибка QRZ.ru"
+            val msg = e.message ?: tr("Ошибка QRZ.ru")
             hamqthFallback(call, qrzProblem = msg) ?: Lookup.Failed(msg)
         } catch (e: Exception) {
             val msg = networkError(e)
@@ -850,10 +868,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun networkError(e: Exception) = when (e) {
-        is java.net.UnknownHostException -> "Нет интернета: не удаётся найти api.qrz.ru"
-        is java.net.SocketTimeoutException -> "QRZ.ru не ответил вовремя"
-        is javax.net.ssl.SSLException -> "Ошибка защищённого соединения: ${e.message}"
-        else -> "Нет связи с QRZ.ru: ${e.javaClass.simpleName} ${e.message.orEmpty()}".trim()
+        is java.net.UnknownHostException -> tr("Нет интернета: не удаётся найти api.qrz.ru")
+        is java.net.SocketTimeoutException -> tr("QRZ.ru не ответил вовремя")
+        is javax.net.ssl.SSLException -> tr("Ошибка защищённого соединения: %s", e.message)
+        else -> tr("Нет связи с QRZ.ru: %s %s", e.javaClass.simpleName, e.message.orEmpty()).trim()
     }
 
     private fun loadHistory(call: String) {
@@ -877,7 +895,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (f.audio.isBlank()) return
         form = f.copy(audio = "", removedAudio = f.audio)
         viewModelScope.launch {
-            _messages.send(Message("Аудиозапись удалена") {
+            _messages.send(Message(tr("Аудиозапись удалена")) {
                 if (form.audio.isBlank() && form.removedAudio == f.audio) form = form.copy(audio = f.audio, removedAudio = "")
             })
         }
@@ -895,7 +913,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val info = qrzLookup(qso.call)
                 if (info == null) {
                     withContext(Dispatchers.IO) { db.save(qso.copy(pendingLookup = false)) }
-                    "На QRZ.ru позывного ${qso.call} нет"
+                    tr("На QRZ.ru позывного %s нет", qso.call)
                 } else {
                     val pos = info.position
                     // A region-centre position from HamQTH gives way to the station's own one.
@@ -917,12 +935,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         updatedAt = System.currentTimeMillis(),
                     )
                     withContext(Dispatchers.IO) { db.save(updated) }
-                    "Данные ${qso.call} получены с QRZ.ru"
+                    tr("Данные %s получены с QRZ.ru", qso.call)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: QrzException) {
-                e.message ?: "Ошибка QRZ.ru"
+                e.message ?: tr("Ошибка QRZ.ru")
             } catch (e: Exception) {
                 networkError(e)
             } finally {
@@ -943,9 +961,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val now = LocalDateTime.now(ZoneOffset.UTC)
             f0.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now))
         } else f0
-        if (f.call.length < 3) return "Введите позывной"
-        val date = try { LocalDate.parse(f.date.trim(), DATE_FMT) } catch (e: Exception) { return "Дата в формате ДД.ММ.ГГГГ" }
-        val time = try { LocalTime.parse(f.time.trim(), TIME_FMT) } catch (e: Exception) { return "Время в формате ЧЧ:ММ" }
+        if (f.call.length < 3) return tr("Введите позывной")
+        val date = try { LocalDate.parse(f.date.trim(), DATE_FMT) } catch (e: Exception) { return tr("Дата в формате ДД.ММ.ГГГГ") }
+        val time = try { LocalTime.parse(f.time.trim(), TIME_FMT) } catch (e: Exception) { return tr("Время в формате ЧЧ:ММ") }
         val ts = LocalDateTime.of(date, time).toInstant(ZoneOffset.UTC).toEpochMilli()
         val freq = normalizeFreq(f.freq)
         // Receive band/frequency and end time repeat the main fields; kept in sync unless an imported log had its own.
@@ -985,8 +1003,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.IO) { db.save(finalQso) }
             reload()
             if (f.isNew) newSavedTick++
-            val note = if (finalQso.pendingLookup) ". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе" else ""
-            _messages.send(Message((if (f.isNew) "Связь с ${f.call} записана" else "Изменения сохранены") + note))
+            val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
+            _messages.send(Message((if (f.isNew) tr("Связь с %s записана", f.call) else tr("Изменения сохранены")) + note))
         }
         screen = editReturn
         return null
@@ -1059,12 +1077,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun testQrzSite() {
         viewModelScope.launch {
             qrzSiteOk = null
-            qrzSiteStatus = "Проверяю…"
+            qrzSiteStatus = tr("Проверяю…")
             qrzSite.reset()
             try {
                 qrzSite.login()
                 qrzSiteOk = true
-                qrzSiteStatus = "Вход выполнен"
+                qrzSiteStatus = tr("Вход выполнен")
             } catch (e: QrzException) {
                 qrzSiteOk = false
                 qrzSiteStatus = e.message
@@ -1078,12 +1096,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun testQrz() {
         viewModelScope.launch {
             qrzOk = null
-            qrzStatus = "Проверяю…"
+            qrzStatus = tr("Проверяю…")
             qrz.reset()
             try {
                 qrz.login()
                 qrzOk = true
-                qrzStatus = "Подключено"
+                qrzStatus = tr("Подключено")
             } catch (e: QrzException) {
                 qrzOk = false
                 qrzStatus = e.message
@@ -1112,10 +1130,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (pos == null && qth.isNotBlank()) pos = geocode(qth)
             val found = pos
             if (found == null) {
-                _messages.send(Message("Не удалось найти координаты. Введите локатор вручную"))
+                _messages.send(Message(tr("Не удалось найти координаты. Введите локатор вручную")))
             } else {
                 updateSettings(settings.copy(myLocator = Geo.latLonToLocator(found), myQth = qth))
-                _messages.send(Message("Локатор определён: ${Geo.latLonToLocator(found)}"))
+                _messages.send(Message(tr("Локатор определён: %s", Geo.latLonToLocator(found))))
             }
         }
     }
@@ -1161,9 +1179,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     list.size
                 }
-                "Экспортировано в ADIF: $count"
+                tr("Экспортировано в ADIF: %s", count)
             } catch (e: Exception) {
-                "Не удалось сохранить файл: ${e.message}"
+                tr("Не удалось сохранить файл: %s", e.message)
             }
             _messages.send(Message(msg))
         }
@@ -1183,12 +1201,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     Triple(added, rows.size - added, r.skipped)
                 }
                 buildString {
-                    append("Импортировано из ADIF: $added")
-                    if (dup > 0) append(", повторов пропущено: $dup")
-                    if (bad > 0) append(", записей с ошибками: $bad")
+                    append(tr("Импортировано из ADIF: %s", added))
+                    if (dup > 0) append(tr(", повторов пропущено: %s", dup))
+                    if (bad > 0) append(tr(", записей с ошибками: %s", bad))
                 }
             } catch (e: Exception) {
-                "Не удалось прочитать файл: ${e.message}"
+                tr("Не удалось прочитать файл: %s", e.message)
             }
             reload()
             _messages.send(Message(msg))
@@ -1203,9 +1221,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     getApplication<Application>().contentResolver.openOutputStream(uri)!!.use { Csv.export(list, it) }
                     list.size
                 }
-                "Экспортировано записей: $count"
+                tr("Экспортировано записей: %s", count)
             } catch (e: Exception) {
-                "Не удалось сохранить файл: ${e.message}"
+                tr("Не удалось сохранить файл: %s", e.message)
             }
             _messages.send(Message(msg))
         }
@@ -1220,12 +1238,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     Triple(added, r.rows.size - added, r.skipped)
                 }
                 buildString {
-                    append("Импортировано: $added")
-                    if (dup > 0) append(", повторов пропущено: $dup")
-                    if (bad > 0) append(", строк с ошибками: $bad")
+                    append(tr("Импортировано: %s", added))
+                    if (dup > 0) append(tr(", повторов пропущено: %s", dup))
+                    if (bad > 0) append(tr(", строк с ошибками: %s", bad))
                 }
             } catch (e: Exception) {
-                "Не удалось прочитать файл: ${e.message}"
+                tr("Не удалось прочитать файл: %s", e.message)
             }
             reload()
             _messages.send(Message(msg))

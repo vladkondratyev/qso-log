@@ -8,7 +8,11 @@
 **Аппаратный журнал радиолюбителя для телефона и компьютера: Android, macOS, Windows и Linux.**
 Быстрый ввод связей в эфире, данные абонента с QRZ.ru, расстояние и карта трассы, голосовые заметки,
 обмен журналом через ADIF и отчёты для соревнований ЕРМАК / Cabrillo. Крупный шрифт и большие кнопки —
-чтобы вести лог прямо во время связи.
+чтобы вести лог прямо во время связи. **Интерфейс на русском и английском** — язык выбирается в настройках.
+
+> **In English:** QSO-LOG is a free ham radio logbook for Android, macOS (Apple Silicon and Intel), Windows and Linux:
+> fast QSO entry, station data from QRZ.ru and HamQTH, distance and path map, voice notes, ADIF import/export,
+> ERMAK / Cabrillo contest reports. The interface is available in English — Settings → “Language / Язык”.
 
 <p align="center">
 <img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG на компьютере и на телефоне">
@@ -16,11 +20,11 @@
 
 | Платформа | Версия | Скачать |
 |---|---|---|
-| **Android** 8.0 и новее | 0.21.0 | [QSO-LOG-0.21.0.apk](../../releases/tag/v0.21.0) |
-| **macOS** 11 и новее, Apple Silicon (M1 и новее) | 1.6.0 | [QSO-LOG-1.6.0-macos-arm64.dmg](../../releases/tag/desktop-v1.6.0) |
-| **macOS** 11 и новее, Intel (в том числе Ventura) | 1.6.0 | [QSO-LOG-1.6.0-macos-x64.dmg](../../releases/tag/desktop-v1.6.0) |
-| **Windows** 10/11, 64 бит | 1.6.0 | [QSO-LOG-1.6.0-windows-x64.zip](../../releases/tag/desktop-v1.6.0) |
-| **Linux**: Ubuntu 22.04+, Debian 12, Mint (64 бит) | 1.6.0 | [QSO-LOG-1.6.0-linux-amd64.deb](../../releases/tag/desktop-v1.6.0) |
+| **Android** 8.0 и новее | 0.22.0 | [QSO-LOG-0.22.0.apk](../../releases/tag/v0.22.0) |
+| **macOS** 11 и новее, Apple Silicon (M1 и новее) | 1.7.0 | [QSO-LOG-1.7.0-macos-arm64.dmg](../../releases/tag/desktop-v1.7.0) |
+| **macOS** 11 и новее, Intel (в том числе Ventura) | 1.7.0 | [QSO-LOG-1.7.0-macos-x64.dmg](../../releases/tag/desktop-v1.7.0) |
+| **Windows** 10/11, 64 бит | 1.7.0 | [QSO-LOG-1.7.0-windows-x64.zip](../../releases/tag/desktop-v1.7.0) |
+| **Linux**: Ubuntu 22.04+, Debian 12, Mint (64 бит) | 1.7.0 | [QSO-LOG-1.7.0-linux-amd64.deb](../../releases/tag/desktop-v1.7.0) |
 
 Установка: [Android](#установка-на-android) · [macOS](#установка-на-macos) · [Windows](#установка-на-windows) ·
 [Linux](#установка-на-linux-ubuntu-debian). Всё бесплатно, исходный код открыт (MIT).
@@ -36,6 +40,7 @@
 - [Расстояние и карты](#расстояние-и-карты)
 - [Импорт, экспорт, отчёты для соревнований](#импорт-экспорт-отчёты-для-соревнований)
 - [Настройки и оформление](#настройки-и-оформление)
+- [Язык интерфейса / Interface language](#язык-интерфейса--interface-language)
 - [QSO-LOG на компьютере](#qso-log-на-компьютере)
 - [Установка](#установка-на-android) · [Данные и приватность](#данные-и-приватность) · [Сборка](#сборка-из-исходников)
 
@@ -43,11 +48,12 @@
 
 QSO-LOG написан на Kotlin: общая часть (журнал, ADIF, ЕРМАК/Cabrillo, расчёт расстояния, QRZ.ru, HamQTH) одна для
 всех систем, интерфейс — Jetpack Compose на Android и Compose Multiplatform на компьютере. Поэтому **версия для
-компьютера умеет то же, что и Android**: версия 1.6.0 для macOS, Windows и Linux соответствует Android 0.21.0.
+компьютера умеет то же, что и Android**: версия 1.7.0 для macOS, Windows и Linux соответствует Android 0.22.0.
 
 - **Телефон** — в эфире, в походе, на даче: одна рука, крупные кнопки, голосовая заметка удержанием кнопки.
 - **Компьютер** — в шеке: окно в две колонки (журнал слева, карточка справа), ввод с клавиатуры, горячие клавиши.
 - **Журнал переносится** между устройствами файлом ADIF: экспорт на одном, импорт на другом, повторы пропускаются.
+- **Интерфейс на русском и английском** на всех системах — один общий словарь для телефона и компьютера.
 
 | | Android | macOS | Windows | Linux |
 |---|---|---|---|---|
@@ -202,6 +208,7 @@ QSO-LOG написан на Kotlin: общая часть (журнал, ADIF, �
 - **Моя станция**: позывной, QTH-локатор («Определить локатор» — по карточке QRZ.ru или по городу), город, а для новых
   записей — мощность, трансивер, антенна, оператор, область, район.
 - **Диапазоны и виды связи**: какие показывать кнопками в карточке; хотя бы один диапазон и один вид всегда включены.
+- **Язык / Language**: как в системе, русский или English (см. ниже).
 - **Оформление**: тема как в системе, светлая или тёмная. Экраны проверены с увеличенным системным шрифтом.
 - **Проверить обновления**: программа узнаёт на GitHub, есть ли версия новее, показывает, что изменилось, и даёт скачать.
 
@@ -223,6 +230,24 @@ QSO-LOG написан на Kotlin: общая часть (журнал, ADIF, �
 </details>
 
 На скриншотах демонстрационные данные: позывные `*DEMO` выдуманы.
+
+## Язык интерфейса / Interface language
+
+Настройки → **«Язык / Language»**: «Как в системе», «Русский» или «English». Язык меняется сразу, без перезапуска,
+на телефоне и на компьютере одинаково. «Как в системе» — русский, если язык системы русский, украинский или
+белорусский, иначе английский. После обновления уже настроенной программы язык остаётся русским.
+
+Settings → **“Language / Язык”**: “As in system”, “Русский” or “English”. The language changes at once, no restart,
+the same on the phone and on the computer.
+
+<p>
+<img src="docs/screenshots/en-01-log.png" width="200" alt="Log in English">
+<img src="docs/screenshots/en-02-new-qso.png" width="200" alt="New QSO in English">
+<img src="docs/screenshots/en-03-language.png" width="200" alt="Language setting">
+</p>
+<p>
+<img src="docs/screenshots/desktop-en-02-new-qso.png" width="600" alt="Desktop version in English">
+</p>
 
 ## QSO-LOG на компьютере
 
@@ -270,14 +295,14 @@ QSO-LOG написан на Kotlin: общая часть (журнал, ADIF, �
 
 ## Установка на Android
 
-1. Скачайте `QSO-LOG-0.21.0.apk` со страницы [релиза](../../releases/tag/v0.21.0).
+1. Скачайте `QSO-LOG-0.22.0.apk` со страницы [релиза](../../releases/tag/v0.22.0).
 2. Откройте файл на телефоне. Если Android спросит, разрешите установку из этого источника.
 3. Новую версию ставьте поверх старой: лог и настройки сохранятся.
 
 ## Установка на macOS
 
-1. Скачайте со страницы [релиза](../../releases/tag/desktop-v1.6.0) файл для своего Mac (macOS 11 и новее):
-   `QSO-LOG-1.6.0-macos-arm64.dmg` — процессор Apple (M1 и новее), `QSO-LOG-1.6.0-macos-x64.dmg` — процессор Intel.
+1. Скачайте со страницы [релиза](../../releases/tag/desktop-v1.7.0) файл для своего Mac (macOS 11 и новее):
+   `QSO-LOG-1.7.0-macos-arm64.dmg` — процессор Apple (M1 и новее), `QSO-LOG-1.7.0-macos-x64.dmg` — процессор Intel.
    Какой у вас: меню  → «Об этом Mac», строка «Чип» (Apple) или «Процессор» (Intel).
 2. Откройте DMG и перетащите QSO-LOG в «Программы».
 3. Программа не подписана сертификатом Apple, поэтому первый запуск macOS заблокирует. Откройте
@@ -290,7 +315,7 @@ QSO-LOG написан на Kotlin: общая часть (журнал, ADIF, �
 
 ## Установка на Windows
 
-1. Скачайте `QSO-LOG-1.6.0-windows-x64.zip` со страницы [релиза](../../releases/tag/desktop-v1.6.0).
+1. Скачайте `QSO-LOG-1.7.0-windows-x64.zip` со страницы [релиза](../../releases/tag/desktop-v1.7.0).
 2. Распакуйте архив целиком, например в «Документы». Из самого архива программа не запустится.
 3. Запустите `QSO-LOG.exe` в папке QSO-LOG. Java устанавливать не нужно, она внутри.
 4. Windows покажет «Система Windows защитила ваш компьютер», потому что программа не подписана:
@@ -303,10 +328,10 @@ QSO-LOG написан на Kotlin: общая часть (журнал, ADIF, �
 
 ## Установка на Linux (Ubuntu, Debian)
 
-1. Скачайте `QSO-LOG-1.6.0-linux-amd64.deb` со страницы [релиза](../../releases/tag/desktop-v1.6.0).
+1. Скачайте `QSO-LOG-1.7.0-linux-amd64.deb` со страницы [релиза](../../releases/tag/desktop-v1.7.0).
 2. Установите в терминале из папки с файлом:
    ```bash
-   sudo apt install ./QSO-LOG-1.6.0-linux-amd64.deb
+   sudo apt install ./QSO-LOG-1.7.0-linux-amd64.deb
    ```
    Или двойным щелчком по файлу в «Центре приложений».
 3. QSO-LOG появится в меню приложений (раздел «Любительское радио» / «Интернет»).

@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,19 +49,19 @@ fun MapPane(vm: AppState) {
                 add(MapMarker(LatLon(q.lat!!, q.lon!!), label, StationColor, onClick = { vm.edit(q, from = Pane.Map) }))
             }
             // My station last, so it is drawn on top of the stations around it.
-            myPos?.let { add(MapMarker(it, myCall.ifBlank { "Я" }, MyColor, home = true)) }
+            myPos?.let { add(MapMarker(it, myCall.ifBlank { tr("Я") }, MyColor, home = true)) }
         }
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.pane = Pane.Empty }, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад (Esc)", Modifier.size(30.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Назад (Esc)"), Modifier.size(30.dp))
             }
             Column {
-                Text("Карта QSO", style = MaterialTheme.typography.headlineSmall)
+                Text(tr("Карта QSO"), style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "позывных на карте: ${stations.size}" + if (withoutPosition > 0) " · без координат: $withoutPosition" else "",
+                    tr("позывных на карте: %s", stations.size) + if (withoutPosition > 0) tr(" · без координат: %s", withoutPosition) else "",
                     style = MaterialTheme.typography.bodyMedium, color = x.muted,
                 )
             }
@@ -68,13 +69,13 @@ fun MapPane(vm: AppState) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (stations.isEmpty()) {
                 Text(
-                    "В логе пока нет связей с известным QTH. Точки появятся, когда QRZ.ru вернёт координаты абонента или вы впишете его локатор.",
+                    tr("В логе пока нет связей с известным QTH. Точки появятся, когда QRZ.ru вернёт координаты абонента или вы впишете его локатор."),
                     style = MaterialTheme.typography.bodyLarge, color = x.muted,
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
                 )
             } else {
                 MarkerMap(
-                    markers, path = null, interactive = true, filledLabels = true, fitHint = "Показать все станции",
+                    markers, path = null, interactive = true, filledLabels = true, fitHint = tr("Показать все станции"),
                     modifier = Modifier.fillMaxSize(),
                     camera = vm.mapCamera, onCamera = { vm.mapCamera = it },
                 )

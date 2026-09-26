@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.tr
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -55,41 +56,39 @@ fun WelcomeScreen(vm: AppViewModel) {
     ) {
         Column(Modifier.widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             QsoLogo(fontSize = 34.sp)
-            Text("Шаг ${step + 1} из 3", style = MaterialTheme.typography.titleSmall, color = x.muted)
+            Text(tr("Шаг %s из 3", step + 1), style = MaterialTheme.typography.titleSmall, color = x.muted)
             when (step) {
                 0 -> {
-                    Text("Ваш позывной", style = MaterialTheme.typography.headlineSmall)
-                    Text("Он попадёт в каждую связь и в файлы ADIF.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
-                    SettingField("Мой позывной", s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
+                    Text(tr("Ваш позывной"), style = MaterialTheme.typography.headlineSmall)
+                    Text(tr("Он попадёт в каждую связь и в файлы ADIF."), style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                    SettingField(tr("Мой позывной"), s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
                 }
                 1 -> {
-                    Text("Где вы находитесь", style = MaterialTheme.typography.headlineSmall)
+                    Text(tr("Где вы находитесь"), style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        "От QTH-локатора считаются расстояние и азимут до абонента. Не знаете локатор — впишите город и нажмите «Определить по городу».",
+                        tr("От QTH-локатора считаются расстояние и азимут до абонента. Не знаете локатор — впишите город и нажмите «Определить по городу»."),
                         style = MaterialTheme.typography.bodyLarge, color = x.muted,
                     )
                     val locOk = s.myLocator.isBlank() || Geo.isLocator(s.myLocator)
                     SettingField(
-                        "QTH-локатор (например KO85ts)", s.myLocator, { vm.updateSettings(s.copy(myLocator = it.trim())) },
-                        mono = true, error = if (locOk) null else "Локатор: 2 буквы, 2 цифры, 2 буквы",
+                        tr("QTH-локатор (например KO85ts)"), s.myLocator, { vm.updateSettings(s.copy(myLocator = it.trim())) },
+                        mono = true, error = if (locOk) null else tr("Локатор: 2 буквы, 2 цифры, 2 буквы"),
                     )
-                    SettingField("Город / адрес QTH", s.myQth, { vm.updateSettings(s.copy(myQth = it)) })
-                    OutlinedButton(onClick = vm::findMyLocator, shape = RoundedCornerShape(12.dp)) { Text("Определить по городу", fontSize = 17.sp) }
+                    SettingField(tr("Город / адрес QTH"), s.myQth, { vm.updateSettings(s.copy(myQth = it)) })
+                    OutlinedButton(onClick = vm::findMyLocator, shape = RoundedCornerShape(12.dp)) { Text(tr("Определить по городу"), fontSize = 17.sp) }
                 }
                 else -> {
-                    Text("QRZ.ru: имя и QTH абонента", style = MaterialTheme.typography.headlineSmall)
+                    Text(tr("QRZ.ru: имя и QTH абонента"), style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        "Лучше всего — доступ к XML API QRZ.ru: логин и пароль для программ выдаёт сайт qrz.ru (как получить — в настройках, " +
-                            "блок «Источники данных об абоненте»). Можно пропустить: страна и область придут с HamQTH, а учётную запись — " +
-                            "или запасной вход по e-mail сайта — можно указать позже в настройках.",
+                        tr("Лучше всего — доступ к XML API QRZ.ru: логин и пароль для программ выдаёт сайт qrz.ru (как получить — в настройках, блок «Источники данных об абоненте»). Можно пропустить: страна и область придут с HamQTH, а учётную запись — или запасной вход по e-mail сайта — можно указать позже в настройках."),
                         style = MaterialTheme.typography.bodyLarge, color = x.muted,
                     )
-                    SettingField("Логин XML API", s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)
+                    SettingField(tr("Логин XML API"), s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)
                     OutlinedTextField(
                         value = s.qrzPassword,
                         onValueChange = { vm.updateSettings(s.copy(qrzPassword = it)) },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Пароль XML API") },
+                        label = { Text(tr("Пароль XML API")) },
                         singleLine = true,
                         textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
                         visualTransformation = PasswordVisualTransformation(),
@@ -100,7 +99,7 @@ fun WelcomeScreen(vm: AppViewModel) {
             }
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (step > 0) TextButton(onClick = { step-- }) { Text("Назад", fontSize = 17.sp) }
+                if (step > 0) TextButton(onClick = { step-- }) { Text(tr("Назад"), fontSize = 17.sp) }
                 Spacer(Modifier.weight(1f))
                 if (step < 2) {
                     Button(
@@ -108,14 +107,14 @@ fun WelcomeScreen(vm: AppViewModel) {
                         enabled = step != 0 || s.myCall.length >= 3,
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.height(52.dp),
-                    ) { Text("Далее", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                    ) { Text(tr("Далее"), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
                 } else {
                     Button(onClick = vm::finishWelcome, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp)) {
-                        Text("Готово", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text(tr("Готово"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
-            TextButton(onClick = vm::finishWelcome) { Text("Настроить позже", fontSize = 16.sp, color = x.muted) }
+            TextButton(onClick = vm::finishWelcome) { Text(tr("Настроить позже"), fontSize = 16.sp, color = x.muted) }
         }
     }
 }

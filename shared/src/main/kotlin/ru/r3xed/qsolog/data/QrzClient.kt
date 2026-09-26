@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.data
 
+import ru.r3xed.qsolog.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -82,11 +83,11 @@ class QrzClient(private val credentials: () -> Pair<String, String>) {
 
     private suspend fun loginLocked(): String {
         val (user, pass) = credentials()
-        if (user.isBlank() || pass.isBlank()) throw QrzException(0, "Укажите логин и пароль QRZ.ru в настройках")
+        if (user.isBlank() || pass.isBlank()) throw QrzException(0, tr("Укажите логин и пароль QRZ.ru в настройках"))
         // POST keeps the password out of URLs, as the API docs recommend.
         val r = parse(request("https://api.qrz.ru/login", "u=${enc(user)}&p=${enc(pass)}&agent=QSOLog"))
         r.error?.let { throw QrzException(r.errorCode, translate(it)) }
-        val id = r.session["session_id"] ?: throw QrzException(0, "QRZ.ru не вернул ключ сессии")
+        val id = r.session["session_id"] ?: throw QrzException(0, tr("QRZ.ru не вернул ключ сессии"))
         sessionId = id
         sessionAt = System.currentTimeMillis()
         return id
@@ -158,7 +159,7 @@ class QrzClient(private val credentials: () -> Pair<String, String>) {
                 // 403 and 404 carry an XML error description in the body.
                 val stream = if (code >= 400) conn.errorStream else conn.inputStream
                 val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-                if (!body.contains("<QRZDatabase")) throw QrzException(code, "QRZ.ru ответил кодом HTTP $code")
+                if (!body.contains("<QRZDatabase")) throw QrzException(code, tr("QRZ.ru ответил кодом HTTP %s", code))
                 body
             } finally {
                 conn.disconnect()
@@ -177,8 +178,8 @@ class QrzClient(private val credentials: () -> Pair<String, String>) {
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
     private fun translate(error: String) = when {
-        error.contains("password", true) -> "Неверный логин или пароль QRZ.ru"
-        error.contains("expired", true) -> "Сессия QRZ.ru истекла"
+        error.contains("password", true) -> tr("Неверный логин или пароль QRZ.ru")
+        error.contains("expired", true) -> tr("Сессия QRZ.ru истекла")
         else -> "QRZ.ru: $error"
     }
 }

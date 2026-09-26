@@ -21,7 +21,7 @@ object DesktopUpdates {
         conn.connectTimeout = 10_000
         conn.readTimeout = 15_000
         val xml = try {
-            if (conn.responseCode != 200) throw IllegalStateException("GitHub ответил ${conn.responseCode}")
+            if (conn.responseCode != 200) throw IllegalStateException(tr("GitHub ответил %s", conn.responseCode))
             conn.inputStream.bufferedReader().use { it.readText() }
         } finally {
             conn.disconnect()
@@ -34,7 +34,7 @@ object DesktopUpdates {
             val html = unescape(Regex("<content[^>]*>(.*?)</content>", RegexOption.DOT_MATCHES_ALL).find(body)?.groupValues?.get(1).orEmpty())
             return DesktopRelease(version, htmlToText(html), "$REPO/releases/download/$tag/${fileName(version)}", "$REPO/releases/tag/$tag")
         }
-        throw IllegalStateException("в ленте релизов нет версии для компьютера")
+        throw IllegalStateException(tr("в ленте релизов нет версии для компьютера"))
     }
 
     /** Release files are always named like this, see the build scripts. */

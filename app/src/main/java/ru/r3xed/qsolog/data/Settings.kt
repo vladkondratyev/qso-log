@@ -66,6 +66,11 @@ class Settings(context: Context) {
         set(v) = prefs.edit().putStringSet("enabled_modes", v).apply()
 
     /** Second lookup source: country and region by prefix from HamQTH (free, no account). On by default. */
+    /** Interface language code: "system", "ru" or "en" (see ru.r3xed.qsolog.Lang). */
+    var language: String
+        // An update of a set-up app keeps Russian (it was the only language); a new install follows the system.
+        get() = prefs.getString("language", null) ?: if (prefs.contains("my_call")) "ru" else "system"
+        set(v) = prefs.edit().putString("language", v).apply()
     /** Time of a new contact: when the card was opened (false) or when it is saved (true). */
     var timeOnSave: Boolean
         get() = prefs.getBoolean("time_on_save", false)

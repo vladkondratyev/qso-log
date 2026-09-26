@@ -91,16 +91,16 @@ class MainActivity : ComponentActivity() {
                 }
                 val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
                     vm.say(
-                        if (granted && vm.screen == Screen.Edit) "Микрофон разрешён. Нажмите значок микрофона ещё раз"
-                        else if (granted) "Микрофон разрешён. Удерживайте «Добавить QSO», чтобы записать голос"
-                        else "Без доступа к микрофону голосовые заметки недоступны. Разрешить можно в настройках Android"
+                        if (granted && vm.screen == Screen.Edit) tr("Микрофон разрешён. Нажмите значок микрофона ещё раз")
+                        else if (granted) tr("Микрофон разрешён. Удерживайте «Добавить QSO», чтобы записать голос")
+                        else tr("Без доступа к микрофону голосовые заметки недоступны. Разрешить можно в настройках Android")
                     )
                 }
                 LaunchedEffect(Unit) {
                     vm.messages.collect { m ->
                         val r = snackbar.showSnackbar(
                             m.text,
-                            actionLabel = if (m.undo != null) "Отменить" else null,
+                            actionLabel = if (m.undo != null) tr("Отменить") else null,
                             duration = if (m.undo != null) SnackbarDuration.Long else SnackbarDuration.Short,
                         )
                         if (r == SnackbarResult.ActionPerformed) m.undo?.invoke()
@@ -108,6 +108,8 @@ class MainActivity : ComponentActivity() {
                 }
                 // Surface sets the default text colour from the theme (light grey on the dark theme);
                 // without it Text falls back to black on every theme.
+                // Texts are read through tr() while composing: a new language re-creates the screen.
+                key(vm.language) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
                     Box(Modifier.fillMaxSize()) {
                         when (vm.screen) {
@@ -151,6 +153,7 @@ class MainActivity : ComponentActivity() {
                             Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = if (vm.screen == Screen.Edit) 80.dp else 16.dp),
                         )
                     }
+                }
                 }
             }
         }

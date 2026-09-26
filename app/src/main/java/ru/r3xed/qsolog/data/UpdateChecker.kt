@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.data
 
+import ru.r3xed.qsolog.tr
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -23,7 +24,7 @@ object UpdateChecker {
         fromFeed()
     }
 
-    private class RefusedException(code: Int) : Exception("GitHub ответил $code")
+    private class RefusedException(code: Int) : Exception(tr("GitHub ответил %s", code))
 
     private fun fromApi(): Release {
         val conn = URL(API).openConnection() as HttpURLConnection
@@ -58,7 +59,7 @@ object UpdateChecker {
         conn.connectTimeout = 10_000
         conn.readTimeout = 15_000
         val xml = try {
-            if (conn.responseCode != 200) throw IllegalStateException("GitHub ответил ${conn.responseCode}")
+            if (conn.responseCode != 200) throw IllegalStateException(tr("GitHub ответил %s", conn.responseCode))
             conn.inputStream.bufferedReader().use { it.readText() }
         } finally {
             conn.disconnect()
@@ -77,7 +78,7 @@ object UpdateChecker {
                 pageUrl = "$REPO/releases/tag/$tag",
             )
         }
-        throw IllegalStateException("в ленте релизов нет версии для Android")
+        throw IllegalStateException(tr("в ленте релизов нет версии для Android"))
     }
 
     private fun unescape(s: String) = s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")

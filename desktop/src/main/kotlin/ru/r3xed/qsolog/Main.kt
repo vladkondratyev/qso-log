@@ -82,68 +82,69 @@ fun main() {
         ) {
             LaunchedEffect(Unit) { window.minimumSize = Dimension(980, 640) }
             val exportCsv = {
-                chooseFile(window, "Экспорт лога в CSV", save = true, suggested = state.csvFileName())?.let(state::exportCsv)
+                chooseFile(window, tr("Экспорт лога в CSV"), save = true, suggested = state.csvFileName())?.let(state::exportCsv)
                 Unit
             }
             val exportAdif = {
-                chooseFile(window, "Экспорт лога в ADIF", save = true, suggested = state.adifFileName(), ext = "adi")?.let(state::exportAdif)
+                chooseFile(window, tr("Экспорт лога в ADIF"), save = true, suggested = state.adifFileName(), ext = "adi")?.let(state::exportAdif)
                 Unit
             }
             val importAdif = {
-                chooseFile(window, "Импорт лога из ADIF", save = false, ext = "adi")?.let(state::importAdif)
+                chooseFile(window, tr("Импорт лога из ADIF"), save = false, ext = "adi")?.let(state::importAdif)
                 Unit
             }
             val importCsv = {
-                chooseFile(window, "Импорт лога из CSV", save = false)?.let(state::importCsv)
+                chooseFile(window, tr("Импорт лога из CSV"), save = false)?.let(state::importCsv)
                 Unit
             }
             val exportSelected = {
-                chooseFile(window, "Экспорт выбранных связей в ADIF", save = true, suggested = state.selectedAdifFileName(), ext = "adi")
+                chooseFile(window, tr("Экспорт выбранных связей в ADIF"), save = true, suggested = state.selectedAdifFileName(), ext = "adi")
                     ?.let(state::exportSelectedAdif)
                 Unit
             }
             // Contest reports: the dialog picks the header, then the save dialog; .txt (ЕРМАК) or .cbr (Cabrillo).
             val exportContest = { h: ru.r3xed.qsolog.data.Cabrillo.Header ->
-                val file = chooseFile(window, "Экспорт в ${h.format.title}", save = true, suggested = state.prepareContest(h), ext = h.format.extension)
+                val file = chooseFile(window, tr("Экспорт в %s", h.format.title), save = true, suggested = state.prepareContest(h), ext = h.format.extension)
                 if (file != null) state.exportContest(file) else state.cancelContest()
             }
             val importContest = {
-                chooseFile(window, "Импорт из ЕРМАК / Cabrillo", save = false, ext = "cbr")?.let(state::importContest)
+                chooseFile(window, tr("Импорт из ЕРМАК / Cabrillo"), save = false, ext = "cbr")?.let(state::importContest)
                 Unit
             }
-            MenuBar {
-                Menu("Файл") {
-                    Item("Новый QSO", shortcut = shortcut(Key.N), onClick = { state.addQso() })
-                    Item("Сохранить связь", enabled = state.pane == Pane.Edit, shortcut = shortcut(Key.S), onClick = state::trySave)
+            // Texts are read through tr() while composing: a new language rebuilds the menu and the window.
+            key(state.language) { MenuBar {
+                Menu(tr("Файл")) {
+                    Item(tr("Новый QSO"), shortcut = shortcut(Key.N), onClick = { state.addQso() })
+                    Item(tr("Сохранить связь"), enabled = state.pane == Pane.Edit, shortcut = shortcut(Key.S), onClick = state::trySave)
                     Item(
-                        "Сохранить и следующая", enabled = state.pane == Pane.Edit && state.form.isNew,
+                        tr("Сохранить и следующая"), enabled = state.pane == Pane.Edit && state.form.isNew,
                         shortcut = KeyShortcut(Key.S, meta = IS_MAC, ctrl = !IS_MAC, shift = true), onClick = { state.saveAndNext() },
                     )
                     Separator()
-                    Item("Экспорт лога в ADIF…", onClick = exportAdif)
-                    Item("Импорт лога из ADIF…", onClick = importAdif)
+                    Item(tr("Экспорт лога в ADIF…"), onClick = exportAdif)
+                    Item(tr("Импорт лога из ADIF…"), onClick = importAdif)
                     Separator()
-                    Item("Экспорт лога в CSV…", onClick = exportCsv)
-                    Item("Импорт лога из CSV…", onClick = importCsv)
+                    Item(tr("Экспорт лога в CSV…"), onClick = exportCsv)
+                    Item(tr("Импорт лога из CSV…"), onClick = importCsv)
                     Separator()
-                    Item("Экспорт в ЕРМАК / Cabrillo…", onClick = { state.openContestExport(selectedOnly = false) })
-                    Item("Импорт из ЕРМАК / Cabrillo…", onClick = importContest)
+                    Item(tr("Экспорт в ЕРМАК / Cabrillo…"), onClick = { state.openContestExport(selectedOnly = false) })
+                    Item(tr("Импорт из ЕРМАК / Cabrillo…"), onClick = importContest)
                     Separator()
-                    Item("Карта QSO", shortcut = shortcut(Key.M), onClick = state::openMap)
-                    Item("Настройки", shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
+                    Item(tr("Карта QSO"), shortcut = shortcut(Key.M), onClick = state::openMap)
+                    Item(tr("Настройки"), shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
                     if (!IS_MAC) {
                         Separator()
-                        Item("Выход", onClick = { state.flushSettings(); exitApplication() })
+                        Item(tr("Выход"), onClick = { state.flushSettings(); exitApplication() })
                     }
                 }
-            }
+            } }
             // Theme from the settings; "system" follows the OS (macOS, Windows).
             val dark = when (state.themeMode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
-            QsoTheme(dark) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest)) }
+            QsoTheme(dark) { key(state.language) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest)) } }
         }
     }
 }
@@ -166,7 +167,7 @@ fun App(state: AppState, files: Exports) {
         state.messages.collect { m ->
             val r = snackbar.showSnackbar(
                 m.text,
-                actionLabel = if (m.undo != null) "Отменить" else null,
+                actionLabel = if (m.undo != null) tr("Отменить") else null,
                 duration = if (m.undo != null) SnackbarDuration.Long else SnackbarDuration.Short,
             )
             if (r == SnackbarResult.ActionPerformed) m.undo?.invoke()
@@ -209,16 +210,15 @@ private fun EmptyPane(state: AppState) {
         Modifier.fillMaxSize().padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
     ) {
-        Text("Готов к записи", style = MaterialTheme.typography.headlineMedium)
+        Text(tr("Готов к записи"), style = MaterialTheme.typography.headlineMedium)
         Text(
-            "Нажмите «Добавить QSO» или $NEW_SHORTCUT. Удерживайте кнопку, чтобы записать голосовую заметку. " +
-                "Чтобы исправить запись, выберите её в логе слева.",
+            tr("Нажмите «Добавить QSO» или %s. Удерживайте кнопку, чтобы записать голосовую заметку. Чтобы исправить запись, выберите её в логе слева.", NEW_SHORTCUT),
             style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.widthIn(max = 560.dp),
         )
         val s = state.settings
         if (s.myLocator.isBlank()) {
             Text(
-                "Укажите свой QTH-локатор в настройках, чтобы видеть расстояние до абонентов.",
+                tr("Укажите свой QTH-локатор в настройках, чтобы видеть расстояние до абонентов."),
                 style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error, modifier = Modifier.widthIn(max = 560.dp),
             )
         } else {

@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -45,44 +46,43 @@ fun ContestExportDialog(defaults: Cabrillo.Header, count: Int, onDismiss: () -> 
     var location by remember { mutableStateOf(defaults.location) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Отчёт для соревнований") },
+        title = { Text(tr("Отчёт для соревнований")) },
         text = {
             Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Записей в отчёте: $count", style = MaterialTheme.typography.bodyLarge)
+                Text(tr("Записей в отчёте: %s", count), style = MaterialTheme.typography.bodyLarge)
                 Options(
-                    listOf(Cabrillo.Format.ERMAK to "ЕРМАК", Cabrillo.Format.CABRILLO to "Cabrillo"),
+                    listOf(Cabrillo.Format.ERMAK to tr("ЕРМАК"), Cabrillo.Format.CABRILLO to "Cabrillo"),
                     format,
                 ) { format = it }
                 Text(
-                    if (format == Cabrillo.Format.ERMAK) "Для российских соревнований (ermak.srr.ru): UTF-8, кириллица в заголовке, файл .txt."
-                    else "Международный формат 3.0: только латиница, файл .cbr.",
+                    if (format == Cabrillo.Format.ERMAK) tr("Для российских соревнований (ermak.srr.ru): UTF-8, кириллица в заголовке, файл .txt.")
+                    else tr("Международный формат 3.0: только латиница, файл .cbr."),
                     style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted,
                 )
                 OutlinedTextField(
                     value = contest,
                     onValueChange = { contest = it.uppercase().filter { c -> c.isLetterOrDigit() || c == '-' } },
-                    label = { Text("Код соревнования (CONTEST)") },
-                    placeholder = { Text(if (format == Cabrillo.Format.ERMAK) "например RDXC, R3X-CHAMP" else "например CQ-WW-CW") },
+                    label = { Text(tr("Код соревнования (CONTEST)")) },
+                    placeholder = { Text(if (format == Cabrillo.Format.ERMAK) tr("например RDXC, R3X-CHAMP") else tr("например CQ-WW-CW")) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Категория", style = MaterialTheme.typography.titleSmall)
+                Text(tr("Категория"), style = MaterialTheme.typography.titleSmall)
                 Options(
-                    listOf("SINGLE-OP" to "Один оператор", "MULTI-OP" to "Несколько", "CHECKLOG" to "Для контроля"),
+                    listOf("SINGLE-OP" to tr("Один оператор"), "MULTI-OP" to tr("Несколько"), "CHECKLOG" to tr("Для контроля")),
                     operator,
                 ) { operator = it }
                 OutlinedTextField(
                     value = location,
                     onValueChange = { location = it.uppercase() },
-                    label = { Text(if (format == Cabrillo.Format.ERMAK) "Район RDA (LOCATION)" else "LOCATION") },
-                    placeholder = { Text(if (format == Cabrillo.Format.ERMAK) "например KG03" else "секция, штат") },
+                    label = { Text(if (format == Cabrillo.Format.ERMAK) tr("Район RDA (LOCATION)") else "LOCATION") },
+                    placeholder = { Text(if (format == Cabrillo.Format.ERMAK) tr("например KG03") else tr("секция, штат")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "Контрольные номера берутся из полей карточки «Контрольный номер передан/принят»; если переданного нет, " +
-                        "ставится порядковый номер 001, 002… Связи идут по времени, как требует формат.",
+                    tr("Контрольные номера берутся из полей карточки «Контрольный номер передан/принят»; если переданного нет, ставится порядковый номер 001, 002… Связи идут по времени, как требует формат."),
                     style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted,
                 )
             }
@@ -90,9 +90,9 @@ fun ContestExportDialog(defaults: Cabrillo.Header, count: Int, onDismiss: () -> 
         confirmButton = {
             Button(onClick = {
                 onConfirm(defaults.copy(format = format, contest = contest.trim(), categoryOperator = operator, location = location.trim()))
-            }) { Text("Сохранить файл") }
+            }) { Text(tr("Сохранить файл")) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Отмена")) } },
     )
 }
 

@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.tr
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.animation.animateColorAsState
@@ -88,9 +89,9 @@ fun AddQsoButton(
         if (recording || vm.showRecordHint) {
             Text(
                 when {
-                    tapRec -> "Нажмите кнопку, чтобы остановить запись и открыть карточку"
-                    recording -> "Отпустите кнопку, чтобы открыть карточку"
-                    else -> "Удерживайте кнопку или нажмите на микрофон, чтобы записать голос"
+                    tapRec -> tr("Нажмите кнопку, чтобы остановить запись и открыть карточку")
+                    recording -> tr("Отпустите кнопку, чтобы открыть карточку")
+                    else -> tr("Удерживайте кнопку или нажмите на микрофон, чтобы записать голос")
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (recording) RecordRed else LocalExtra.current.muted,
@@ -108,9 +109,9 @@ fun AddQsoButton(
                 .background(bg)
                 .semantics {
                     role = Role.Button
-                    contentDescription = "Добавить QSO. Удерживайте, чтобы записать голос"
-                    onClick("Добавить QSO") { vm.addQso(); true }
-                    onLongClick("Записать голос") { false }
+                    contentDescription = tr("Добавить QSO. Удерживайте, чтобы записать голос")
+                    onClick(tr("Добавить QSO")) { vm.addQso(); true }
+                    onLongClick(tr("Записать голос")) { false }
                 }
                 .pointerInput(Unit) {
                     val longPress = viewConfiguration.longPressTimeoutMillis
@@ -167,7 +168,7 @@ fun AddQsoButton(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Add, null, Modifier.size(32.dp), tint = onBg)
                     Spacer(Modifier.width(10.dp))
-                    Text("Добавить QSO", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = onBg)
+                    Text(tr("Добавить QSO"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = onBg)
                 }
                 MicSpot(onBg, Modifier.align(Alignment.CenterEnd))
             }
@@ -188,9 +189,9 @@ private fun RecordingContent(since: Long, color: Color) {
     val a by pulse.animateFloat(1f, 0.35f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "a")
     val secs = ((now - since) / 1000).coerceAtLeast(0)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-        Icon(Icons.Filled.Mic, "Идёт запись", Modifier.size(40.dp).alpha(a), tint = color)
+        Icon(Icons.Filled.Mic, tr("Идёт запись"), Modifier.size(40.dp).alpha(a), tint = color)
         Spacer(Modifier.width(12.dp))
-        Text("Запись", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = color)
+        Text(tr("Запись"), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = color)
         Spacer(Modifier.width(14.dp))
         Text("%d:%02d".format(secs / 60, secs % 60), fontFamily = Mono, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = color)
     }
@@ -211,6 +212,6 @@ private fun MicSpot(color: Color, modifier: Modifier = Modifier) {
         modifier.padding(end = 14.dp).size(44.dp).background(color.copy(alpha = 0.18f), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Filled.Mic, "Записать голос", Modifier.size(24.dp), tint = color)
+        Icon(Icons.Filled.Mic, tr("Записать голос"), Modifier.size(24.dp), tint = color)
     }
 }

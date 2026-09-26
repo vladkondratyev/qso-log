@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.tr
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -109,29 +110,29 @@ fun AudioPlayButton(file: File, onDelete: () -> Unit, onShare: (() -> Unit)? = n
                 .background(MaterialTheme.colorScheme.primary)
                 .clickable(
                     role = Role.Button,
-                    onClickLabel = if (player != null) "Остановить" else "Проиграть запись",
+                    onClickLabel = if (player != null) tr("Остановить") else tr("Проиграть запись"),
                 ) { if (player != null) stopPlayback() else startPlayback() },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
             val fg = MaterialTheme.colorScheme.onPrimary
-            if (player != null) Icon(Icons.Filled.Stop, "Остановить", Modifier.size(34.dp), tint = fg)
-            else Icon(Icons.Filled.PlayArrow, "Проиграть запись", Modifier.size(38.dp), tint = fg)
+            if (player != null) Icon(Icons.Filled.Stop, tr("Остановить"), Modifier.size(34.dp), tint = fg)
+            else Icon(Icons.Filled.PlayArrow, tr("Проиграть запись"), Modifier.size(38.dp), tint = fg)
             val shown = if (player != null) positionMs else totalMs
             Text("%d:%02d".format(shown / 60000, shown / 1000 % 60), fontFamily = Mono, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg)
         }
         Box(Modifier.fillMaxHeight(), contentAlignment = Alignment.Center) {
             IconButton(onClick = { menu = true }, modifier = Modifier.width(36.dp)) {
-                Icon(Icons.Filled.MoreVert, "Действия с голосовой заметкой")
+                Icon(Icons.Filled.MoreVert, tr("Действия с голосовой заметкой"))
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 if (onShare != null) DropdownMenuItem(
-                    text = { Text("Отправить заметку", fontSize = 17.sp) },
+                    text = { Text(tr("Отправить заметку"), fontSize = 17.sp) },
                     leadingIcon = { Icon(Icons.Filled.Share, null) },
                     onClick = { menu = false; stopPlayback(); onShare() },
                 )
                 DropdownMenuItem(
-                    text = { Text("Удалить заметку", fontSize = 17.sp, color = DeleteRed) },
+                    text = { Text(tr("Удалить заметку"), fontSize = 17.sp, color = DeleteRed) },
                     leadingIcon = { Icon(Icons.Filled.Delete, null, tint = DeleteRed) },
                     onClick = { menu = false; stopPlayback(); onDelete() },
                 )

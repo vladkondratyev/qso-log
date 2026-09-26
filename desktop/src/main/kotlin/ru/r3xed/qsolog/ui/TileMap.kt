@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.tr
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -170,7 +171,7 @@ fun TileMap(
     val markers = remember(path, myLabel, theirLabel, ink, primary) {
         listOf(MapMarker(path.first(), myLabel, ink), MapMarker(path.last(), theirLabel, primary))
     }
-    MarkerMap(markers, path, interactive, filledLabels = false, fitHint = "Показать всю трассу", modifier = modifier)
+    MarkerMap(markers, path, interactive, filledLabels = false, fitHint = tr("Показать всю трассу"), modifier = modifier)
 }
 
 /**
@@ -351,7 +352,7 @@ fun MarkerMap(
             }
         }
         Text(
-            "© участники OpenStreetMap",
+            tr("© участники OpenStreetMap"),
             fontSize = 11.sp,
             color = Color(0xFF14202B),
             modifier = Modifier.align(Alignment.BottomEnd).background(Color.White.copy(alpha = 0.8f)).padding(horizontal = 6.dp, vertical = 2.dp),
@@ -359,8 +360,8 @@ fun MarkerMap(
         if (interactive) {
             Column(Modifier.align(Alignment.CenterEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val center = Offset(size.width / 2f, size.height / 2f)
-                MapButton({ zoomBy(1, center) }) { Icon(Icons.Filled.Add, "Приблизить") }
-                MapButton({ zoomBy(-1, center) }) { Icon(Icons.Filled.Remove, "Отдалить") }
+                MapButton({ zoomBy(1, center) }) { Icon(Icons.Filled.Add, tr("Приблизить")) }
+                MapButton({ zoomBy(-1, center) }) { Icon(Icons.Filled.Remove, tr("Отдалить")) }
                 MapButton({ fit() }) { Icon(Icons.Filled.CenterFocusStrong, fitHint) }
             }
         }

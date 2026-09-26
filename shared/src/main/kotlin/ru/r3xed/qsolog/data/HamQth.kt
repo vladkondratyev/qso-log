@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.data
 
+import ru.r3xed.qsolog.tr
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -36,7 +37,7 @@ object HamQth {
         conn.connectTimeout = 10_000
         conn.readTimeout = 10_000
         val body = try {
-            if (conn.responseCode != 200) throw IllegalStateException("HamQTH ответил ${conn.responseCode}")
+            if (conn.responseCode != 200) throw IllegalStateException(tr("HamQTH ответил %s", conn.responseCode))
             conn.inputStream.bufferedReader().use { it.readText() }
         } finally {
             conn.disconnect()

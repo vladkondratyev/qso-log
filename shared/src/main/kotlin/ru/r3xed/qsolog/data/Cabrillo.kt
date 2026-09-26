@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.data
 
+import ru.r3xed.qsolog.tr
 import java.io.InputStream
 import java.nio.charset.Charset
 import java.time.LocalDate
@@ -15,9 +16,13 @@ import java.time.format.DateTimeFormatter
  * Cabrillo is ASCII and knows only CW, PH, FM, RY, DG.
  */
 object Cabrillo {
-    enum class Format(val title: String, val extension: String) {
+    enum class Format(private val ru: String, val extension: String) {
         ERMAK("ЕРМАК", "txt"),
         CABRILLO("Cabrillo 3.0", "cbr"),
+        ;
+
+        /** Name in the interface language. */
+        val title: String get() = tr(ru)
     }
 
     /** What goes into the header; the rest comes from the records. */

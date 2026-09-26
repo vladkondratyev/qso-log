@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog
 
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -39,10 +40,12 @@ fun main(args: Array<String>) {
     runBlocking {
         withContext(Dispatchers.Main) {
             val state = AppState()
+            // Russian shots first (the README is in Russian), a few English ones at the end.
+            state.changeLanguage(Lang.RU)
             val files = Exports({}, {}, {}, {}, {}, {}, {})
             var dark by mutableStateOf(false)
             // Sized in pixels: a 1280×860 window at 2× (Retina) scale.
-            val big = ImageComposeScene(2560, 1720, Density(2f)) { QsoTheme(dark) { App(state, files) } }
+            val big = ImageComposeScene(2560, 1720, Density(2f)) { QsoTheme(dark) { key(state.language) { App(state, files) } } }
             // Frames need a clock, or animations (floating field labels, colours) never move past their first frame.
             val t0 = System.nanoTime()
             fun frame() = big.render(System.nanoTime() - t0)
@@ -102,6 +105,17 @@ fun main(args: Array<String>) {
             dark = true
             state.edit(log().first { it.call == "R9DEMO" })
             shot("10-dark", 3000)
+
+            dark = false
+            state.closeEditor()
+            state.changeLanguage(Lang.EN)
+            shot("en-01-log")
+            state.newQso(audio = "demo_new.wav")
+            state.setCall("R9DEMO")
+            shot("en-02-new-qso")
+            state.closeEditor()
+            state.pane = Pane.Settings
+            shot("en-08-settings")
             big.close()
         }
     }

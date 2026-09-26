@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.tr
 import ru.r3xed.qsolog.Form
 import ru.r3xed.qsolog.data.Geo
 import java.awt.FileDialog
@@ -10,17 +11,17 @@ import java.io.File
 
 /** The contact as a few lines of text, to go along with a shared voice note. */
 fun qsoText(f: Form, myPosition: ru.r3xed.qsolog.data.LatLon?): String = buildList {
-    add("QSO с ${f.call}")
+    add(tr("QSO с %s", f.call))
     add("${f.date} ${f.time} UTC")
     add(
-        listOf(f.band, f.freq.ifBlank { null }?.let { "$it МГц" }, f.mode).filterNotNull().filter { it.isNotBlank() }
+        listOf(f.band, f.freq.ifBlank { null }?.let { tr("%s МГц", it) }, f.mode).filterNotNull().filter { it.isNotBlank() }
             .joinToString(" · ") + if (f.rstSent.isNotBlank() || f.rstRcvd.isNotBlank()) " · RST ${f.rstSent}/${f.rstRcvd}" else "",
     )
     val who = listOf(f.name, f.qth, f.country).filter { it.isNotBlank() }.joinToString(", ")
     if (who.isNotBlank()) add(who + if (f.locator.isNotBlank()) " · ${f.locator}" else "")
     val them = f.position
     if (myPosition != null && them != null) {
-        add((if (f.approxPosition) "≈ " else "") + formatKm(Geo.distanceKm(myPosition, them)) + ", азимут ${Geo.bearing(myPosition, them).toInt()}°")
+        add((if (f.approxPosition) "≈ " else "") + formatKm(Geo.distanceKm(myPosition, them)) + tr(", азимут %s°", Geo.bearing(myPosition, them).toInt()))
     }
     if (f.comment.isNotBlank()) add(f.comment)
     add("— ${f.myCall.ifBlank { "QSO-LOG" }}, QSO-LOG")
@@ -32,7 +33,7 @@ fun qsoText(f: Form, myPosition: ru.r3xed.qsolog.data.LatLon?): String = buildLi
  */
 fun exportVoiceNote(file: File, text: String, f: Form, say: (String) -> Unit) {
     val base = "QSO_${f.call.replace('/', '-')}_${f.date.replace('.', '-')}_${f.time.replace(":", "")}"
-    val dialog = FileDialog(null as Frame?, "Сохранить запись QSO", FileDialog.SAVE)
+    val dialog = FileDialog(null as Frame?, tr("Сохранить запись QSO"), FileDialog.SAVE)
     dialog.file = "$base.wav"
     dialog.isVisible = true
     val name = dialog.file ?: return
@@ -42,9 +43,9 @@ fun exportVoiceNote(file: File, text: String, f: Form, say: (String) -> Unit) {
         file.copyTo(target, overwrite = true)
         File(target.parentFile, target.nameWithoutExtension + ".txt").writeText(text + "\n")
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
-        say("Запись сохранена: ${target.name}. Параметры связи — в ${target.nameWithoutExtension}.txt и в буфере обмена")
+        say(tr("Запись сохранена: %s. Параметры связи — в %s.txt и в буфере обмена", target.name, target.nameWithoutExtension))
     } catch (e: Exception) {
-        say("Не удалось сохранить запись: ${e.message}")
+        say(tr("Не удалось сохранить запись: %s", e.message))
     }
 }
 
@@ -57,6 +58,6 @@ fun shareForm(f: Form, myPosition: ru.r3xed.qsolog.data.LatLon?, audio: File?, s
     if (audio != null && audio.exists()) exportVoiceNote(audio, text, f, say)
     else {
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
-        say("Связь с ${f.call} скопирована в буфер обмена: вставьте её в мессенджер или письмо")
+        say(tr("Связь с %s скопирована в буфер обмена: вставьте её в мессенджер или письмо", f.call))
     }
 }

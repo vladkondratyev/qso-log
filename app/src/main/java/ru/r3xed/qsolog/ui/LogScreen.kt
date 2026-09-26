@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.filled.Check
 import ru.r3xed.qsolog.LogFilter
 import androidx.activity.compose.BackHandler
@@ -125,15 +126,15 @@ fun LogScreen(
                     }
                     val me = vm.settings.myCall
                     ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
-                        OneLineText((if (me.isNotBlank()) "$me · " else "") + "записей: ${vm.total}", maxSize = 16.sp, minSize = 11.sp, color = x.muted)
+                        OneLineText((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", vm.total), maxSize = 16.sp, minSize = 11.sp, color = x.muted)
                     }
                 }
                 FilledTonalIconButton(onClick = vm::openMap, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Filled.Map, contentDescription = "Карта QSO", modifier = Modifier.size(30.dp))
+                    Icon(Icons.Filled.Map, contentDescription = tr("Карта QSO"), modifier = Modifier.size(30.dp))
                 }
                 Spacer(Modifier.width(10.dp))
                 FilledTonalIconButton(onClick = { vm.openSettings() }, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Настройки", modifier = Modifier.size(30.dp))
+                    Icon(Icons.Filled.Settings, contentDescription = tr("Настройки"), modifier = Modifier.size(30.dp))
                 }
             }
 
@@ -142,10 +143,10 @@ fun LogScreen(
                 onValueChange = vm::search,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 // One line on narrow phones and with a large system font: smaller than the typed text, never wrapped.
-                placeholder = { OneLineText("Поиск: позывной, имя, город", maxSize = 16.sp, minSize = 11.sp) },
+                placeholder = { OneLineText(tr("Поиск: позывной, имя, город"), maxSize = 16.sp, minSize = 11.sp) },
                 leadingIcon = { Icon(Icons.Filled.Search, null) },
                 trailingIcon = {
-                    if (vm.query.isNotEmpty()) IconButton(onClick = { vm.search("") }) { Icon(Icons.Filled.Clear, "Очистить поиск") }
+                    if (vm.query.isNotEmpty()) IconButton(onClick = { vm.search("") }) { Icon(Icons.Filled.Clear, tr("Очистить поиск")) }
                 },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyLarge,
@@ -195,32 +196,32 @@ private fun EmptyLog(vm: AppViewModel) {
     val x = LocalExtra.current
     Column(Modifier.fillMaxWidth().padding(32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (vm.query.isBlank() && vm.filters.isNotEmpty()) {
-            Text("Под выбранные фильтры записей нет", style = MaterialTheme.typography.titleLarge)
-            Text("Снимите фильтр кнопкой над списком.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+            Text(tr("Под выбранные фильтры записей нет"), style = MaterialTheme.typography.titleLarge)
+            Text(tr("Снимите фильтр кнопкой над списком."), style = MaterialTheme.typography.bodyLarge, color = x.muted)
         } else if (vm.query.isNotBlank()) {
-            Text("В вашем журнале ничего не найдено", style = MaterialTheme.typography.titleLarge)
+            Text(tr("В вашем журнале ничего не найдено"), style = MaterialTheme.typography.titleLarge)
             // A callsign-like search goes on to QRZ.ru; a found station opens a new card by itself.
             when (val s = vm.searchLookup) {
                 is SearchLookup.Searching -> Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
                     Spacer(Modifier.width(12.dp))
-                    Text("Ищу ${s.call} на QRZ.ru…", style = MaterialTheme.typography.bodyLarge)
+                    Text(tr("Ищу %s на QRZ.ru…", s.call), style = MaterialTheme.typography.bodyLarge)
                 }
-                is SearchLookup.NotFound -> Text("На QRZ.ru позывного ${s.call} тоже нет.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                is SearchLookup.NotFound -> Text(tr("На QRZ.ru позывного %s тоже нет.", s.call), style = MaterialTheme.typography.bodyLarge, color = x.muted)
                 SearchLookup.NoAccount -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Чтобы искать позывные на QRZ.ru, укажите учётную запись XML API.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
-                    TextButton(onClick = { vm.openSettings() }) { Text("Открыть настройки") }
+                    Text(tr("Чтобы искать позывные на QRZ.ru, укажите учётную запись XML API."), style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                    TextButton(onClick = { vm.openSettings() }) { Text(tr("Открыть настройки")) }
                 }
                 is SearchLookup.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(s.message, style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.weight(1f))
-                    TextButton(onClick = vm::retrySearchLookup) { Text("Повторить") }
+                    TextButton(onClick = vm::retrySearchLookup) { Text(tr("Повторить")) }
                 }
-                SearchLookup.Idle -> Text("Проверьте написание или очистите поиск.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                SearchLookup.Idle -> Text(tr("Проверьте написание или очистите поиск."), style = MaterialTheme.typography.bodyLarge, color = x.muted)
             }
         } else {
-            Text("Лог пока пуст", style = MaterialTheme.typography.titleLarge)
+            Text(tr("Лог пока пуст"), style = MaterialTheme.typography.titleLarge)
             Text(
-                "Нажмите «Добавить QSO», чтобы записать первую связь. Если удерживать кнопку, запишется голосовая заметка. Старый лог можно загрузить из CSV в настройках.",
+                tr("Нажмите «Добавить QSO», чтобы записать первую связь. Если удерживать кнопку, запишется голосовая заметка. Старый лог можно загрузить из CSV в настройках."),
                 style = MaterialTheme.typography.bodyLarge, color = x.muted,
             )
         }
@@ -234,8 +235,8 @@ private class Group(val key: String, val title: String?, val items: List<Qso>)
 private fun dayTitle(day: LocalDate): String {
     val today = LocalDate.now(ZoneOffset.UTC)
     return when (day) {
-        today -> "Сегодня, ${DATE_FMT.format(day)}"
-        today.minusDays(1) -> "Вчера, ${DATE_FMT.format(day)}"
+        today -> tr("Сегодня, %s", DATE_FMT.format(day))
+        today.minusDays(1) -> tr("Вчера, %s", DATE_FMT.format(day))
         else -> DATE_FMT.format(day)
     }
 }
@@ -254,7 +255,7 @@ private fun groupAndSort(list: List<Qso>, by: SortBy, desc: Boolean): List<Group
             val unknown = newestFirst.filter { it.distanceKm == null }
             listOfNotNull(
                 Group("dist", null, known),
-                if (unknown.isNotEmpty()) Group("nodist", "Расстояние неизвестно", unknown) else null,
+                if (unknown.isNotEmpty()) Group("nodist", tr("Расстояние неизвестно"), unknown) else null,
             )
         }
         SortBy.CALL -> {
@@ -266,7 +267,7 @@ private fun groupAndSort(list: List<Qso>, by: SortBy, desc: Boolean): List<Group
             val byBand = newestFirst.groupBy { it.band }
             // Known bands in frequency order, anything else after them.
             val order = byBand.keys.sortedWith(compareBy({ BANDS.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } }, { it }))
-            (if (desc) order.reversed() else order).map { Group("b$it", it.ifBlank { "Без диапазона" }, byBand.getValue(it)) }
+            (if (desc) order.reversed() else order).map { Group("b$it", it.ifBlank { tr("Без диапазона") }, byBand.getValue(it)) }
         }
     }
 }
@@ -287,7 +288,7 @@ private fun SortBar(vm: AppViewModel) {
                 Modifier.height(44.dp)
                     .clip(RoundedCornerShape(22.dp))
                     .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
-                    .clickable(onClickLabel = "Сортировать: ${by.label}") { vm.sort(by) }
+                    .clickable(onClickLabel = tr("Сортировать: %s", by.label)) { vm.sort(by) }
                     .padding(horizontal = 14.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
@@ -296,7 +297,7 @@ private fun SortBar(vm: AppViewModel) {
                 if (selected) {
                     Icon(
                         if (vm.sortDesc) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
-                        if (vm.sortDesc) "по убыванию" else "по возрастанию",
+                        if (vm.sortDesc) tr("по убыванию") else tr("по возрастанию"),
                         Modifier.size(16.dp),
                         tint = fg,
                     )
@@ -312,7 +313,7 @@ private fun SortBar(vm: AppViewModel) {
         LogFilter.entries.forEach { flt ->
             val band = vm.currentBand
             if (flt == LogFilter.BAND && band.isBlank()) return@forEach
-            val label = if (flt == LogFilter.BAND) "Только $band" else flt.label
+            val label = if (flt == LogFilter.BAND) tr("Только %s", band) else flt.label
             val on = flt in vm.filters
             val fg = if (on) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
             Row(
@@ -320,7 +321,7 @@ private fun SortBar(vm: AppViewModel) {
                     .clip(RoundedCornerShape(18.dp))
                     .background(if (on) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
                     .border(1.5.dp, if (on) MaterialTheme.colorScheme.secondary else x.line, RoundedCornerShape(18.dp))
-                    .clickable(onClickLabel = if (on) "Снять фильтр: $label" else "Фильтр: $label") { vm.toggleFilter(flt) }
+                    .clickable(onClickLabel = if (on) tr("Снять фильтр: %s", label) else tr("Фильтр: %s", label)) { vm.toggleFilter(flt) }
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -370,14 +371,14 @@ private fun SelectionBar(vm: AppViewModel, onExport: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = vm::clearSelection, modifier = Modifier.size(56.dp)) {
-            Icon(Icons.Filled.Close, "Отменить выбор", Modifier.size(30.dp))
+            Icon(Icons.Filled.Close, tr("Отменить выбор"), Modifier.size(30.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text("Выбрано: ${vm.selected.size}", style = MaterialTheme.typography.headlineSmall)
-            Text("Нажимайте записи, чтобы добавить", style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
+            Text(tr("Выбрано: %s", vm.selected.size), style = MaterialTheme.typography.headlineSmall)
+            Text(tr("Нажимайте записи, чтобы добавить"), style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
         }
         IconButton(onClick = vm::selectAllShown, modifier = Modifier.size(52.dp)) {
-            Icon(Icons.Filled.SelectAll, "Выбрать все", Modifier.size(28.dp))
+            Icon(Icons.Filled.SelectAll, tr("Выбрать все"), Modifier.size(28.dp))
         }
         // Export of the picked records: ADIF, or a contest report (ЕРМАК / Cabrillo) via its settings dialog.
         var menu by remember { mutableStateOf(false) }
@@ -385,11 +386,11 @@ private fun SelectionBar(vm: AppViewModel, onExport: () -> Unit) {
             Button(onClick = { menu = true }, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp)) {
                 Icon(Icons.Filled.FileUpload, null)
                 Spacer(Modifier.width(6.dp))
-                Text("Экспорт", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text(tr("Экспорт"), fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("ADIF (.adi)", fontSize = 17.sp) }, onClick = { menu = false; onExport() })
-                DropdownMenuItem(text = { Text("ЕРМАК / Cabrillo", fontSize = 17.sp) }, onClick = { menu = false; vm.openContestExport(selectedOnly = true) })
+                DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; vm.openContestExport(selectedOnly = true) })
             }
         }
     }
@@ -417,7 +418,7 @@ private fun QsoRow(
             .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else x.line, shape)
             .combinedClickable(
                 onClick = onClick,
-                onLongClickLabel = "Выбрать запись",
+                onLongClickLabel = tr("Выбрать запись"),
                 onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onLongClick()
@@ -430,7 +431,7 @@ private fun QsoRow(
             if (selecting) {
                 Icon(
                     if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
-                    if (selected) "Выбрана" else "Не выбрана",
+                    if (selected) tr("Выбрана") else tr("Не выбрана"),
                     Modifier.size(28.dp),
                     tint = if (selected) MaterialTheme.colorScheme.primary else x.muted,
                 )
@@ -438,7 +439,7 @@ private fun QsoRow(
             }
             Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (qso.audio.isNotBlank()) {
-                Icon(Icons.Filled.Mic, "Есть голосовая заметка", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Filled.Mic, tr("Есть голосовая заметка"), Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
             }
             // Saved while QRZ.ru was unreachable: fetch the station data again.
@@ -447,7 +448,7 @@ private fun QsoRow(
                     CircularProgressIndicator(Modifier.padding(horizontal = 8.dp).size(28.dp), strokeWidth = 3.dp)
                 } else {
                     FilledTonalIconButton(onClick = onRefresh, modifier = Modifier.size(44.dp)) {
-                        Icon(Icons.Filled.Refresh, "Обновить данные с QRZ.ru", Modifier.size(26.dp))
+                        Icon(Icons.Filled.Refresh, tr("Обновить данные с QRZ.ru"), Modifier.size(26.dp))
                     }
                 }
                 Spacer(Modifier.width(8.dp))
@@ -468,7 +469,7 @@ private fun QsoRow(
         if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
         val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ").ifBlank { qso.country }
         if (who.isNotEmpty()) Text(who, style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        else if (qso.pendingLookup) Text("Данные QRZ.ru не получены", style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1)
+        else if (qso.pendingLookup) Text(tr("Данные QRZ.ru не получены"), style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1)
     }
 }
 

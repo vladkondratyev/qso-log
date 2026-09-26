@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.data
 
+import ru.r3xed.qsolog.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -47,12 +48,12 @@ class QrzSite(private val credentials: () -> Pair<String, String>) {
 
     private suspend fun loginLocked() {
         val (email, password) = credentials()
-        if (email.isBlank() || password.isBlank()) throw QrzException(403, "Укажите e-mail и пароль сайта QRZ.ru")
+        if (email.isBlank() || password.isBlank()) throw QrzException(403, tr("Укажите e-mail и пароль сайта QRZ.ru"))
         cookies.clear()
         get("$BASE/passport/login") // session cookie first, as a browser would
         val form = "Form%5Bemail%5D=${enc(email.trim())}&Form%5Bpassword%5D=${enc(password)}&Form%5BrememberMe%5D=1"
         val page = post("$BASE/passport/login", form)
-        if (page.contains("id=\"login-form\"")) throw QrzException(403, "Сайт QRZ.ru не принял e-mail или пароль")
+        if (page.contains("id=\"login-form\"")) throw QrzException(403, tr("Сайт QRZ.ru не принял e-mail или пароль"))
         loggedIn = true
     }
 
@@ -91,18 +92,18 @@ class QrzSite(private val credentials: () -> Pair<String, String>) {
                     if (name.isNotEmpty()) if (value.isEmpty() || value == "deleted") cookies.remove(name) else cookies[name] = value
                 }
                 if (code in 300..399) {
-                    val loc = conn.getHeaderField("Location") ?: throw QrzException(code, "Сайт QRZ.ru ответил $code")
+                    val loc = conn.getHeaderField("Location") ?: throw QrzException(code, tr("Сайт QRZ.ru ответил %s", code))
                     url = URL(URL(url), loc).toString()
                     postBody = null
                     return@repeat
                 }
-                if (code != 200) throw QrzException(code, "Сайт QRZ.ru ответил $code")
+                if (code != 200) throw QrzException(code, tr("Сайт QRZ.ru ответил %s", code))
                 return@withContext (conn.inputStream).use { it.readBytes().toString(Charsets.UTF_8) }
             } finally {
                 conn.disconnect()
             }
         }
-        throw QrzException(0, "Сайт QRZ.ru: слишком много перенаправлений")
+        throw QrzException(0, tr("Сайт QRZ.ru: слишком много перенаправлений"))
     }
 
     companion object {
