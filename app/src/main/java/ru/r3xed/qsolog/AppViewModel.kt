@@ -38,6 +38,8 @@ import ru.r3xed.qsolog.data.Settings
 import ru.r3xed.qsolog.data.StationSettings
 import ru.r3xed.qsolog.data.VoiceNotes
 import ru.r3xed.qsolog.data.bandForFreq
+import ru.r3xed.qsolog.data.freqMhz
+import ru.r3xed.qsolog.data.normalizeFreq
 import ru.r3xed.qsolog.data.defaultRst
 import ru.r3xed.qsolog.data.withDistance
 import java.time.Instant
@@ -79,6 +81,12 @@ sealed interface UpdateState {
     data class Failed(val message: String) : UpdateState
 }
 
+enum class LogFilter(val label: String) {
+    TODAY("Сегодня"),
+    BAND("Этот диапазон"),
+    PENDING("Без данных QRZ"),
+}
+
 enum class SortBy(val label: String, val defaultDesc: Boolean) {
     DATE("Дата", true),
     DISTANCE("Км", true),
@@ -91,6 +99,7 @@ sealed interface Screen {
     data object Edit : Screen
     data object Settings : Screen
     data object Map : Screen
+    data object Welcome : Screen
 }
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -308,6 +317,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     var hamqthEnabled by mutableStateOf(prefs.hamqthEnabled); private set
 
+    /** "Время связи": false — when the card was opened (default), true — when it is saved. */
+    var timeOnSave by mutableStateOf(prefs.timeOnSave); private set
+
+    fun changeTimeOnSave(on: Boolean) {
+        timeOnSave = on
+        prefs.timeOnSave = on
+    }
+
     fun setHamqth(on: Boolean) {
         hamqthEnabled = on
         prefs.hamqthEnabled = on
@@ -348,6 +365,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Where "Назад" in the settings returns: the log, or the card that sent the user there. */
     private var settingsReturn: Screen = Screen.Log
 
+    /** Leaves the first-start setup (done or "Настроить позже"); it is not shown again. */
+    fun finishWelcome() {
+        prefs.welcomeDone = true
+        screen = Screen.Log
+    }
+
     fun openSettings(from: Screen = Screen.Log) {
         settingsReturn = from
         screen = Screen.Settings
@@ -363,6 +386,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The card as it was opened, to tell whether closing it would lose something. */
     private var formOriginal: Form? = null
 
+    /** Bumped each time a card is opened, so the card's own UI state (fields, focus) starts fresh. */
+    var editSession by mutableStateOf(0); private set
+
     val hasUnsavedChanges: Boolean
         get() = formOriginal.let { it != null && form != it }
 
@@ -370,7 +396,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.launchCount = prefs.launchCount + 1
         showRecordHint = prefs.launchCount <= 5
         reload()
-        if (settings.myCall.isBlank()) screen = Screen.Settings
+        // First start: a short three-step setup; later, without a callsign, the settings as before.
+        if (settings.myCall.isBlank()) screen = if (prefs.welcomeDone) Screen.Settings else Screen.Welcome
         viewModelScope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
     }
 
@@ -388,8 +415,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 all to if (query.isBlank()) all else db.all(query)
             }
             allQsos = all
-            qsos = list
+            qsos = applyFilters(list, all)
             total = all.size
+        }
+    }
+
+    // ---------- quick filters over the log ----------
+
+    /** Quick filters above the list; several can be on at once, the search applies on top. */
+    var filters by mutableStateOf<Set<LogFilter>>(emptySet()); private set
+
+    fun toggleFilter(f: LogFilter) {
+        filters = if (f in filters) filters - f else filters + f
+        reload()
+    }
+
+    /** "Этот диапазон": the band of the most recent contact, i.e. the one being worked now. */
+    val currentBand: String get() = allQsos.maxByOrNull { it.timeUtc }?.band.orEmpty()
+
+    private fun applyFilters(list: List<Qso>, all: List<Qso>): List<Qso> {
+        if (filters.isEmpty()) return list
+        val today = DATE_FMT.format(LocalDateTime.now(ZoneOffset.UTC))
+        val band = all.maxByOrNull { it.timeUtc }?.band.orEmpty()
+        return list.filter { q ->
+            (LogFilter.TODAY !in filters || DATE_FMT.format(utc(q.timeUtc)) == today) &&
+                (LogFilter.BAND !in filters || q.band.equals(band, ignoreCase = true)) &&
+                (LogFilter.PENDING !in filters || q.pendingLookup)
         }
     }
 
@@ -634,6 +685,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         formOriginal = form
         history = CallHistory(0, null)
         lookup = Lookup.Idle
+        editSession++
         editReturn = Screen.Log
         screen = Screen.Edit
     }
@@ -641,6 +693,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun edit(qso: Qso, from: Screen = Screen.Log) {
         lookupJob?.cancel() // a lookup for another card must not land in this one
         cardFromLog = false
+        editSession++
         val t = utc(qso.timeUtc)
         form = Form(
             id = qso.id, call = qso.call,
@@ -693,7 +746,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setFreq(freq: String) {
-        val band = freq.replace(',', '.').toDoubleOrNull()?.let { bandForFreq(it) }
+        // "14195" works too: taken as kHz (see freqMhz), stored as MHz on saving.
+        val band = freqMhz(freq)?.let { bandForFreq(it) }
         form = form.copy(freq = freq, band = band ?: form.band)
     }
 
@@ -882,12 +936,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Returns an error message, or null when saved. */
     fun save(): String? {
         stopCardRecording()
-        val f = form
+        val f0 = form
+        val orig = formOriginal
+        // "Время связи: при сохранении": a new card whose time the user did not touch takes the moment of saving.
+        val f = if (f0.isNew && timeOnSave && orig != null && f0.date == orig.date && f0.time == orig.time) {
+            val now = LocalDateTime.now(ZoneOffset.UTC)
+            f0.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now))
+        } else f0
         if (f.call.length < 3) return "Введите позывной"
         val date = try { LocalDate.parse(f.date.trim(), DATE_FMT) } catch (e: Exception) { return "Дата в формате ДД.ММ.ГГГГ" }
         val time = try { LocalTime.parse(f.time.trim(), TIME_FMT) } catch (e: Exception) { return "Время в формате ЧЧ:ММ" }
         val ts = LocalDateTime.of(date, time).toInstant(ZoneOffset.UTC).toEpochMilli()
-        val freq = f.freq.replace(',', '.').trim()
+        val freq = normalizeFreq(f.freq)
         // Receive band/frequency and end time repeat the main fields; kept in sync unless an imported log had its own.
         val derived = mutableMapOf<String, String>()
         if (f.bandRxFollows) derived["BAND_RX"] = f.band
@@ -930,6 +990,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         screen = editReturn
         return null
+    }
+
+    /**
+     * "＋ Следующая": saves the card and opens a new one on the same band, mode and frequency with the cursor in the
+     * callsign — for pile-ups and contests. Returns the error like [save].
+     */
+    fun saveAndNext(): String? {
+        val f = form
+        val err = save()
+        if (err != null) return err
+        newQso()
+        val freq = normalizeFreq(f.freq)
+        form = form.copy(band = f.band, mode = f.mode, freq = freq, rstSent = defaultRst(f.mode), rstRcvd = defaultRst(f.mode))
+        formOriginal = form
+        return null
+    }
+
+    /** Callsigns from the log that start with what is typed, most recent first: one tap instead of the rest of the call. */
+    fun callSuggestions(typed: String): List<String> {
+        if (typed.length < 2) return emptyList()
+        return allQsos.sortedByDescending { it.timeUtc }.asSequence().map { it.call }.distinct()
+            .filter { it.startsWith(typed) && it != typed }.take(3).toList()
+    }
+
+    /** Same station, band and mode on the card's UTC day: a repeat (a dupe in a contest). */
+    fun dupeOf(f: Form): Qso? {
+        if (f.call.length < 3) return null
+        return allQsos.filter {
+            it.id != f.id && it.call == f.call && it.band.equals(f.band, ignoreCase = true) &&
+                it.mode.equals(f.mode, ignoreCase = true) && DATE_FMT.format(utc(it.timeUtc)) == f.date.trim()
+        }.maxByOrNull { it.timeUtc }
     }
 
     fun deleteCurrent() {

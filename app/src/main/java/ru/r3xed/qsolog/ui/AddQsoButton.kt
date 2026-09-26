@@ -1,5 +1,7 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -72,6 +74,9 @@ fun AddQsoButton(
     modifier: Modifier = Modifier,
 ) {
     val recording = vm.recordingSince != null
+    // Recording started by a tap on the mic (not by holding): runs until the next tap on the button.
+    var tapRec by remember { mutableStateOf(false) }
+    LaunchedEffect(recording) { if (!recording) tapRec = false }
     val haptic = LocalHapticFeedback.current
     val bg by animateColorAsState(if (recording) RecordRed else MaterialTheme.colorScheme.primary, label = "bg")
     val onBg = if (recording) Color.White else MaterialTheme.colorScheme.onPrimary
@@ -82,7 +87,11 @@ fun AddQsoButton(
         // The button sits at the bottom, so the hint goes above it: while recording, and on the first few starts.
         if (recording || vm.showRecordHint) {
             Text(
-                if (recording) "Отпустите кнопку, чтобы открыть карточку" else "Удерживайте кнопку, чтобы записать голос",
+                when {
+                    tapRec -> "Нажмите кнопку, чтобы остановить запись и открыть карточку"
+                    recording -> "Отпустите кнопку, чтобы открыть карточку"
+                    else -> "Удерживайте кнопку или нажмите на микрофон, чтобы записать голос"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (recording) RecordRed else LocalExtra.current.muted,
                 fontWeight = if (recording) FontWeight.Bold else FontWeight.Normal,
@@ -106,7 +115,15 @@ fun AddQsoButton(
                 .pointerInput(Unit) {
                     val longPress = viewConfiguration.longPressTimeoutMillis
                     awaitEachGesture {
-                        awaitFirstDown()
+                        val down = awaitFirstDown()
+                        if (tapRec) {
+                            waitForUpOrCancellation()
+                            tapRec = false
+                            vm.finishRecording()
+                            return@awaitEachGesture
+                        }
+                        // The mic at the right end of the button: a tap there starts recording.
+                        val onMic = down.position.x > size.width - 76.dp.toPx()
                         var released = false
                         var cancelled = false
                         withTimeoutOrNull(longPress) {
@@ -114,7 +131,15 @@ fun AddQsoButton(
                         }
                         when {
                             cancelled -> return@awaitEachGesture
-                            released -> { vm.addQso(); return@awaitEachGesture }
+                            released -> {
+                                if (onMic) {
+                                    if (!permissionCheck()) permissionRequest() else {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    if (vm.startRecording()) tapRec = true
+                                }
+                                } else vm.addQso()
+                                return@awaitEachGesture
+                            }
                         }
                         // Held long enough: record while the finger stays down.
                         if (!permissionCheck()) {
@@ -138,13 +163,13 @@ fun AddQsoButton(
             contentAlignment = Alignment.Center,
         ) {
             if (recording) RecordingContent(vm.recordingSince ?: 0L, onBg)
-            else Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Add, null, Modifier.size(32.dp), tint = onBg)
-                Spacer(Modifier.width(10.dp))
-                Text("Добавить QSO", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = onBg)
-                // Reminder that holding records a voice note, once the text hint is gone.
-                Spacer(Modifier.width(12.dp))
-                Icon(Icons.Filled.Mic, null, Modifier.size(22.dp), tint = onBg.copy(alpha = 0.7f))
+            else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Add, null, Modifier.size(32.dp), tint = onBg)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Добавить QSO", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = onBg)
+                }
+                MicSpot(onBg, Modifier.align(Alignment.CenterEnd))
             }
         }
     }
@@ -176,5 +201,16 @@ private suspend fun AwaitPointerEventScope.waitForAllUp() {
         val e = awaitPointerEvent()
         e.changes.forEach { it.consume() }
         if (e.changes.none { it.pressed }) return
+    }
+}
+
+/** The mic at the right end of "Добавить QSO": a tap there starts a voice note, the next tap on the button ends it. */
+@Composable
+private fun MicSpot(color: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier.padding(end = 14.dp).size(44.dp).background(color.copy(alpha = 0.18f), CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Filled.Mic, "Записать голос", Modifier.size(24.dp), tint = color)
     }
 }

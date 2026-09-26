@@ -77,6 +77,23 @@ fun bandForFreq(mhz: Double): String? = when (mhz) {
     else -> null
 }
 
+/**
+ * The typed frequency in MHz. A number that is no amateur band in MHz but is one in kHz ("14195", "7074.5", "1840")
+ * is taken as kHz, as most loggers do; "1296.2" stays MHz (23 cm).
+ */
+fun freqMhz(typed: String): Double? {
+    val v = typed.trim().replace(',', '.').toDoubleOrNull() ?: return null
+    return if (v >= 1000 && bandForFreq(v) == null && bandForFreq(v / 1000) != null) v / 1000 else v
+}
+
+/** The frequency as stored, always MHz: "14195" → "14.195", "14,195" → "14.195"; anything else as typed. */
+fun normalizeFreq(typed: String): String {
+    val t = typed.trim().replace(',', '.')
+    val v = t.toDoubleOrNull() ?: return t
+    val mhz = freqMhz(t) ?: return t
+    return if (mhz == v) t else java.math.BigDecimal(t).movePointLeft(3).stripTrailingZeros().toPlainString()
+}
+
 fun defaultRst(mode: String): String = when (mode) {
     "CW", "RTTY", "PSK31", "OLIVIA" -> "599"
     "FT8", "FT4", "DIGI", "JT65", "JS8", "Q65" -> "-10"

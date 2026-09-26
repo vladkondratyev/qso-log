@@ -1,5 +1,14 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -41,7 +50,7 @@ private val DeleteRed = Color(0xFFC62828)
 
 /**
  * Play / stop for a contact's voice note, with the elapsed or total time under the icon.
- * A long press (hold the mouse button) turns it into a red bin for a few seconds; tapping the bin calls [onDelete].
+ * Next to it a "⋮" menu: save the note with the contact as text ([onShare]) or delete it ([onDelete]).
  * The caller sizes it (the card stretches it to the height of the callsign field).
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -49,7 +58,6 @@ private val DeleteRed = Color(0xFFC62828)
 fun AudioPlayButton(file: File, onDelete: () -> Unit, onShare: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     var player by remember(file) { mutableStateOf<Clip?>(null) }
     var positionMs by remember(file) { mutableIntStateOf(0) }
-    var armed by remember(file) { mutableStateOf(false) }
     val totalMs = remember(file) { VoiceNotes.durationMs(file).toInt() }
 
     fun stopPlayback() {
@@ -81,53 +89,45 @@ fun AudioPlayButton(file: File, onDelete: () -> Unit, onShare: (() -> Unit)? = n
         }
     }
 
-    // The bin disarms itself if not tapped.
-    LaunchedEffect(armed) {
-        if (armed) {
-            delay(4000)
-            armed = false
-        }
-    }
 
-    val bg by animateColorAsState(if (armed) DeleteRed else MaterialTheme.colorScheme.primary, label = "bg")
-    val fg = if (armed) Color.White else MaterialTheme.colorScheme.onPrimary
-    Column(
-        modifier
-            .width(76.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(bg)
-            .combinedClickable(
-                role = Role.Button,
-                onClickLabel = if (armed) "Удалить аудиозапись" else if (player != null) "Остановить" else "Проиграть запись",
-                // Held while playing: save the note (and the contact as text) for another program.
-                // Held while stopped: the red bin for deleting, as before.
-                onLongClickLabel = if (player != null && onShare != null) "Сохранить запись" else "Удалить аудиозапись",
-                onLongClick = {
-                    val playing = player != null
-                    stopPlayback()
-                    if (playing && onShare != null) onShare() else armed = true
-                },
-                onClick = {
-                    when {
-                        armed -> { armed = false; stopPlayback(); onDelete() }
-                        player != null -> stopPlayback()
-                        else -> startPlayback()
-                    }
-                },
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        when {
-            armed -> Icon(Icons.Filled.Delete, "Удалить аудиозапись", Modifier.size(34.dp), tint = fg)
-            player != null -> Icon(Icons.Filled.Stop, "Остановить", Modifier.size(34.dp), tint = fg)
-            else -> Icon(Icons.Filled.PlayArrow, "Проиграть запись", Modifier.size(38.dp), tint = fg)
-        }
-        if (armed) {
-            Text("Удалить", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = fg)
-        } else {
+    // Saving and deleting live in a visible "⋮" menu next to the button (no hidden long presses).
+    var menu by remember(file) { mutableStateOf(false) }
+    Row(modifier) {
+        Column(
+            Modifier
+                .width(76.dp)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.primary)
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = if (player != null) "Остановить" else "Проиграть запись",
+                ) { if (player != null) stopPlayback() else startPlayback() },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            val fg = MaterialTheme.colorScheme.onPrimary
+            if (player != null) Icon(Icons.Filled.Stop, "Остановить", Modifier.size(34.dp), tint = fg)
+            else Icon(Icons.Filled.PlayArrow, "Проиграть запись", Modifier.size(38.dp), tint = fg)
             val shown = if (player != null) positionMs else totalMs
             Text("%d:%02d".format(shown / 60000, shown / 1000 % 60), fontFamily = Mono, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg)
+        }
+        Box(Modifier.fillMaxHeight(), contentAlignment = Alignment.Center) {
+            IconButton(onClick = { menu = true }, modifier = Modifier.width(36.dp)) {
+                Icon(Icons.Filled.MoreVert, "Действия с голосовой заметкой")
+            }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (onShare != null) DropdownMenuItem(
+                    text = { Text("Сохранить заметку и текст связи…", fontSize = 16.sp) },
+                    leadingIcon = { Icon(Icons.Filled.Share, null) },
+                    onClick = { menu = false; stopPlayback(); onShare() },
+                )
+                DropdownMenuItem(
+                    text = { Text("Удалить заметку", fontSize = 16.sp, color = DeleteRed) },
+                    leadingIcon = { Icon(Icons.Filled.Delete, null, tint = DeleteRed) },
+                    onClick = { menu = false; stopPlayback(); onDelete() },
+                )
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog
 
+import androidx.compose.runtime.key
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -37,6 +38,7 @@ import ru.r3xed.qsolog.ui.MapScreen
 import ru.r3xed.qsolog.ui.ContestExportDialog
 import ru.r3xed.qsolog.ui.QsoTheme
 import ru.r3xed.qsolog.ui.SettingsScreen
+import ru.r3xed.qsolog.ui.WelcomeScreen
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -118,13 +120,15 @@ class MainActivity : ComponentActivity() {
                                 onExportSelected = { exportSelectedAdif.launch(vm.selectedAdifFileName()) },
                             )
                             Screen.Map -> MapScreen(vm)
-                            Screen.Edit -> EditScreen(
+                            Screen.Welcome -> WelcomeScreen(vm)
+                            // A fresh card (also "＋ Следующая") starts with fresh fields, focus and scroll.
+                            Screen.Edit -> key(vm.editSession) { EditScreen(
                                 vm,
                                 hasMicPermission = {
                                     ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                                 },
                                 requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
-                            )
+                            ) }
                             Screen.Settings -> SettingsScreen(
                                 vm,
                                 onExportCsv = { export.launch(vm.csvFileName()) },

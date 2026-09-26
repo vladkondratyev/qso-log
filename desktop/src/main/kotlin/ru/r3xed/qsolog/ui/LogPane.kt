@@ -1,5 +1,7 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.material.icons.filled.Check
+import ru.r3xed.qsolog.LogFilter
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
@@ -148,8 +150,13 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
 
 
         if (state.qsos.isEmpty()) {
+            // A filter that left nothing: keep the bar so it can be switched off.
+            if (state.filters.isNotEmpty()) SortBar(state)
             Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (state.query.isNotBlank()) {
+                if (state.query.isBlank() && state.filters.isNotEmpty()) {
+                    Text("Под выбранные фильтры записей нет", style = MaterialTheme.typography.titleLarge)
+                    Text("Снимите фильтр кнопкой над списком.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                } else if (state.query.isNotBlank()) {
                     Text("В вашем журнале ничего не найдено", style = MaterialTheme.typography.titleLarge)
                     // A callsign-like search goes on to QRZ.ru; a found station opens a new card by itself.
                     when (val s = state.searchLookup) {
@@ -257,6 +264,7 @@ private fun groupAndSort(list: List<Qso>, by: SortBy, desc: Boolean): List<Group
 @Composable
 private fun SortBar(state: AppState) {
     val x = LocalExtra.current
+    Column {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -284,6 +292,35 @@ private fun SortBar(state: AppState) {
                 }
             }
         }
+    }
+    // Quick filters: a second row under the sort buttons.
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        LogFilter.entries.forEach { flt ->
+            val band = state.currentBand
+            if (flt == LogFilter.BAND && band.isBlank()) return@forEach
+            val label = if (flt == LogFilter.BAND) "Только $band" else flt.label
+            val on = flt in state.filters
+            val fg = if (on) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+            Row(
+                Modifier.height(36.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (on) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                    .border(1.5.dp, if (on) MaterialTheme.colorScheme.secondary else x.line, RoundedCornerShape(18.dp))
+                    .clickable(onClickLabel = if (on) "Снять фильтр: $label" else "Фильтр: $label") { state.toggleFilter(flt) }
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (on) {
+                    Icon(Icons.Filled.Check, null, Modifier.size(16.dp), tint = fg)
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1, softWrap = false)
+            }
+        }
+    }
     }
 }
 

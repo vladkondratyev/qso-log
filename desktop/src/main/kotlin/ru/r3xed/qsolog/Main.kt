@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog
 
+import androidx.compose.runtime.key
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import ru.r3xed.qsolog.ui.LogPane
 import ru.r3xed.qsolog.ui.MapPane
 import ru.r3xed.qsolog.ui.QsoTheme
 import ru.r3xed.qsolog.ui.SettingsPane
+import ru.r3xed.qsolog.ui.WelcomePane
 import java.awt.Dimension
 import java.awt.FileDialog
 import java.io.File
@@ -51,6 +53,7 @@ val IS_MAC = System.getProperty("os.name").lowercase().contains("mac")
 val IS_WINDOWS = System.getProperty("os.name").lowercase().contains("win")
 val NEW_SHORTCUT = if (IS_MAC) "⌘N" else "Ctrl+N"
 val SAVE_SHORTCUT = if (IS_MAC) "⌘S" else "Ctrl+S"
+val NEXT_SHORTCUT = if (IS_MAC) "⇧⌘S" else "Ctrl+Shift+S"
 
 private fun shortcut(key: Key) = KeyShortcut(key, meta = IS_MAC, ctrl = !IS_MAC)
 
@@ -112,6 +115,10 @@ fun main() {
                 Menu("Файл") {
                     Item("Новый QSO", shortcut = shortcut(Key.N), onClick = { state.addQso() })
                     Item("Сохранить связь", enabled = state.pane == Pane.Edit, shortcut = shortcut(Key.S), onClick = state::trySave)
+                    Item(
+                        "Сохранить и следующая", enabled = state.pane == Pane.Edit && state.form.isNew,
+                        shortcut = KeyShortcut(Key.S, meta = IS_MAC, ctrl = !IS_MAC, shift = true), onClick = { state.saveAndNext() },
+                    )
                     Separator()
                     Item("Экспорт лога в ADIF…", onClick = exportAdif)
                     Item("Импорт лога из ADIF…", onClick = importAdif)
@@ -174,9 +181,11 @@ fun App(state: AppState, files: Exports) {
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     when (state.pane) {
                         Pane.Empty -> EmptyPane(state)
-                        Pane.Edit -> EditPane(state)
+                        // A fresh card (also "＋ Следующая") starts with fresh fields, focus and scroll.
+                        Pane.Edit -> key(state.editSession) { EditPane(state) }
                         Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif, files.importContest)
                         Pane.Map -> MapPane(state)
+                        Pane.Welcome -> WelcomePane(state)
                     }
                 }
             }

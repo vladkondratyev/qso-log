@@ -66,6 +66,10 @@ class Settings(context: Context) {
         set(v) = prefs.edit().putStringSet("enabled_modes", v).apply()
 
     /** Second lookup source: country and region by prefix from HamQTH (free, no account). On by default. */
+    /** Time of a new contact: when the card was opened (false) or when it is saved (true). */
+    var timeOnSave: Boolean
+        get() = prefs.getBoolean("time_on_save", false)
+        set(v) = prefs.edit().putBoolean("time_on_save", v).apply()
     var hamqthEnabled: Boolean
         get() = prefs.getBoolean("hamqth_enabled", true)
         set(v) = prefs.edit().putBoolean("hamqth_enabled", v).apply()
@@ -84,6 +88,10 @@ class Settings(context: Context) {
         get() = prefs.getString("theme", "system") ?: "system"
         set(v) = prefs.edit().putString("theme", v).apply()
     /** App starts so far; the "hold to record" hint under the add button shows only on the first few. */
+    /** The first-start setup has been shown (finished or put off). */
+    var welcomeDone: Boolean
+        get() = prefs.getBoolean("welcome_done", false)
+        set(v) = prefs.edit().putBoolean("welcome_done", v).apply()
     var launchCount: Int
         get() = prefs.getInt("launch_count", 0)
         set(v) = prefs.edit().putInt("launch_count", v).apply()

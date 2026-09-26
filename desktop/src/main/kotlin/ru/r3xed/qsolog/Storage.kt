@@ -319,6 +319,16 @@ class Settings {
         set(v) = put("enabled_modes", v.joinToString(","))
 
     /** Second lookup source: country and region by prefix from HamQTH (free, no account). On by default. */
+    /** Time of a new contact: when the card was opened (false) or when it is saved (true). */
+    var timeOnSave: Boolean
+        get() = get("time_on_save", "false") == "true"
+        set(v) = put("time_on_save", v.toString())
+
+    /** The first-start setup has been shown (finished or put off). */
+    var welcomeDone: Boolean
+        get() = get("welcome_done", "false") == "true"
+        set(v) = put("welcome_done", v.toString())
+
     var hamqthEnabled: Boolean
         get() = get("hamqth_enabled", "true") == "true"
         set(v) = put("hamqth_enabled", v.toString())

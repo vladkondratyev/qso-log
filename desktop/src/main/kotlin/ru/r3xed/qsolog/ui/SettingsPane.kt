@@ -125,16 +125,28 @@ fun SettingsPane(
                 Note("Эти значения попадают в каждую новую связь и хранятся в ней. Если позже их поменять, старые записи не изменятся.")
             }
 
+            // Where callsign data comes from, in the order it is asked: XML API → the site → HamQTH.
             SettingsBlock(
-                "Учётная запись XML API QRZ.ru",
-                when {
-                    s.qrzLogin.isBlank() -> "не указана"
-                    vm.qrzOk == true -> "${s.qrzLogin} · подключено"
-                    vm.qrzOk == false -> "${s.qrzLogin} · ошибка"
-                    else -> s.qrzLogin
-                },
-                open = s.qrzLogin.isBlank() || s.qrzPassword.isBlank(),
+                "Источники данных об абоненте",
+                listOf(
+                    "XML API: " + when {
+                        s.qrzLogin.isBlank() -> "нет"
+                        vm.qrzOk == true -> "подключено"
+                        vm.qrzOk == false -> "ошибка"
+                        else -> "указан"
+                    },
+                    "сайт: " + when {
+                        s.qrzSiteEmail.isBlank() -> "нет"
+                        vm.qrzSiteOk == true -> "вход выполнен"
+                        vm.qrzSiteOk == false -> "ошибка"
+                        else -> "указан"
+                    },
+                    "HamQTH: " + if (vm.hamqthEnabled) "вкл" else "выкл",
+                ).joinToString(" · "),
+                open = s.qrzLogin.isBlank() && s.qrzSiteEmail.isBlank(),
             ) {
+                Note("Данные абонента ищутся по порядку: 1) XML API QRZ.ru — основной и правильный способ; 2) сайт QRZ.ru по вашим e-mail и паролю — запасной, если XML API не указан или не ответил; 3) HamQTH — только страна и область, если QRZ.ru ничего не дал.")
+                Section("1. QRZ.ru — XML API (основной)")
                 SettingField("Логин", s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)
                 var show by remember { mutableStateOf(false) }
                 OutlinedTextField(
@@ -175,20 +187,7 @@ fun SettingsPane(
                 },
             )
             Note("Это основной и правильный способ подключения: XML API — официальный интерфейс QRZ.ru для программ-журналов. Если указаны и эта учётная запись, и учётная запись сайта ниже, данные берутся через XML API.")
-            }
-
-            // A fallback for users without XML API access: the site's own login, the callsign page read as HTML.
-            SettingsBlock(
-                "Учётная запись сайта QRZ.ru",
-                when {
-                    s.qrzSiteEmail.isBlank() -> "не указана · запасной способ"
-                    vm.qrzSiteOk == true -> "${s.qrzSiteEmail} · вход выполнен"
-                    vm.qrzSiteOk == false -> "${s.qrzSiteEmail} · ошибка"
-                    s.qrzLogin.isNotBlank() -> "${s.qrzSiteEmail} · запасной, основной — XML API"
-                    else -> s.qrzSiteEmail
-                },
-                open = false,
-            ) {
+                Section("2. Сайт QRZ.ru (запасной)")
                 Note("Запасной способ, если доступа к XML API нет. Правильнее подключаться через XML API (блок выше): это официальный интерфейс для программ. Здесь программа входит на сайт qrz.ru с вашими e-mail и паролем и читает страницу позывного (www.qrz.ru/db/ПОЗЫВНОЙ): имя, город, область, RDA и то, что сайт показывает после входа.")
                 SettingField("E-mail на qrz.ru", s.qrzSiteEmail, { vm.updateSettings(s.copy(qrzSiteEmail = it.trim())) }, mono = true)
                 var showSite by remember { mutableStateOf(false) }
@@ -222,10 +221,7 @@ fun SettingsPane(
                 }
                 ActionButton("Проверить вход", null, vm::testQrzSite)
                 Note("Ограничения: страница сайта — не интерфейс для программ, после изменений на сайте поиск может перестать работать; каждый запрос добавляет абоненту «Просмотр»; правила сайта могут запрещать автоматические запросы. Если указана и учётная запись XML API, данные берутся через неё, а сайт — только когда XML API не ответил.")
-            }
-
-            // Station defaults: copied into each new contact, where they stay as that record's own values.
-            SettingsBlock("Второй источник: HamQTH", if (vm.hamqthEnabled) "включён · без учётной записи" else "выключен") {
+                Section("3. HamQTH — страна и область")
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                         .toggleable(value = vm.hamqthEnabled, role = Role.Switch, onValueChange = vm::setHamqth)
@@ -240,6 +236,20 @@ fun SettingsPane(
                         "справочник HamQTH.com. Он по префиксу даёт страну, область, зоны CQ и ITU и центр области — " +
                         "расстояние тогда примерное, со знаком ≈. Имени и точного QTH там нет. Учётная запись не нужна.",
                 )
+            }
+
+
+            SettingsBlock("Ввод связи", if (vm.timeOnSave) "время — при сохранении" else "время — при открытии карточки") {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
+                        .toggleable(value = vm.timeOnSave, role = Role.Switch, onValueChange = vm::changeTimeOnSave)
+                        .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Время связи — при сохранении", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Switch(checked = vm.timeOnSave, onCheckedChange = null)
+                }
+                Note("Выключено: время связи — момент, когда открыта карточка «Новый QSO». Включено: время ставится при нажатии «Сохранить» (если вы не меняли его вручную) — удобно для долгих связей.")
             }
 
             SettingsBlock("Диапазоны и виды связи", "диапазонов: ${vm.enabledBands.size} · видов: ${vm.enabledModes.size}") {
@@ -529,7 +539,7 @@ private fun ActionButton(text: String, icon: ImageVector?, onClick: () -> Unit) 
 }
 
 @Composable
-private fun SettingField(
+internal fun SettingField(
     label: String,
     value: String,
     onChange: (String) -> Unit,

@@ -1,5 +1,21 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import ru.r3xed.qsolog.NEXT_SHORTCUT
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -128,10 +144,42 @@ fun EditPane(vm: AppState) {
     // Closing a card with typed data asks first (Esc does the same, see Main.kt).
     val close = vm::requestClose
 
+    // Show a save problem where it is: the callsign at the top, the date/time fields opened.
+    fun showSaveError(error: String?) {
+        when {
+            error == CALL_ERROR -> { scope.launch { scroll.animateScrollTo(0) }; callFocus.requestFocus() }
+            error != null -> editTime = true
+        }
+    }
+    val focusManager = LocalFocusManager.current
+    var rstRcvdFocused by remember { mutableStateOf(false) }
+
     val me = vm.myPositionFor(vm.form)
     val them = f.position
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    // Keyboard-first entry: Enter goes to the next field and saves from "RST принят";
+    // Alt+1…9 picks the n-th band that is switched on, Alt+Shift+1…9 the n-th mode.
+    Column(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).onPreviewKeyEvent { e ->
+            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            val digit = DIGIT_KEYS.indexOf(e.key)
+            when {
+                (e.key == Key.Enter || e.key == Key.NumPadEnter) && !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed -> {
+                    if (rstRcvdFocused) showSaveError(vm.trySave()) else focusManager.moveFocus(FocusDirection.Next)
+                    true
+                }
+                e.isAltPressed && digit >= 0 && !e.isShiftPressed -> {
+                    BANDS.filter { it in vm.enabledBands }.getOrNull(digit)?.let(vm::setBand)
+                    true
+                }
+                e.isAltPressed && digit >= 0 && e.isShiftPressed -> {
+                    MODES.filter { it in vm.enabledModes }.getOrNull(digit)?.let(vm::setMode)
+                    true
+                }
+                else -> false
+            }
+        },
+    ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = close, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Filled.Close, "Закрыть (Esc)", Modifier.size(30.dp))
@@ -187,8 +235,14 @@ fun EditPane(vm: AppState) {
                 }
             }
             LaunchedEffect(vm.editSession) { if (f.isNew) callFocus.requestFocus() }
+            // Callsigns from the log that start with what is typed: one click instead of the rest.
+            if (f.isNew) CallSuggestions(vm) { call ->
+                vm.setCall(call)
+                if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
+            }
 
             StationCard(vm)
+            DupeCard(vm)
             HistoryCard(vm)
 
             // --- date/time ---
@@ -242,7 +296,7 @@ fun EditPane(vm: AppState) {
                     QuickValues(quick, f.rstSent) { vm.update(vm.form.copy(rstSent = it)) }
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RstField("RST принят", f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus), rstKeyboard, onNext = null)
+                    RstField("RST принят", f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
                     QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
                 }
             }
@@ -315,15 +369,20 @@ fun EditPane(vm: AppState) {
                         shape = RoundedCornerShape(16.dp),
                     ) { Icon(Icons.Filled.Share, "Отправить QSO", Modifier.size(28.dp)) }
                 }
+                // New card: "＋ Следующая" saves and opens the next card on the same band, mode and frequency.
+                if (f.isNew) FilledTonalButton(
+                    onClick = { showSaveError(vm.saveAndNext()) },
+                    modifier = Modifier.height(60.dp),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Icon(Icons.Filled.Add, null, Modifier.size(24.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Следующая", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(8.dp))
+                    Text(NEXT_SHORTCUT, fontSize = 13.sp, color = LocalContentColor.current.copy(alpha = 0.7f))
+                }
                 Button(
-                    onClick = {
-                        val error = vm.trySave()
-                        when {
-                            // Show the problem where it is: the callsign at the top, the date/time fields opened.
-                            error == CALL_ERROR -> { scope.launch { scroll.animateScrollTo(0) }; callFocus.requestFocus() }
-                            error != null -> editTime = true
-                        }
-                    },
+                    onClick = { showSaveError(vm.trySave()) },
                     modifier = Modifier.weight(1f).height(60.dp),
                     shape = RoundedCornerShape(16.dp),
                 ) {
@@ -764,5 +823,47 @@ private fun CardRecording(since: Long, onStop: () -> Unit) {
         Text("%d:%02d".format(secs / 60, secs % 60), fontFamily = Mono, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.width(8.dp))
         Icon(Icons.Filled.Stop, "Остановить запись", Modifier.size(26.dp), tint = Color.White)
+    }
+}
+
+private val DIGIT_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine)
+
+/** Up to three callsigns from the log that start with what is typed, most recent first. */
+@Composable
+private fun CallSuggestions(vm: AppState, onPick: (String) -> Unit) {
+    val call = vm.form.call
+    val list = remember(call, vm.allQsos) { vm.callSuggestions(call) }
+    if (list.isEmpty()) return
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Из журнала:", style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
+        list.forEach { c ->
+            SuggestionChip(
+                onClick = { onPick(c) },
+                label = { Text(c, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            )
+        }
+    }
+}
+
+/** Red note when the station was already worked on this band and mode on the card's UTC day (a contest dupe). */
+@Composable
+private fun DupeCard(vm: AppState) {
+    val f = vm.form
+    val dupe = remember(f.call, f.band, f.mode, f.date, f.id, vm.allQsos) { vm.dupeOf(f) } ?: return
+    val t = utc(dupe.timeUtc)
+    val today = DATE_FMT.format(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC)) == f.date.trim()
+    Row(
+        Modifier.fillMaxWidth()
+            .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(14.dp))
+            .border(2.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(14.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Повтор", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            "${dupe.band} ${dupe.mode} — уже было ${if (today) "сегодня" else DATE_FMT.format(t)} в ${TIME_FMT.format(t)} UTC",
+            fontSize = 17.sp, color = MaterialTheme.colorScheme.onErrorContainer,
+        )
     }
 }
