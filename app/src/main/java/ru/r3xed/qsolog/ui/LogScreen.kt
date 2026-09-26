@@ -56,6 +56,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import ru.r3xed.qsolog.SearchLookup
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ProvideTextStyle
@@ -189,8 +191,25 @@ private fun EmptyLog(vm: AppViewModel) {
     val x = LocalExtra.current
     Column(Modifier.fillMaxWidth().padding(32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (vm.query.isNotBlank()) {
-            Text("Ничего не найдено", style = MaterialTheme.typography.titleLarge)
-            Text("Проверьте написание или очистите поиск.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+            Text("В вашем журнале ничего не найдено", style = MaterialTheme.typography.titleLarge)
+            // A callsign-like search goes on to QRZ.ru; a found station opens a new card by itself.
+            when (val s = vm.searchLookup) {
+                is SearchLookup.Searching -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Ищу ${s.call} на QRZ.ru…", style = MaterialTheme.typography.bodyLarge)
+                }
+                is SearchLookup.NotFound -> Text("На QRZ.ru позывного ${s.call} тоже нет.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                SearchLookup.NoAccount -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Чтобы искать позывные на QRZ.ru, укажите учётную запись XML API.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                    TextButton(onClick = { vm.openSettings() }) { Text("Открыть настройки") }
+                }
+                is SearchLookup.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(s.message, style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.weight(1f))
+                    TextButton(onClick = vm::retrySearchLookup) { Text("Повторить") }
+                }
+                SearchLookup.Idle -> Text("Проверьте написание или очистите поиск.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+            }
         } else {
             Text("Лог пока пуст", style = MaterialTheme.typography.titleLarge)
             Text(

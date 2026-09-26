@@ -54,6 +54,17 @@ enum class ThemeMode(val label: String) {
 /** Callsign length at which the QRZ.ru / HamQTH lookup starts. */
 const val MIN_LOOKUP_LENGTH = 4
 
+/** A log search that looks like a callsign: 4–6 Latin letters and digits, at least one of each. */
+private val SEARCH_CALL = Regex("^(?=.*[A-Z])(?=.*\\d)[A-Z0-9]{4,6}$")
+
+sealed interface SearchLookup {
+    data object Idle : SearchLookup
+    data class Searching(val call: String) : SearchLookup
+    data class NotFound(val call: String) : SearchLookup
+    data object NoAccount : SearchLookup
+    data class Failed(val message: String) : SearchLookup
+}
+
 /** Records for a contest report: [only] the picked ones, or the whole log when null. */
 data class ContestTarget(val only: Set<Long>?)
 
@@ -336,6 +347,56 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun search(q: String) {
         query = q
+        reload()
+        searchLookupJob?.cancel()
+        searchLookup = SearchLookup.Idle
+        val call = q.trim().uppercase()
+        if (!SEARCH_CALL.matches(call)) return
+        // Typed a callsign that is not in the log: ask QRZ.ru and, if it knows it, open a new card filled in.
+        searchLookupJob = viewModelScope.launch {
+            delay(900) // wait until typing pauses; QRZ.ru allows one request per 3 s
+            val inLog = withContext(Dispatchers.IO) { db.all(call) }
+            if (inLog.isNotEmpty() || query.trim().uppercase() != call) return@launch
+            if (settings.qrzLogin.isBlank()) {
+                searchLookup = SearchLookup.NoAccount
+                return@launch
+            }
+            searchLookup = SearchLookup.Searching(call)
+            searchLookup = try {
+                val info = qrz.lookup(call) { query.trim().uppercase() == call }
+                if (info == null) SearchLookup.NotFound(call) else {
+                    newQsoFor(call, info)
+                    SearchLookup.Idle
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: QrzException) {
+                SearchLookup.Failed(e.message ?: "Ошибка QRZ.ru")
+            } catch (e: Exception) {
+                SearchLookup.Failed(networkError(e))
+            }
+        }
+    }
+
+    /** QRZ.ru lookup started from the log search (the callsign is not in the log). */
+    var searchLookup by mutableStateOf<SearchLookup>(SearchLookup.Idle); private set
+    private var searchLookupJob: Job? = null
+
+    fun retrySearchLookup() = search(query)
+
+    /** New card for a callsign found on QRZ.ru from the log search; the search is cleared for when the user returns. */
+    private fun newQsoFor(call: String, info: QrzInfo) {
+        newQso()
+        form = form.copy(
+            call = call, name = info.fullName, qth = info.city, country = info.country,
+            locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
+            lat = info.lat, lon = info.lon, infoFromQrz = true,
+        )
+        // Nothing typed by the user yet: closing this card right away does not ask.
+        formOriginal = form
+        lookup = Lookup.Found(info)
+        loadHistory(call)
+        query = ""
         reload()
     }
 
