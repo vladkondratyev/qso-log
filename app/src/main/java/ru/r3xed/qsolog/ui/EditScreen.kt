@@ -2,6 +2,7 @@ package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -155,7 +156,16 @@ fun EditScreen(vm: AppViewModel) {
                     colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
                 )
                 if (f.audio.isNotBlank()) {
-                    AudioPlayButton(vm.voice.file(f.audio), onDelete = vm::removeAudio, modifier = Modifier.fillMaxHeight().padding(top = 8.dp))
+                    val context = LocalContext.current
+                    AudioPlayButton(
+                        vm.voice.file(f.audio),
+                        onDelete = vm::removeAudio,
+                        onShare = {
+                            val form = vm.form
+                            shareVoiceNote(context, vm.voice.file(form.audio), qsoText(form, vm.myPositionFor(form)), "QSO ${form.call} ${form.date} ${form.time} UTC")
+                        },
+                        modifier = Modifier.fillMaxHeight().padding(top = 8.dp),
+                    )
                 }
             }
             if (f.isNew) LaunchedEffect(Unit) { callFocus.requestFocus() }
@@ -336,7 +346,7 @@ private fun StationCard(vm: AppViewModel) {
     // The only place to edit name, QTH, country and locator: tap the pencil, the card turns into fields.
     var editing by remember(f.id, f.createdAt) { mutableStateOf(false) }
 
-    val hasInfo = f.name.isNotBlank() || f.qth.isNotBlank() || f.locator.isNotBlank()
+    val hasInfo = f.name.isNotBlank() || f.qth.isNotBlank() || f.country.isNotBlank() || f.locator.isNotBlank()
     Column(
         Modifier.fillMaxWidth()
             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))

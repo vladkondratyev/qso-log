@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Voice notes that can be sent to other apps (share sheet), see ui/ShareQso.kt. -->
+<paths>
+    <files-path name="audio" path="audio/" />
+</paths>

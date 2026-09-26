@@ -47,7 +47,7 @@ private val DeleteRed = Color(0xFFC62828)
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AudioPlayButton(file: File, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+fun AudioPlayButton(file: File, onDelete: () -> Unit, onShare: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     var player by remember(file) { mutableStateOf<MediaPlayer?>(null) }
     var positionMs by remember(file) { mutableIntStateOf(0) }
     var armed by remember(file) { mutableStateOf(false) }
@@ -110,11 +110,14 @@ fun AudioPlayButton(file: File, onDelete: () -> Unit, modifier: Modifier = Modif
             .combinedClickable(
                 role = Role.Button,
                 onClickLabel = if (armed) "Удалить аудиозапись" else if (player != null) "Остановить" else "Проиграть запись",
-                onLongClickLabel = "Удалить аудиозапись",
+                // Held while playing: send the note (and the contact as text) to another app.
+                // Held while stopped: the red bin for deleting, as before.
+                onLongClickLabel = if (player != null && onShare != null) "Отправить запись" else "Удалить аудиозапись",
                 onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    val playing = player != null
                     stopPlayback()
-                    armed = true
+                    if (playing && onShare != null) onShare() else armed = true
                 },
                 onClick = {
                     when {

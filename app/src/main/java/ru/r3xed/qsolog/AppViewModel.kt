@@ -50,6 +50,9 @@ enum class ThemeMode(val label: String) {
     DARK("Тёмная"),
 }
 
+/** Callsign length at which the QRZ.ru / HamQTH lookup starts. */
+const val MIN_LOOKUP_LENGTH = 4
+
 sealed interface UpdateState {
     data object Idle : UpdateState
     data object Checking : UpdateState
@@ -209,7 +212,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         screen = settingsReturn
         settingsReturn = Screen.Log
         // Coming back to a card after entering the QRZ.ru account: look the callsign up now.
-        if (screen == Screen.Edit && form.call.length >= 3 && (lookup as? Lookup.Failed)?.noAccount == true) retryLookup()
+        if (screen == Screen.Edit && form.call.length >= MIN_LOOKUP_LENGTH && (lookup as? Lookup.Failed)?.noAccount == true) retryLookup()
     }
 
     /** The card as it was opened, to tell whether closing it would lose something. */
@@ -431,7 +434,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } else f.copy(call = call)
         loadHistory(call)
         lookupJob?.cancel()
-        if (call.length < 3) {
+        // Searching starts from the 4th character: shorter prefixes only waste the QRZ.ru request limit.
+        if (call.length < MIN_LOOKUP_LENGTH) {
             lookup = Lookup.Idle
             return
         }
