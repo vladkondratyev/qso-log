@@ -111,7 +111,7 @@ fun SettingsScreen(
             }
 
             SettingsBlock(
-                "Учётная запись QRZ.ru",
+                "Учётная запись XML API QRZ.ru",
                 when {
                     s.qrzLogin.isBlank() -> "не указана"
                     vm.qrzOk == true -> "${s.qrzLogin} · подключено"
