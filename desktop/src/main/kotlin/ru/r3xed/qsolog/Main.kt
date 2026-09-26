@@ -36,6 +36,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import ru.r3xed.qsolog.ui.ContestExportDialog
 import ru.r3xed.qsolog.ui.EditPane
 import ru.r3xed.qsolog.ui.LocalExtra
 import ru.r3xed.qsolog.ui.LogPane
@@ -98,9 +99,18 @@ fun main() {
                     ?.let(state::exportSelectedAdif)
                 Unit
             }
+            // Contest reports: the dialog picks the header, then the save dialog; .txt (ЕРМАК) or .cbr (Cabrillo).
+            val exportContest = { h: ru.r3xed.qsolog.data.Cabrillo.Header ->
+                val file = chooseFile(window, "Экспорт в ${h.format.title}", save = true, suggested = state.prepareContest(h), ext = h.format.extension)
+                if (file != null) state.exportContest(file) else state.cancelContest()
+            }
+            val importContest = {
+                chooseFile(window, "Импорт из ЕРМАК / Cabrillo", save = false, ext = "cbr")?.let(state::importContest)
+                Unit
+            }
             MenuBar {
                 Menu("Файл") {
-                    Item("Новый QSO", shortcut = shortcut(Key.N), onClick = { state.newQso() })
+                    Item("Новый QSO", shortcut = shortcut(Key.N), onClick = { state.addQso() })
                     Item("Сохранить связь", enabled = state.pane == Pane.Edit, shortcut = shortcut(Key.S), onClick = state::trySave)
                     Separator()
                     Item("Экспорт лога в ADIF…", onClick = exportAdif)
@@ -108,6 +118,9 @@ fun main() {
                     Separator()
                     Item("Экспорт лога в CSV…", onClick = exportCsv)
                     Item("Импорт лога из CSV…", onClick = importCsv)
+                    Separator()
+                    Item("Экспорт в ЕРМАК / Cabrillo…", onClick = { state.openContestExport(selectedOnly = false) })
+                    Item("Импорт из ЕРМАК / Cabrillo…", onClick = importContest)
                     Separator()
                     Item("Карта QSO", shortcut = shortcut(Key.M), onClick = state::openMap)
                     Item("Настройки", shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
@@ -123,7 +136,7 @@ fun main() {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
-            QsoTheme(dark) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected)) }
+            QsoTheme(dark) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest)) }
         }
     }
 }
@@ -135,6 +148,8 @@ class Exports(
     val exportAdif: () -> Unit,
     val importAdif: () -> Unit,
     val exportSelected: () -> Unit,
+    val exportContest: (ru.r3xed.qsolog.data.Cabrillo.Header) -> Unit,
+    val importContest: () -> Unit,
 )
 
 @Composable
@@ -160,10 +175,18 @@ fun App(state: AppState, files: Exports) {
                     when (state.pane) {
                         Pane.Empty -> EmptyPane(state)
                         Pane.Edit -> EditPane(state)
-                        Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif)
+                        Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif, files.importContest)
                         Pane.Map -> MapPane(state)
                     }
                 }
+            }
+            state.contestTarget?.let { target ->
+                ContestExportDialog(
+                    defaults = state.contestDefaults(),
+                    count = target.only?.size ?: state.total,
+                    onDismiss = state::closeContestExport,
+                    onConfirm = files.exportContest,
+                )
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).widthIn(max = 640.dp))
         }
@@ -200,7 +223,7 @@ private fun chooseFile(window: ComposeWindow, title: String, save: Boolean, sugg
     val dialog = FileDialog(window, title, if (save) FileDialog.SAVE else FileDialog.LOAD)
     if (suggested != null) dialog.file = suggested
     if (!save) {
-        dialog.setFilenameFilter { _, name -> name.lowercase().let { it.endsWith(".$ext") || it.endsWith(".txt") || (ext == "adi" && it.endsWith(".adif")) } }
+        dialog.setFilenameFilter { _, name -> name.lowercase().let { it.endsWith(".$ext") || it.endsWith(".txt") || (ext == "adi" && it.endsWith(".adif")) || (ext == "cbr" && it.endsWith(".log")) } }
         if (!IS_MAC) dialog.file = "*.$ext" // Windows ignores the filter above and uses this pattern instead
     }
     dialog.isVisible = true

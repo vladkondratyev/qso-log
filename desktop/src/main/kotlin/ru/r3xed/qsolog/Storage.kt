@@ -4,7 +4,9 @@ import com.github.javakeyring.Keyring
 import ru.r3xed.qsolog.data.Adif
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.CallHistory
+import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.DEFAULT_BANDS
+import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.DEFAULT_MODES
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.data.StationSettings
@@ -301,16 +303,27 @@ class Settings {
 
     /** Bands and modes shown as buttons in the contact card. */
     var enabledBands: Set<String>
-        get() = props.getProperty("enabled_bands")?.let(::splitSet) ?: DEFAULT_BANDS.toSet()
+        get() = props.getProperty("enabled_bands")?.let(::splitSet)?.takeIf { s -> s.any { it in BANDS } } ?: DEFAULT_BANDS.toSet()
         set(v) = put("enabled_bands", v.joinToString(","))
     var enabledModes: Set<String>
-        get() = props.getProperty("enabled_modes")?.let(::splitSet) ?: DEFAULT_MODES.toSet()
+        get() = props.getProperty("enabled_modes")?.let(::splitSet)?.takeIf { s -> s.any { it in MODES } } ?: DEFAULT_MODES.toSet()
         set(v) = put("enabled_modes", v.joinToString(","))
 
     /** Second lookup source: country and region by prefix from HamQTH (free, no account). On by default. */
     var hamqthEnabled: Boolean
         get() = get("hamqth_enabled", "true") == "true"
         set(v) = put("hamqth_enabled", v.toString())
+
+    /** Last ЕРМАК / Cabrillo export: format name, CONTEST code, CATEGORY-OPERATOR. */
+    var contestFormat: String
+        get() = get("contest_format", "ERMAK")
+        set(v) = put("contest_format", v)
+    var contestCode: String
+        get() = get("contest_code")
+        set(v) = put("contest_code", v)
+    var contestOperator: String
+        get() = get("contest_operator", "SINGLE-OP")
+        set(v) = put("contest_operator", v)
 
     /** Colour theme: "system" (follow the OS), "light" or "dark". */
     var theme: String

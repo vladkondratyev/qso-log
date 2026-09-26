@@ -1,5 +1,21 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -120,7 +136,15 @@ fun EditPane(vm: AppState) {
             IconButton(onClick = close, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Filled.Close, "Закрыть (Esc)", Modifier.size(30.dp))
             }
-            Text(if (f.isNew) "Новый QSO" else "Запись QSO", style = MaterialTheme.typography.headlineSmall)
+            Text(if (f.isNew) "Новый QSO" else "Запись QSO", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            // A voice note for a card typed by hand: offered once QRZ.ru has found the station, runs until ■ or "Сохранить".
+            val since = vm.cardRecordingSince
+            if (since != null) CardRecording(since, onStop = vm::stopCardRecording)
+            else if (f.isNew && f.audio.isBlank() && vm.lookup is Lookup.Found) {
+                IconButton(onClick = vm::startCardRecording, modifier = Modifier.size(56.dp)) {
+                    Icon(Icons.Filled.Mic, "Записать голосовую заметку", Modifier.size(28.dp), tint = x.muted.copy(alpha = 0.6f))
+                }
+            }
         }
 
         Column(
@@ -156,7 +180,7 @@ fun EditPane(vm: AppState) {
                         onDelete = vm::removeAudio,
                         onShare = {
                             val form = vm.form
-                            exportVoiceNote(vm.voice.file(form.audio), qsoText(form, vm.myPositionFor(form)), form, vm::say)
+                            shareForm(form, vm.myPositionFor(form), vm.voice.file(form.audio), vm::say)
                         },
                         modifier = Modifier.fillMaxHeight().padding(top = 8.dp),
                     )
@@ -201,10 +225,13 @@ fun EditPane(vm: AppState) {
             Field("Частота, МГц", f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
 
             // One scrolling row each: what is switched on in the settings, plus the record's own value if that one is off.
+            // Nothing to choose from (one value on, and the record has it) — the label alone shows it.
+            val modes = MODES.filter { it in vm.enabledModes || it == f.mode } + listOfNotNull(f.mode.takeIf { it.isNotBlank() && it !in MODES })
+            val bands = BANDS.filter { it in vm.enabledBands || it == f.band } + listOfNotNull(f.band.takeIf { it.isNotBlank() && it !in BANDS })
             Label("Вид связи", f.mode)
-            ChipRow(MODES.filter { it in vm.enabledModes || it == f.mode } + listOfNotNull(f.mode.takeIf { it.isNotBlank() && it !in MODES }), f.mode, vm::setMode)
+            if (modes != listOf(f.mode)) ChipRow(modes, f.mode, vm::setMode)
             Label("Диапазон", f.band)
-            ChipRow(BANDS.filter { it in vm.enabledBands || it == f.band } + listOfNotNull(f.band.takeIf { it.isNotBlank() && it !in BANDS }), f.band, vm::setBand)
+            if (bands != listOf(f.band)) ChipRow(bands, f.band, vm::setBand)
 
             // Reports: the usual values one tap away, digits keyboard unless the mode reports in dB.
             val quick = quickReports(f.mode)
@@ -270,13 +297,23 @@ fun EditPane(vm: AppState) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (!f.isNew) {
-                    OutlinedButton(
+                    // Bin icon only; the confirmation dialog still asks before anything is deleted.
+                    OutlinedIconButton(
                         onClick = { confirmDelete = true },
-                        modifier = Modifier.height(60.dp),
+                        modifier = Modifier.size(60.dp),
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) { Text("Удалить", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                        colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) { Icon(Icons.Filled.DeleteOutline, "Удалить связь", Modifier.size(28.dp)) }
+                    // Saved records only: the contact as text (clipboard), with its voice note saved next to a .txt if there is one.
+                    FilledTonalIconButton(
+                        onClick = {
+                            val form = vm.form
+                            shareForm(form, vm.myPositionFor(form), form.audio.ifBlank { null }?.let { vm.voice.file(it) }, vm::say)
+                        },
+                        modifier = Modifier.size(60.dp),
+                        shape = RoundedCornerShape(16.dp),
+                    ) { Icon(Icons.Filled.Share, "Отправить QSO", Modifier.size(28.dp)) }
                 }
                 Button(
                     onClick = {
@@ -701,4 +738,31 @@ fun Field(
         ),
         keyboardActions = if (onNext != null) KeyboardActions(onNext = { onNext() }) else KeyboardActions.Default,
     )
+}
+
+/** Red pill in the card's header while a voice note records: pulsing dot, elapsed time, ■. */
+@Composable
+private fun CardRecording(since: Long, onStop: () -> Unit) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(since) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(200)
+        }
+    }
+    val pulse = rememberInfiniteTransition(label = "pulse")
+    val a by pulse.animateFloat(1f, 0.35f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "a")
+    val secs = ((now - since) / 1000).coerceAtLeast(0)
+    Row(
+        Modifier.padding(end = 8.dp).clip(RoundedCornerShape(28.dp)).background(RecordRed)
+            .clickable(onClickLabel = "Остановить запись", onClick = onStop)
+            .padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Mic, "Идёт запись", Modifier.size(22.dp).alpha(a), tint = Color.White)
+        Spacer(Modifier.width(6.dp))
+        Text("%d:%02d".format(secs / 60, secs % 60), fontFamily = Mono, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Spacer(Modifier.width(8.dp))
+        Icon(Icons.Filled.Stop, "Остановить запись", Modifier.size(26.dp), tint = Color.White)
+    }
 }

@@ -39,7 +39,8 @@ object DesktopUpdates {
 
     /** Release files are always named like this, see the build scripts. */
     private fun fileName(version: String) = when {
-        IS_MAC -> "QSO-LOG-$version-macos-arm64.dmg"
+        // Intel Macs run the x86_64 runtime (os.arch "x86_64"); Apple Silicon — "aarch64".
+        IS_MAC -> "QSO-LOG-$version-macos-" + (if (System.getProperty("os.arch") == "aarch64") "arm64" else "x64") + ".dmg"
         IS_WINDOWS -> "QSO-LOG-$version-windows-x64.zip"
         else -> "QSO-LOG-$version-linux-amd64.deb"
     }

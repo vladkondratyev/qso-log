@@ -15,7 +15,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.r3xed.qsolog.data.Adif
 import ru.r3xed.qsolog.data.AdifLabels
+import ru.r3xed.qsolog.data.BANDS
+import ru.r3xed.qsolog.data.Cabrillo
 import ru.r3xed.qsolog.data.CallHistory
+import ru.r3xed.qsolog.data.MODES
+import ru.r3xed.qsolog.data.QrzInfo
 import ru.r3xed.qsolog.data.Csv
 import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.HamQth
@@ -42,6 +46,20 @@ enum class Pane { Empty, Edit, Settings, Map }
 
 /** Callsign length at which the QRZ.ru / HamQTH lookup starts. */
 const val MIN_LOOKUP_LENGTH = 4
+
+/** A log search that looks like a callsign: 4–6 Latin letters and digits, at least one of each. */
+private val SEARCH_CALL = Regex("^(?=.*[A-Z])(?=.*\\d)[A-Z0-9]{4,6}$")
+
+sealed interface SearchLookup {
+    data object Idle : SearchLookup
+    data class Searching(val call: String) : SearchLookup
+    data class NotFound(val call: String) : SearchLookup
+    data object NoAccount : SearchLookup
+    data class Failed(val message: String) : SearchLookup
+}
+
+/** Records for a contest report: [only] the picked ones, or the whole log when null. */
+data class ContestTarget(val only: Set<Long>?)
 
 enum class ThemeMode(val label: String) {
     SYSTEM("Как в системе"),
@@ -101,12 +119,21 @@ class AppState {
     var enabledBands by mutableStateOf(prefs.enabledBands); private set
     var enabledModes by mutableStateOf(prefs.enabledModes); private set
 
+    // At least one band and one mode stay on: the card needs something to pick. The switch simply does not move.
     fun setBandEnabled(band: String, on: Boolean) {
+        if (!on && enabledBands.count { it in BANDS && it != band } == 0) {
+            say("Должен быть включён хотя бы один диапазон")
+            return
+        }
         enabledBands = if (on) enabledBands + band else enabledBands - band
         prefs.enabledBands = enabledBands
     }
 
     fun setModeEnabled(mode: String, on: Boolean) {
+        if (!on && enabledModes.count { it in MODES && it != mode } == 0) {
+            say("Должен быть включён хотя бы один вид связи")
+            return
+        }
         enabledModes = if (on) enabledModes + mode else enabledModes - mode
         prefs.enabledModes = enabledModes
     }
@@ -252,6 +279,56 @@ class AppState {
     fun search(q: String) {
         query = q
         reload()
+        searchLookupJob?.cancel()
+        searchLookup = SearchLookup.Idle
+        val call = q.trim().uppercase()
+        if (!SEARCH_CALL.matches(call)) return
+        // Typed a callsign that is not in the log: ask QRZ.ru and, if it knows it, open a new card filled in.
+        searchLookupJob = scope.launch {
+            delay(900) // wait until typing pauses; QRZ.ru allows one request per 3 s
+            val inLog = withContext(Dispatchers.IO) { db.all(call) }
+            if (inLog.isNotEmpty() || query.trim().uppercase() != call) return@launch
+            if (settings.qrzLogin.isBlank()) {
+                searchLookup = SearchLookup.NoAccount
+                return@launch
+            }
+            searchLookup = SearchLookup.Searching(call)
+            searchLookup = try {
+                val info = qrz.lookup(call) { query.trim().uppercase() == call }
+                if (info == null) SearchLookup.NotFound(call) else {
+                    newQsoFor(call, info)
+                    SearchLookup.Idle
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: QrzException) {
+                SearchLookup.Failed(e.message ?: "Ошибка QRZ.ru")
+            } catch (e: Exception) {
+                SearchLookup.Failed(networkError(e))
+            }
+        }
+    }
+
+    /** QRZ.ru lookup started from the log search (the callsign is not in the log). */
+    var searchLookup by mutableStateOf<SearchLookup>(SearchLookup.Idle); private set
+    private var searchLookupJob: Job? = null
+
+    fun retrySearchLookup() = search(query)
+
+    /** New card for a callsign found on QRZ.ru from the log search; the search is cleared for when the user returns. */
+    private fun newQsoFor(call: String, info: QrzInfo) {
+        newQso()
+        form = form.copy(
+            call = call, name = info.fullName, qth = info.city, country = info.country,
+            locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
+            lat = info.lat, lon = info.lon, infoFromQrz = true,
+        )
+        // Nothing typed by the user yet: closing this card right away does not ask.
+        formOriginal = form
+        lookup = Lookup.Found(info)
+        loadHistory(call)
+        query = ""
+        reload()
     }
 
     fun delete(qso: Qso) {
@@ -313,8 +390,123 @@ class AppState {
         recordingSince = null
         scope.launch {
             val name = withContext(Dispatchers.IO) { runCatching { voice.stop() }.getOrNull() }
-            newQso(audio = name.orEmpty())
+            addQso(audio = name.orEmpty())
             if (name == null) say("Запись слишком короткая, аудио не сохранено")
+        }
+    }
+
+    /** Recording started from the card's header (🎤): runs until ■ or "Сохранить". */
+    var cardRecordingSince by mutableStateOf<Long?>(null); private set
+
+    fun startCardRecording() {
+        try {
+            voice.start()
+            cardRecordingSince = System.currentTimeMillis()
+        } catch (e: Exception) {
+            cardRecordingSince = null
+            say("Не удалось включить микрофон: ${e.message ?: e.javaClass.simpleName}")
+        }
+    }
+
+    /** Stops the card recording and attaches it to the form. */
+    fun stopCardRecording() {
+        if (cardRecordingSince == null) return
+        cardRecordingSince = null
+        val name = runCatching { voice.stop() }.getOrNull()
+        if (name == null) say("Запись слишком короткая, аудио не сохранено")
+        else form = form.copy(audio = name)
+    }
+
+    /** Leaving the card without saving: the recording goes with it. */
+    private fun discardCardRecording() {
+        if (cardRecordingSince == null) return
+        cardRecordingSince = null
+        runCatching { voice.stopAndDiscard() }
+    }
+
+    // ---------- ЕРМАК / Cabrillo ----------
+
+    /** The contest-report dialog is open: for [ContestTarget.only] records, or the whole log when null. */
+    var contestTarget by mutableStateOf<ContestTarget?>(null); private set
+
+    /** Header chosen in the dialog, waiting for the file picker. */
+    private var pendingContest: Pair<Cabrillo.Header, Set<Long>?>? = null
+
+    fun openContestExport(selectedOnly: Boolean) {
+        contestTarget = ContestTarget(if (selectedOnly) selected else null)
+    }
+
+    fun closeContestExport() {
+        contestTarget = null
+    }
+
+    /** Values the dialog starts with: last format and contest, RDA from "Мой район", operator from the station. */
+    fun contestDefaults(): Cabrillo.Header = Cabrillo.Header(
+        format = runCatching { Cabrillo.Format.valueOf(prefs.contestFormat) }.getOrDefault(Cabrillo.Format.ERMAK),
+        contest = prefs.contestCode,
+        callsign = settings.myCall,
+        categoryOperator = prefs.contestOperator,
+        location = settings.station["MY_CNTY"].orEmpty().replace("-", "").uppercase(),
+        operators = settings.station["OPERATOR"].orEmpty(),
+        createdBy = "QSO-LOG $APP_VERSION",
+    )
+
+    /** Remembers the dialog's choice and returns the file name to offer. */
+    fun prepareContest(h: Cabrillo.Header): String {
+        prefs.contestFormat = h.format.name
+        prefs.contestCode = h.contest
+        prefs.contestOperator = h.categoryOperator
+        pendingContest = h to contestTarget?.only
+        contestTarget = null
+        val code = h.contest.uppercase().ifBlank { "LOG" }.replace('/', '-')
+        return "${h.callsign.ifBlank { "log" }.replace('/', '-')}_$code.${h.format.extension}"
+    }
+
+    /** The save dialog was cancelled: forget the chosen header. */
+    fun cancelContest() {
+        pendingContest = null
+    }
+
+    fun exportContest(file: File) {
+        val (h, only) = pendingContest ?: return
+        pendingContest = null
+        if (only != null) clearSelection()
+        scope.launch {
+            val msg = try {
+                val count = withContext(Dispatchers.IO) {
+                    val list = db.all().let { all -> if (only == null) all else all.filter { it.id in only } }
+                    file.writeBytes(Cabrillo.export(list, h).toByteArray(Cabrillo.charset(h.format)))
+                    list.size
+                }
+                "Экспортировано в ${h.format.title}: $count, файл ${file.name}"
+            } catch (e: Exception) {
+                "Не удалось сохранить файл: ${e.message}"
+            }
+            say(msg)
+        }
+    }
+
+    fun importContest(file: File) {
+        scope.launch {
+            val msg = try {
+                val (added, dup, r) = withContext(Dispatchers.IO) {
+                    val r = file.inputStream().use { Cabrillo.import(it) }
+                    val rows = r.rows.map { it.withDistance(settings.myPosition) }
+                    val added = db.insertAll(rows)
+                    Triple(added, rows.size - added, r)
+                }
+                buildString {
+                    append("Импортировано из отчёта")
+                    if (r.contest.isNotBlank()) append(" ${r.contest}")
+                    append(": $added")
+                    if (dup > 0) append(", повторов пропущено: $dup")
+                    if (r.skipped > 0) append(", строк с ошибками: ${r.skipped}")
+                }
+            } catch (e: Exception) {
+                "Не удалось прочитать файл: ${e.message}"
+            }
+            reload()
+            say(msg)
         }
     }
 
@@ -328,6 +520,7 @@ class AppState {
     /** Closes the card without saving; a voice note recorded for an unsaved contact is deleted. */
     fun closeEditor() {
         lookupJob?.cancel() // a lookup for another card must not land in this one
+        discardCardRecording()
         val f = form
         if (f.isNew) {
             if (f.audio.isNotBlank()) voice.delete(f.audio)
@@ -336,20 +529,64 @@ class AppState {
         pane = editReturn
     }
 
+    /**
+     * "Новый QSO". When the log search has narrowed down to one station (or the query is exactly its callsign),
+     * the card opens for that station: its data from the last contact, then refreshed from QRZ.ru.
+     */
+    fun addQso(audio: String = "") {
+        val last = searchedStation()
+        if (last == null) newQso(audio) else newQsoFromLog(last, audio)
+    }
+
+    private fun searchedStation(): Qso? {
+        if (query.isBlank()) return null
+        val q = query.trim().uppercase()
+        val calls = qsos.map { it.call }.distinct()
+        val call = calls.firstOrNull { it == q } ?: calls.singleOrNull() ?: return null
+        return allQsos.filter { it.call == call }.maxByOrNull { it.timeUtc }
+    }
+
+    /** The card was filled from the log: a fresh QRZ.ru answer updates it, HamQTH's rough region must not replace it. */
+    private var cardFromLog = false
+
+    private fun newQsoFromLog(last: Qso, audio: String) {
+        newQso(audio)
+        form = form.copy(
+            call = last.call, name = last.name, qth = last.qth, country = last.country, locator = last.locator,
+            lat = last.lat, lon = last.lon, infoFromQrz = true,
+            // What else is known about the station: region, zones, QSL via… (and the "≈ region" mark if it was approximate).
+            adif = form.adif + last.adif.filterKeys { it in AdifLabels.THEM || it == HamQth.POSITION_FIELD },
+        )
+        formOriginal = form
+        cardFromLog = true
+        loadHistory(last.call)
+        query = ""
+        reload()
+        // Without an account there is nothing to update: the card keeps what the log had.
+        if (settings.qrzLogin.isNotBlank()) lookupJob = scope.launch { runLookup(last.call) }
+    }
+
     fun newQso(audio: String = "") {
         lookupJob?.cancel() // a lookup for another card must not land in this one
         if (pane == Pane.Edit && form.isNew) closeEditor()
+        cardFromLog = false
         val now = LocalDateTime.now(ZoneOffset.UTC)
         // Mode, band and frequency of the most recent contact in the log: usually the next one is on the same.
         // An empty log falls back to what the last saved card had.
         val latest = allQsos.maxByOrNull { it.timeUtc }
-        val mode = latest?.mode?.ifBlank { null } ?: prefs.lastMode
+        // Only one mode or band switched on in the settings: that one, whatever the last contact had.
+        val onlyMode = MODES.filter { it in enabledModes }.singleOrNull()
+        val onlyBand = BANDS.filter { it in enabledBands }.singleOrNull()
+        val mode = onlyMode ?: latest?.mode?.ifBlank { null } ?: prefs.lastMode
+        val band = latest?.band?.ifBlank { null } ?: prefs.lastBand
+        val freq = if (latest != null) latest.freqMhz else prefs.lastFreq
         form = Form(
             date = DATE_FMT.format(now),
             time = TIME_FMT.format(now),
-            band = latest?.band?.ifBlank { null } ?: prefs.lastBand,
+            band = onlyBand ?: band,
             mode = mode,
-            freq = if (latest != null) latest.freqMhz else prefs.lastFreq,
+            // The last frequency belongs to another band than the only one allowed: leave it empty.
+            freq = if (onlyBand == null || onlyBand == band) freq else "",
             rstSent = defaultRst(mode),
             rstRcvd = defaultRst(mode),
             power = settings.power.ifBlank { prefs.lastPower },
@@ -371,6 +608,7 @@ class AppState {
     fun edit(qso: Qso, from: Pane = Pane.Empty) {
         lookupJob?.cancel() // a lookup for another card must not land in this one
         if (pane == Pane.Edit && form.isNew) closeEditor()
+        cardFromLog = false
         val t = utc(qso.timeUtc)
         form = Form(
             id = qso.id, call = qso.call,
@@ -455,6 +693,7 @@ class AppState {
         val call = raw.uppercase().filter { it.isLetterOrDigit() || it == '/' }
         if (formError == "Введите позывной") formError = null
         val f = form
+        if (call != f.call) cardFromLog = false
         form = if (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank())) {
             f.copy(call = call, name = "", qth = "", country = "", locator = "", lat = null, lon = null, infoFromQrz = false, adif = f.adif - HamQth.POSITION_FIELD)
         } else f.copy(call = call)
@@ -491,7 +730,16 @@ class AppState {
             val info = qrz.lookup(call) { form.call == call }
             if (info == null) hamqthFallback(call, qrzProblem = null) ?: Lookup.NotFound else {
                 val f = form
-                if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
+                if (f.call == call && cardFromLog) {
+                    // Filled from the log: QRZ.ru's values win, but what it leaves blank keeps the log's.
+                    val pos = info.position
+                    form = f.copy(
+                        name = info.fullName.ifBlank { f.name }, qth = info.city.ifBlank { f.qth }, country = info.country.ifBlank { f.country },
+                        locator = info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) } ?: f.locator },
+                        lat = if (pos != null) info.lat else f.lat, lon = if (pos != null) info.lon else f.lon,
+                        adif = if (pos != null || info.locator.isNotBlank()) f.adif - HamQth.POSITION_FIELD else f.adif,
+                    )
+                } else if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
                     form = f.copy(
                         name = info.fullName, qth = info.city, country = info.country,
                         locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
@@ -514,7 +762,7 @@ class AppState {
 
     /** HamQTH prefix search into the card; null when switched off, unknown or unreachable. */
     private suspend fun hamqthFallback(call: String, qrzProblem: String?): Lookup? {
-        if (!hamqthEnabled) return null
+        if (!hamqthEnabled || cardFromLog) return null
         val d = try {
             withContext(Dispatchers.IO) { HamQth.dxcc(call) } ?: return null
         } catch (e: CancellationException) {
@@ -606,6 +854,7 @@ class AppState {
 
     /** Returns an error message, or null when saved. */
     private fun save(): String? {
+        stopCardRecording()
         val f = form
         if (f.call.length < 3) return "Введите позывной"
         val date = try { LocalDate.parse(f.date.trim(), DATE_FMT) } catch (e: Exception) { return "Дата в формате ДД.ММ.ГГГГ" }

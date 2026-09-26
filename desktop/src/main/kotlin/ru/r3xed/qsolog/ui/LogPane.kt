@@ -1,5 +1,12 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import ru.r3xed.qsolog.SearchLookup
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.VerticalScrollbar
@@ -143,8 +150,25 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
         if (state.qsos.isEmpty()) {
             Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (state.query.isNotBlank()) {
-                    Text("Ничего не найдено", style = MaterialTheme.typography.titleLarge)
-                    Text("Проверьте написание или очистите поиск.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                    Text("В вашем журнале ничего не найдено", style = MaterialTheme.typography.titleLarge)
+                    // A callsign-like search goes on to QRZ.ru; a found station opens a new card by itself.
+                    when (val s = state.searchLookup) {
+                        is SearchLookup.Searching -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Text("Ищу ${s.call} на QRZ.ru…", style = MaterialTheme.typography.bodyLarge)
+                        }
+                        is SearchLookup.NotFound -> Text("На QRZ.ru позывного ${s.call} тоже нет.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                        SearchLookup.NoAccount -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Чтобы искать позывные на QRZ.ru, укажите учётную запись XML API.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                            TextButton(onClick = { state.openSettings() }) { Text("Открыть настройки") }
+                        }
+                        is SearchLookup.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(s.message, style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.weight(1f))
+                            TextButton(onClick = state::retrySearchLookup) { Text("Повторить") }
+                        }
+                        SearchLookup.Idle -> Text("Проверьте написание или очистите поиск.", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                    }
                 } else {
                     Text("Лог пока пуст", style = MaterialTheme.typography.titleLarge)
                     Text(
@@ -293,10 +317,18 @@ private fun SelectionBar(state: AppState, onExport: () -> Unit) {
                 Icon(Icons.Filled.SelectAll, "Выбрать все", Modifier.size(28.dp))
             }
         }
-        Button(onClick = onExport, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp)) {
-            Icon(Icons.Filled.FileUpload, null)
-            Spacer(Modifier.width(6.dp))
-            Text("ADIF", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        // Export of the picked records: ADIF, or a contest report (ЕРМАК / Cabrillo) via its settings dialog.
+        var menu by remember { mutableStateOf(false) }
+        Box {
+            Button(onClick = { menu = true }, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp)) {
+                Icon(Icons.Filled.FileUpload, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Экспорт", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("ADIF (.adi)", fontSize = 17.sp) }, onClick = { menu = false; onExport() })
+                DropdownMenuItem(text = { Text("ЕРМАК / Cabrillo", fontSize = 17.sp) }, onClick = { menu = false; state.openContestExport(selectedOnly = true) })
+            }
         }
     }
 }

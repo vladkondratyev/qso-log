@@ -96,7 +96,35 @@ class VoiceNotes(val dir: File = AppDirs.audio) {
             val source = AudioInputStream(ByteArrayInputStream(pcmBytes), PCM, (pcmBytes.size / PCM.frameSize).toLong())
             val ulaw = AudioSystem.getAudioInputStream(AudioFormat.Encoding.ULAW, source)
             AudioSystem.write(ulaw, AudioFileFormat.Type.WAVE, file)
+            tagWav(file)
         }
+
+        /** Same Artist tag as the Android notes: a LIST/INFO/IART chunk after the audio, the RIFF size updated. */
+        const val ARTIST = "Recorded in QSO-LOG"
+
+        fun tagWav(file: File) {
+            try {
+                val bytes = file.readBytes()
+                if (bytes.size < 12 || String(bytes, 0, 4, Charsets.US_ASCII) != "RIFF" || String(bytes, 8, 4, Charsets.US_ASCII) != "WAVE") return
+                if (String(bytes, Charsets.ISO_8859_1).contains("IART")) return
+                val text = ARTIST.toByteArray(Charsets.US_ASCII) + 0 // zero-terminated
+                val padded = if (text.size % 2 == 1) text + 0 else text
+                val info = ByteArrayOutputStream().apply {
+                    write("INFO".toByteArray(Charsets.US_ASCII))
+                    write("IART".toByteArray(Charsets.US_ASCII)); write(le32(text.size)); write(padded)
+                }.toByteArray()
+                val list = "LIST".toByteArray(Charsets.US_ASCII) + le32(info.size) + info
+                // Chunks start on even offsets: a data chunk of odd length has a pad byte.
+                val body = if (bytes.size % 2 == 1) bytes + 0 else bytes
+                val out = body + list
+                le32(out.size - 8).copyInto(out, 4)
+                file.writeBytes(out)
+            } catch (_: Exception) {
+                // An untagged note is still a good note.
+            }
+        }
+
+        private fun le32(v: Int) = byteArrayOf(v.toByte(), (v shr 8).toByte(), (v shr 16).toByte(), (v shr 24).toByte())
 
         fun durationMs(file: File): Long = try {
             AudioSystem.getAudioInputStream(file).use { (it.frameLength * 1000 / it.format.frameRate).toLong() }

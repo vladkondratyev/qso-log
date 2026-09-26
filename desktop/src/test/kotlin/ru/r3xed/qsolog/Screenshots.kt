@@ -39,7 +39,7 @@ fun main(args: Array<String>) {
     runBlocking {
         withContext(Dispatchers.Main) {
             val state = AppState()
-            val files = Exports({}, {}, {}, {}, {})
+            val files = Exports({}, {}, {}, {}, {}, {}, {})
             var dark by mutableStateOf(false)
             // Sized in pixels: a 1280×860 window at 2× (Retina) scale.
             val big = ImageComposeScene(2560, 1720, Density(2f)) { QsoTheme(dark) { App(state, files) } }

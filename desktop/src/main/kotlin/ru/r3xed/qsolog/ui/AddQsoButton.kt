@@ -54,7 +54,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import ru.r3xed.qsolog.AppState
 
-private val RecordRed = Color(0xFFC62828)
+internal val RecordRed = Color(0xFFC62828)
 
 /**
  * "Добавить QSO". A click opens an empty card.
@@ -78,7 +78,7 @@ fun AddQsoButton(vm: AppState, shortcut: String, modifier: Modifier = Modifier) 
                 .semantics {
                     role = Role.Button
                     contentDescription = "Добавить QSO. Удерживайте, чтобы записать голос"
-                    onClick("Добавить QSO") { vm.newQso(); true }
+                    onClick("Добавить QSO") { vm.addQso(); true }
                     onLongClick("Записать голос") { false }
                 }
                 .pointerInput(Unit) {
@@ -92,7 +92,7 @@ fun AddQsoButton(vm: AppState, shortcut: String, modifier: Modifier = Modifier) 
                         }
                         when {
                             cancelled -> return@awaitEachGesture
-                            released -> { vm.newQso(); return@awaitEachGesture }
+                            released -> { vm.addQso(); return@awaitEachGesture }
                         }
                         // Held long enough: record while the button stays down.
                         if (!vm.startRecording()) {

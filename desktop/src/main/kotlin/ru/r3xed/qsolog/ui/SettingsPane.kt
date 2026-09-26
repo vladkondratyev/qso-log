@@ -89,6 +89,7 @@ fun SettingsPane(
     onImportCsv: () -> Unit,
     onExportAdif: () -> Unit,
     onImportAdif: () -> Unit,
+    onImportContest: () -> Unit,
 ) {
     val s = vm.settings
     val x = LocalExtra.current
@@ -194,10 +195,10 @@ fun SettingsPane(
             }
 
             SettingsBlock("Диапазоны и виды связи", "диапазонов: ${vm.enabledBands.size} · видов: ${vm.enabledModes.size}") {
-                Section("Диапазоны в карточке связи")
+                Section("Диапазоны")
                 ToggleGrid(BANDS, vm.enabledBands, vm::setBandEnabled)
                 Note("Включённые диапазоны показываются кнопками при добавлении связи.")
-                Section("Виды связи в карточке")
+                Section("Вид связи")
                 ToggleGrid(MODES, vm.enabledModes, vm::setModeEnabled)
                 Note("Если у записи диапазон или вид, который здесь выключен, кнопка для него в её карточке всё равно видна.")
             }
@@ -223,13 +224,16 @@ fun SettingsPane(
                 }
                 Note("«Как в системе» переключается вместе с тёмной темой системы (в macOS и Windows; в Linux — светлая).")
             }
-            SettingsBlock("Журнал связей", "записей: ${vm.total} · ADIF, CSV") {
+            SettingsBlock("Журнал связей", "записей: ${vm.total} · ADIF, CSV, ЕРМАК") {
                 ActionButton("Экспорт в ADIF", Icons.Filled.FileUpload, onExportAdif)
                 ActionButton("Импорт из ADIF", Icons.Filled.FileDownload, onImportAdif)
                 Note("ADIF (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com. Файл сохраняется в кодировке Windows-1251, как у LogHX. При импорте кодировка определяется сама (Windows-1251 или UTF-8). Все поля файла сохраняются в карточке.")
                 ActionButton("Экспорт в CSV", Icons.Filled.FileUpload, onExportCsv)
                 ActionButton("Импорт из CSV", Icons.Filled.FileDownload, onImportCsv)
                 Note("CSV открывается в Excel: разделитель «;», все поля каждой связи, включая дополнительные поля ADIF. При любом импорте повторы пропускаются.")
+                ActionButton("Экспорт в ЕРМАК / Cabrillo", Icons.Filled.FileUpload) { vm.openContestExport(selectedOnly = false) }
+                ActionButton("Импорт из ЕРМАК / Cabrillo", Icons.Filled.FileDownload, onImportContest)
+                Note("Отчёты для соревнований. ЕРМАК — российский формат (ermak.srr.ru), Cabrillo 3.0 — международный. Перед сохранением программа спросит код соревнования и категорию. Чтобы выгрузить только часть журнала, выберите записи (долгое нажатие или ⌘/Ctrl-щелчок) и нажмите «Экспорт».")
 
                 var confirmDeleteAll by remember { mutableStateOf(false) }
                 Button(

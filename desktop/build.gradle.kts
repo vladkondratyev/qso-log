@@ -12,7 +12,7 @@ kotlin {
 // -Ptarget=windows / linux builds the jar with that system's graphics libraries (bundles for them are made on a Mac).
 val target = (findProperty("target") as String?) ?: "current"
 
-val appVersion = "1.3.0"
+val appVersion = "1.4.0"
 
 // APP_VERSION for the settings pane, the ADIF header and the HTTP User-Agent.
 val generateBuildInfo by tasks.registering {
@@ -62,6 +62,8 @@ compose.desktop {
             )
             macOS {
                 bundleID = "ru.r3xed.qsolog"
+                // The bundled Java 17 runtime needs macOS 11; Ventura (13) and newer, Intel and Apple Silicon.
+                minimumSystemVersion = "11.0"
                 iconFile.set(project.file("icons/icon.icns"))
                 // Without this key macOS refuses the microphone to the app instead of asking the user.
                 infoPlist {

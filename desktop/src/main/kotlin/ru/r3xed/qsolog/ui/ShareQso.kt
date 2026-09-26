@@ -47,3 +47,16 @@ fun exportVoiceNote(file: File, text: String, f: Form, say: (String) -> Unit) {
         say("Не удалось сохранить запись: ${e.message}")
     }
 }
+
+/**
+ * "Отправить" in a saved card. With a voice note: the note, a .txt and the clipboard, as above.
+ * Without one: the contact as text in the clipboard, ready to paste into a messenger or an e-mail.
+ */
+fun shareForm(f: Form, myPosition: ru.r3xed.qsolog.data.LatLon?, audio: File?, say: (String) -> Unit) {
+    val text = qsoText(f, myPosition)
+    if (audio != null && audio.exists()) exportVoiceNote(audio, text, f, say)
+    else {
+        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
+        say("Связь с ${f.call} скопирована в буфер обмена: вставьте её в мессенджер или письмо")
+    }
+}

@@ -30,5 +30,13 @@ class VoiceNotesTest {
         assertEquals(2000L, VoiceNotes.durationMs(file))
         // µ-law: one byte per sample, about 1 MB per minute.
         assertTrue(file.length() in 32_000L..32_200L)
+
+        // Artist tag after the audio: the RIFF size covers it, a second tagging does not add another.
+        val bytes = file.readBytes()
+        assertTrue(String(bytes, Charsets.ISO_8859_1).contains("IARTRecorded in QSO-LOG".replace("IART", "IART\u0014\u0000\u0000\u0000")))
+        val riff = (bytes[4].toInt() and 0xFF) or ((bytes[5].toInt() and 0xFF) shl 8) or ((bytes[6].toInt() and 0xFF) shl 16) or ((bytes[7].toInt() and 0xFF) shl 24)
+        assertEquals(bytes.size - 8, riff)
+        VoiceNotes.tagWav(file)
+        assertEquals(bytes.size.toLong(), file.length())
     }
 }
