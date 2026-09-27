@@ -26,6 +26,7 @@
 | **Windows** 10/11, 64 бит | 1.7.0 | [QSO-LOG-1.7.0-windows-x64.zip](../../releases/tag/desktop-v1.7.0) |
 | **Linux**: Ubuntu 22.04+, Debian 12, Mint (64 бит) | 1.7.0 | [QSO-LOG-1.7.0-linux-amd64.deb](../../releases/tag/desktop-v1.7.0) |
 
+Сайт: **[vladkondratyev.github.io/qso-log](https://vladkondratyev.github.io/qso-log/)** — скачать для своей системы в один клик.
 Установка: [Android](#установка-на-android) · [macOS](#установка-на-macos) · [Windows](#установка-на-windows) ·
 [Linux](#установка-на-linux-ubuntu-debian). Всё бесплатно, исходный код открыт (MIT).
 

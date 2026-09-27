@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Инструкция / Manual
+    url: https://github.com/vladkondratyev/qso-log#readme
+    about: Как установить и пользоваться / How to install and use
+  - name: Сайт / Website
+    url: https://vladkondratyev.github.io/qso-log/
+    about: Скачать для Android, macOS, Windows, Linux / Download

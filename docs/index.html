@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QSO-LOG — аппаратный журнал радиолюбителя</title>
+<meta name="description" content="Бесплатный аппаратный журнал радиолюбителя для Android, macOS, Windows и Linux: QRZ.ru, карта трассы, голосовые заметки, ADIF, ЕРМАК/Cabrillo. Free ham radio logbook.">
+<meta property="og:title" content="QSO-LOG — аппаратный журнал радиолюбителя">
+<meta property="og:description" content="Android · macOS · Windows · Linux. QRZ.ru, карта трассы, голосовые заметки, ADIF, ЕРМАК/Cabrillo.">
+<meta property="og:image" content="https://vladkondratyev.github.io/qso-log/social-preview.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon.png">
+<style>
+:root{
+  --bg:#EEF2F5; --paper:#FFFFFF; --ink:#14202B; --muted:#4F5F71; --line:#D3DBE3;
+  --accent:#0A5C8A; --accent-ink:#FFFFFF; --soft:#DCEAF3;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0E141A; --paper:#151D25; --ink:#E8EEF4; --muted:#A3B2C2; --line:#2A3743;
+  --accent:#6BBEEF; --accent-ink:#06121B; --soft:#1B2A36;
+}}
+*{box-sizing:border-box}
+img{max-width:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}
+.wrap{max-width:1100px;margin:0 auto;padding:0 20px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 0}
+header img.logo{height:40px}
+.dark-logo{display:none}
+@media (prefers-color-scheme:dark){.light-logo{display:none}.dark-logo{display:inline}}
+.lang button{font:inherit;font-weight:700;border:1.5px solid var(--line);background:transparent;color:var(--ink);border-radius:10px;padding:6px 12px;cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.hero{display:grid;grid-template-columns:1fr;gap:28px;align-items:center;padding:24px 0 40px}
+@media (min-width:900px){.hero{grid-template-columns:5fr 7fr}}
+h1{font-size:clamp(2rem,4.5vw,3rem);line-height:1.1;margin:0 0 14px;text-wrap:balance}
+.lead{color:var(--muted);font-size:1.15rem;margin:0 0 22px}
+.hero img{width:100%;height:auto;border-radius:14px}
+.dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:8px 0 0}
+.dl a{display:flex;flex-direction:column;gap:2px;text-decoration:none;background:var(--paper);border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;color:var(--ink)}
+.dl a:hover{border-color:var(--accent)}
+.dl b{font-size:1.05rem}
+.dl span{color:var(--muted);font-size:.9rem}
+.dl a.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.dl a.primary span{color:var(--accent-ink);opacity:.85}
+section{padding:36px 0;border-top:1px solid var(--line)}
+h2{font-size:1.6rem;margin:0 0 18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:18px}
+.card h3{margin:0 0 6px;font-size:1.1rem}
+.card p{margin:0;color:var(--muted)}
+.shots{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
+.shots img{height:440px;border-radius:14px;scroll-snap-align:start;border:1px solid var(--line)}
+.desk img{width:100%;border-radius:14px;border:1px solid var(--line)}
+footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px solid var(--line)}
+[data-l]:not(.on){display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <img class="logo light-logo" src="logo-light.png" alt="QSO-LOG">
+      <img class="logo dark-logo" src="logo-dark.png" alt="QSO-LOG">
+    </div>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-set="ru">RU</button>
+      <button type="button" data-set="en">EN</button>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1><span data-l="ru">Аппаратный журнал радиолюбителя для телефона и компьютера</span><span data-l="en">A ham radio logbook for your phone and your computer</span></h1>
+      <p class="lead">
+        <span data-l="ru">Быстрый ввод связи в эфире, данные абонента с QRZ.ru, расстояние и карта трассы, голосовые заметки, ADIF и отчёты ЕРМАК / Cabrillo. Бесплатно, с открытым исходным кодом.</span>
+        <span data-l="en">Fast QSO entry on the air, station data from QRZ.ru, distance and path map, voice notes, ADIF and ERMAK / Cabrillo contest reports. Free and open source.</span>
+      </p>
+      <div class="dl">
+        <a class="primary" id="dl-android" href="https://github.com/vladkondratyev/qso-log/releases/latest"><b>Android</b><span data-l="ru">8.0 и новее · APK</span><span data-l="en">8.0 and newer · APK</span></a>
+        <a id="dl-mac-arm" href="https://github.com/vladkondratyev/qso-log/releases"><b>macOS · Apple Silicon</b><span>M1+ · DMG</span></a>
+        <a id="dl-mac-x64" href="https://github.com/vladkondratyev/qso-log/releases"><b>macOS · Intel</b><span>Ventura+ · DMG</span></a>
+        <a id="dl-win" href="https://github.com/vladkondratyev/qso-log/releases"><b>Windows 10/11</b><span>x64 · ZIP</span></a>
+        <a id="dl-linux" href="https://github.com/vladkondratyev/qso-log/releases"><b>Linux</b><span>Ubuntu / Debian · DEB</span></a>
+      </div>
+      <p style="color:var(--muted);font-size:.95rem;margin-top:12px" id="versions"></p>
+    </div>
+    <img src="screenshots/00-platforms.png" alt="QSO-LOG на компьютере и на телефоне / on a computer and a phone">
+  </div>
+
+  <section>
+    <h2><span data-l="ru">Что умеет</span><span data-l="en">Features</span></h2>
+    <div class="grid">
+      <div class="card"><h3><span data-l="ru">Ввод в эфире</span><span data-l="en">Logging on the air</span></h3><p><span data-l="ru">Позывной → частота → RST. Подсказки из журнала, «Повтор», частота в кГц, «＋ Следующая» для пайлапа.</span><span data-l="en">Callsign → frequency → RST. Log suggestions, dupe warning, kHz input, “＋ Next” for pile-ups.</span></p></div>
+      <div class="card"><h3>QRZ.ru · HamQTH</h3><p><span data-l="ru">Имя, город и локатор абонента через XML API QRZ.ru; запасной вход по учётной записи сайта; страна и область с HamQTH.</span><span data-l="en">Name, city and locator via the QRZ.ru XML API; a fallback site login; country and region from HamQTH.</span></p></div>
+      <div class="card"><h3><span data-l="ru">Голосовые заметки</span><span data-l="en">Voice notes</span></h3><p><span data-l="ru">Удержите «Добавить QSO» или нажмите микрофон — запись прикрепится к связи. Отправка в мессенджер вместе с данными связи.</span><span data-l="en">Hold “Add QSO” or tap the mic — the recording is attached to the QSO. Share it with the QSO details.</span></p></div>
+      <div class="card"><h3><span data-l="ru">Расстояние и карты</span><span data-l="en">Distance and maps</span></h3><p><span data-l="ru">Азимут и трасса по дуге большого круга, карта всех абонентов журнала на OpenStreetMap.</span><span data-l="en">Bearing and great-circle path, a map of every station in your log on OpenStreetMap.</span></p></div>
+      <div class="card"><h3><span data-l="ru">Журнал</span><span data-l="en">Log</span></h3><p><span data-l="ru">Поиск, сортировка, быстрые фильтры «Сегодня», «Этот диапазон», «Без данных QRZ».</span><span data-l="en">Search, sorting and quick filters: Today, This band, No QRZ data.</span></p></div>
+      <div class="card"><h3><span data-l="ru">ADIF · ЕРМАК · Cabrillo</span><span data-l="en">ADIF · ERMAK · Cabrillo</span></h3><p><span data-l="ru">Обмен с LogHX, UR5EQF, N1MM и между телефоном и ПК; отчёты для российских и международных соревнований.</span><span data-l="en">Exchange with LogHX, UR5EQF, N1MM and between phone and PC; reports for Russian and international contests.</span></p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span data-l="ru">Телефон</span><span data-l="en">Phone</span></h2>
+    <div class="shots">
+      <img src="screenshots/01-log.png" alt="Журнал / Log" loading="lazy">
+      <img src="screenshots/23-dupe.png" alt="Новый QSO / New QSO" loading="lazy">
+      <img src="screenshots/03-card-map.png" alt="Карта трассы / Path map" loading="lazy">
+      <img src="screenshots/24-voice-menu.png" alt="Голосовая заметка / Voice note" loading="lazy">
+      <img src="screenshots/26-sources.png" alt="QRZ.ru" loading="lazy">
+      <img src="screenshots/en-02-new-qso.png" alt="English" loading="lazy">
+    </div>
+  </section>
+
+  <section>
+    <h2><span data-l="ru">Компьютер: macOS, Windows, Linux</span><span data-l="en">Computer: macOS, Windows, Linux</span></h2>
+    <p style="color:var(--muted);margin-top:-6px"><span data-l="ru">Окно в две колонки и ввод с клавиатуры: Enter — следующее поле, Alt+1…9 — диапазон, ⇧⌘S — сохранить и следующая.</span><span data-l="en">A two-column window and keyboard entry: Enter moves to the next field, Alt+1…9 picks a band, ⇧⌘S saves and opens the next card.</span></p>
+    <div class="desk"><img src="screenshots/desktop-04-card-map.png" alt="QSO-LOG на компьютере / on a computer" loading="lazy"></div>
+  </section>
+
+  <footer>
+    <span data-l="ru">QSO-LOG — открытый проект, лицензия MIT. Инструкция, исходный код и сообщения об ошибках —</span>
+    <span data-l="en">QSO-LOG is open source under the MIT licence. Manual, source code and bug reports —</span>
+    <a href="https://github.com/vladkondratyev/qso-log">github.com/vladkondratyev/qso-log</a>.
+  </footer>
+</div>
+
+<script>
+(function () {
+  // Language: saved choice, else the browser's.
+  var saved = null;
+  try { saved = localStorage.getItem('lang'); } catch (e) {}
+  var lang = saved || ((navigator.language || 'ru').slice(0, 2) === 'ru' ? 'ru' : 'en');
+  function apply(l) {
+    lang = l;
+    document.documentElement.lang = l;
+    document.querySelectorAll('[data-l]').forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-l') === l); });
+    document.querySelectorAll('[data-set]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-set') === l ? 'true' : 'false'); });
+    try { localStorage.setItem('lang', l); } catch (e) {}
+    showVersions();
+  }
+  document.querySelectorAll('[data-set]').forEach(function (b) { b.addEventListener('click', function () { apply(b.getAttribute('data-set')); }); });
+
+  // Direct download links from the newest releases: Android is tagged vX.Y.Z, the desktop desktop-vX.Y.Z.
+  var found = {};
+  function showVersions() {
+    var el = document.getElementById('versions');
+    if (!found.android && !found.desktop) { el.textContent = ''; return; }
+    el.textContent = (lang === 'ru' ? 'Версии: Android ' : 'Versions: Android ') + (found.android || '—') +
+      (lang === 'ru' ? ', компьютер ' : ', desktop ') + (found.desktop || '—');
+  }
+  fetch('https://api.github.com/repos/vladkondratyev/qso-log/releases?per_page=30')
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (list) {
+      function asset(rel, suffix) {
+        var a = (rel.assets || []).filter(function (x) { return x.name.slice(-suffix.length) === suffix; })[0];
+        return a ? a.browser_download_url : rel.html_url;
+      }
+      var android = list.filter(function (r) { return /^v\d/.test(r.tag_name) && !r.draft && !r.prerelease; })[0];
+      var desktop = list.filter(function (r) { return /^desktop-v\d/.test(r.tag_name) && !r.draft && !r.prerelease; })[0];
+      if (android) {
+        document.getElementById('dl-android').href = asset(android, '.apk');
+        found.android = android.tag_name.replace(/^v/, '');
+      }
+      if (desktop) {
+        document.getElementById('dl-mac-arm').href = asset(desktop, '-macos-arm64.dmg');
+        document.getElementById('dl-mac-x64').href = asset(desktop, '-macos-x64.dmg');
+        document.getElementById('dl-win').href = asset(desktop, '-windows-x64.zip');
+        document.getElementById('dl-linux').href = asset(desktop, '-linux-amd64.deb');
+        found.desktop = desktop.tag_name.replace(/^desktop-v/, '');
+      }
+      showVersions();
+    })
+    .catch(function () {});
+  apply(lang);
+})();
+</script>
+</body>
+</html>

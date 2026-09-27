@@ -1,0 +1,45 @@
+name: Ошибка / Bug report
+description: Что-то работает не так / Something does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за сообщение! Не присылайте пароли, e-mail и чужие личные данные — скриншоты можно замазать.
+        Thanks for the report! Please do not post passwords, e-mails or other people's personal data.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Система / Platform
+      options: [Android, macOS (Apple Silicon), macOS (Intel), Windows, Linux]
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes:
+      label: Версия QSO-LOG / Version
+      description: Видна рядом с логотипом и внизу настроек / Next to the logo and at the bottom of the settings
+      placeholder: 0.22.0 / 1.7.0
+    validations: {required: true}
+  - type: input
+    id: device
+    attributes:
+      label: Устройство и версия системы / Device and OS version
+      placeholder: Poco M8 Pro, Android 15 · MacBook Air M2, macOS 15
+  - type: textarea
+    id: steps
+    attributes:
+      label: Что делали / Steps
+      placeholder: |
+        1. Открыл «Новый QSO»
+        2. Ввёл позывной …
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что ожидали и что получилось / Expected and actual result
+    validations: {required: true}
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Скриншоты / Screenshots
+      description: Перетащите файлы сюда / Drag files here
