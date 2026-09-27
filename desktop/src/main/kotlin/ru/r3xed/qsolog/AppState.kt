@@ -84,15 +84,6 @@ sealed interface UpdateState {
     data class Failed(val message: String) : UpdateState
 }
 
-enum class LogFilter(private val ru: String) {
-    TODAY("Сегодня"), // no-tr
-    BAND("Этот диапазон"), // no-tr
-    PENDING("Без данных QRZ"), // no-tr
-    ;
-
-    val label: String get() = tr(ru)
-}
-
 enum class SortBy(private val ru: String, val defaultDesc: Boolean) {
     DATE("Дата", true), // no-tr
     DISTANCE("Км", true), // no-tr
@@ -362,32 +353,8 @@ class AppState {
                 all to if (query.isBlank()) all else db.all(query)
             }
             allQsos = all
-            qsos = applyFilters(list, all)
+            qsos = list
             total = all.size
-        }
-    }
-
-    // ---------- quick filters over the log ----------
-
-    /** Quick filters above the list; several can be on at once, the search applies on top. */
-    var filters by mutableStateOf<Set<LogFilter>>(emptySet()); private set
-
-    fun toggleFilter(f: LogFilter) {
-        filters = if (f in filters) filters - f else filters + f
-        reload()
-    }
-
-    /** "Этот диапазон": the band of the most recent contact, i.e. the one being worked now. */
-    val currentBand: String get() = allQsos.maxByOrNull { it.timeUtc }?.band.orEmpty()
-
-    private fun applyFilters(list: List<Qso>, all: List<Qso>): List<Qso> {
-        if (filters.isEmpty()) return list
-        val today = DATE_FMT.format(LocalDateTime.now(ZoneOffset.UTC))
-        val band = all.maxByOrNull { it.timeUtc }?.band.orEmpty()
-        return list.filter { q ->
-            (LogFilter.TODAY !in filters || DATE_FMT.format(utc(q.timeUtc)) == today) &&
-                (LogFilter.BAND !in filters || q.band.equals(band, ignoreCase = true)) &&
-                (LogFilter.PENDING !in filters || q.pendingLookup)
         }
     }
 

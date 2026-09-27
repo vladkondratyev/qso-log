@@ -3,7 +3,6 @@ package ru.r3xed.qsolog.ui
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.filled.Check
-import ru.r3xed.qsolog.LogFilter
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -165,8 +164,6 @@ fun LogScreen(
             )
 
             if (vm.qsos.isEmpty()) {
-                // A filter that left nothing: keep the bar so it can be switched off.
-                if (vm.filters.isNotEmpty()) SortBar(vm)
                 Box(Modifier.weight(1f)) { EmptyLog(vm) }
             } else {
                 SortBar(vm)
@@ -201,10 +198,7 @@ fun LogScreen(
 private fun EmptyLog(vm: AppViewModel) {
     val x = LocalExtra.current
     Column(Modifier.fillMaxWidth().padding(32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (vm.query.isBlank() && vm.filters.isNotEmpty()) {
-            Text(tr("Под выбранные фильтры записей нет"), style = MaterialTheme.typography.titleLarge)
-            Text(tr("Снимите фильтр кнопкой над списком."), style = MaterialTheme.typography.bodyLarge, color = x.muted)
-        } else if (vm.query.isNotBlank()) {
+        if (vm.query.isNotBlank()) {
             Text(tr("В вашем журнале ничего не найдено"), style = MaterialTheme.typography.titleLarge)
             // A callsign-like search goes on to QRZ.ru; a found station opens a new card by itself.
             when (val s = vm.searchLookup) {
@@ -282,7 +276,6 @@ private fun groupAndSort(list: List<Qso>, by: SortBy, desc: Boolean): List<Group
 @Composable
 private fun SortBar(vm: AppViewModel) {
     val x = LocalExtra.current
-    Column {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -310,35 +303,6 @@ private fun SortBar(vm: AppViewModel) {
                 }
             }
         }
-    }
-    // Quick filters: a second row under the sort buttons.
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        LogFilter.entries.forEach { flt ->
-            val band = vm.currentBand
-            if (flt == LogFilter.BAND && band.isBlank()) return@forEach
-            val label = if (flt == LogFilter.BAND) tr("Только %s", band) else flt.label
-            val on = flt in vm.filters
-            val fg = if (on) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
-            Row(
-                Modifier.height(36.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(if (on) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-                    .border(1.5.dp, if (on) MaterialTheme.colorScheme.secondary else x.line, RoundedCornerShape(18.dp))
-                    .clickable(onClickLabel = if (on) tr("Снять фильтр: %s", label) else tr("Фильтр: %s", label)) { vm.toggleFilter(flt) }
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (on) {
-                    Icon(Icons.Filled.Check, null, Modifier.size(16.dp), tint = fg)
-                    Spacer(Modifier.width(4.dp))
-                }
-                Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1, softWrap = false)
-            }
-        }
-    }
     }
 }
 
