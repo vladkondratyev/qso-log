@@ -46,6 +46,7 @@ import ru.r3xed.qsolog.ui.QsoTheme
 import ru.r3xed.qsolog.ui.SettingsPane
 import ru.r3xed.qsolog.ui.WelcomePane
 import ru.r3xed.qsolog.ui.ReferencePane
+import ru.r3xed.qsolog.ui.UploadDialog
 import java.awt.Dimension
 import java.awt.FileDialog
 import java.io.File
@@ -132,7 +133,8 @@ fun main() {
                     Item(tr("Импорт из ЕРМАК / Cabrillo…"), onClick = importContest)
                     Separator()
                     Item(tr("Карта QSO"), shortcut = shortcut(Key.M), onClick = state::openMap)
-                    Item(tr("Справка: частоты, Морзе, позывные"), onClick = { state.pane = Pane.Reference })
+                    Item(tr("Выгрузка в онлайн-журналы…"), onClick = { state.openUpload(selectedOnly = false) })
+                    Item(tr("Справка и калькуляторы"), onClick = state::openReference)
                     Item(tr("Настройки"), shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
                     if (!IS_MAC) {
                         Separator()
@@ -189,7 +191,7 @@ fun App(state: AppState, files: Exports) {
                         Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif, files.importContest)
                         Pane.Map -> MapPane(state)
                         Pane.Welcome -> WelcomePane(state)
-                        Pane.Reference -> ReferencePane(onClose = { state.pane = Pane.Empty }, myPosition = state.settings.myPosition)
+                        Pane.Reference -> ReferencePane(onClose = state::closeReference, myPosition = state.settings.myPosition)
                     }
                 }
             }
@@ -199,6 +201,20 @@ fun App(state: AppState, files: Exports) {
                     count = target.only?.size ?: state.total,
                     onDismiss = state::closeContestExport,
                     onConfirm = files.exportContest,
+                )
+            }
+            state.uploadTarget?.let { target ->
+                UploadDialog(
+                    selected = target.only?.size,
+                    total = state.total,
+                    count = { log, onlyNew -> state.uploadCandidates(log, target.only, onlyNew).size },
+                    problem = state::uploadProblem,
+                    busy = state.uploading,
+                    lotwNote = tr("QSO-LOG запускает программу TQSL: она подписывает связи вашим сертификатом и отправляет их в LoTW. Station Location и путь к TQSL — в настройках, блок «Онлайн-журналы»."),
+                    lotwAction = tr("Отправить через TQSL"),
+                    onOpenSettings = { state.closeUpload(); state.openSettings() },
+                    onDismiss = state::closeUpload,
+                    onConfirm = state::upload,
                 )
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).widthIn(max = 640.dp))

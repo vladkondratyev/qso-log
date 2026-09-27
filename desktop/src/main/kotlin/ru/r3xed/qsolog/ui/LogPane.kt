@@ -1,6 +1,6 @@
 package ru.r3xed.qsolog.ui
 
-import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.CloudUpload
 import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.DropdownMenu
@@ -118,9 +118,9 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                 val me = state.settings.myCall
                 Text((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", state.total), style = MaterialTheme.typography.bodyMedium, color = x.muted)
             }
-            Tip(tr("Справка")) {
-                FilledTonalIconButton(onClick = { state.pane = Pane.Reference }, modifier = Modifier.size(52.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = tr("Справка"), modifier = Modifier.size(26.dp))
+            Tip(tr("Выгрузка в онлайн-журналы")) {
+                FilledTonalIconButton(onClick = { state.openUpload(selectedOnly = false) }, modifier = Modifier.size(52.dp)) {
+                    Icon(Icons.Filled.CloudUpload, contentDescription = tr("Выгрузка в онлайн-журналы"), modifier = Modifier.size(28.dp))
                 }
             }
             Spacer(Modifier.width(8.dp))
@@ -336,6 +336,7 @@ private fun SelectionBar(state: AppState, onExport: () -> Unit) {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("ADIF (.adi)", fontSize = 17.sp) }, onClick = { menu = false; onExport() })
                 DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; state.openContestExport(selectedOnly = true) })
+                DropdownMenuItem(text = { Text(tr("Онлайн-журналы: LoTW, QRZ.com, eQSL, Club Log"), fontSize = 17.sp) }, onClick = { menu = false; state.openUpload(selectedOnly = true) })
             }
         }
     }

@@ -8,12 +8,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 /**
  * Online logbooks the log is uploaded to. Which contacts were sent is kept in the contact itself, in the standard
- * ADIF fields ([statusField] = "Y", [dateField] = the day), so it travels with ADIF exports and only new ones go next time.
+ * ADIF fields ([statusField] = "Y", [dateField] = the day), so it travels with ADIF exports and only new ones go next time;
+ * the exact UTC time of the upload goes into our own [timeField].
  */
 enum class OnlineLog(val title: String, val statusField: String, val dateField: String) {
     LOTW("LoTW", "LOTW_QSL_SENT", "LOTW_QSLSDATE"),
@@ -22,20 +24,50 @@ enum class OnlineLog(val title: String, val statusField: String, val dateField: 
     CLUBLOG("Club Log", "CLUBLOG_QSO_UPLOAD_STATUS", "CLUBLOG_QSO_UPLOAD_DATE"),
     ;
 
+    /** "2026-09-27 10:15" (UTC): when the contact was sent or exported. */
+    val timeField: String get() = "APP_QSOLOG_${name}_SENT"
+
     /** Sent, or (LoTW on the phone) exported for TQSL and waiting to be signed ("Q"). */
     fun isSent(q: Qso): Boolean = q.adif[statusField]?.uppercase() in setOf("Y", "Q")
 
-    fun mark(q: Qso, status: String = "Y"): Qso = q.copy(
-        adif = q.adif + (statusField to status) + (dateField to LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.BASIC_ISO_DATE)),
+    /** Only exported to a file for TQSL, not signed and sent yet. */
+    fun isQueued(adif: Map<String, String>): Boolean = adif[statusField].equals("Q", ignoreCase = true)
+
+    fun mark(q: Qso, status: String = "Y", now: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC)): Qso = q.copy(
+        adif = markFields(q.adif, status, now),
         updatedAt = System.currentTimeMillis(),
     )
+
+    fun markFields(adif: Map<String, String>, status: String = "Y", now: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC)): Map<String, String> =
+        adif + (statusField to status) + (dateField to now.format(DateTimeFormatter.BASIC_ISO_DATE)) + (timeField to now.format(TIME_FORMAT))
+
+    /** The contact without this logbook's mark, so it goes again next time. */
+    fun unmarkFields(adif: Map<String, String>): Map<String, String> = adif - statusField - dateField - timeField
+
+    /** "27.09.2026 10:15 UTC", or only the day when the mark came without a time (from another program); null if not sent. */
+    fun sentAt(adif: Map<String, String>): String? {
+        if (adif[statusField]?.uppercase() !in setOf("Y", "Q")) return null
+        adif[timeField]?.let { t ->
+            runCatching { return LocalDateTime.parse(t, TIME_FORMAT).format(SHOW_TIME) + " UTC" }
+        }
+        return adif[dateField]?.let { d -> runCatching { LocalDate.parse(d, DateTimeFormatter.BASIC_ISO_DATE).format(SHOW_DATE) }.getOrNull() }.orEmpty()
+    }
+
+    companion object {
+        private val TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        private val SHOW_TIME = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+        private val SHOW_DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+
+        /** Every field the upload marks use; the card shows them in their own block. */
+        val FIELDS: Set<String> = entries.flatMap { listOf(it.statusField, it.dateField, it.timeField) }.toSet()
+    }
 }
 
 /** Result of one upload: how many went, how many the service already had, and what failed (null = all fine). */
 data class UploadResult(val sent: List<Qso>, val duplicates: Int, val error: String?)
 
 object OnlineLogs {
-    private val UPLOAD_FIELDS = OnlineLog.entries.flatMap { listOf(it.statusField, it.dateField) }.toSet()
+    private val UPLOAD_FIELDS = OnlineLog.FIELDS
 
     /** One contact as an ADIF record for a service: our own APP_ fields and upload marks stay home. */
     fun record(q: Qso): String = buildString {

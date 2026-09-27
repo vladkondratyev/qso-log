@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -66,6 +67,9 @@ sealed interface SearchLookup {
 
 /** Records for a contest report: [only] the picked ones, or the whole log when null. */
 data class ContestTarget(val only: Set<Long>?)
+
+/** Records the online-logbook upload is for; null = the whole log. */
+data class UploadTarget(val only: Set<Long>?)
 
 enum class ThemeMode(private val ru: String) {
     SYSTEM("Как в системе"), // no-tr
@@ -273,8 +277,25 @@ class AppState {
     }
 
     fun openSettings(from: Pane = Pane.Empty) {
+        // A fresh visit starts at the top; only the way back from the reference keeps the place.
+        if (pane != Pane.Reference) scope.launch { settingsScroll.scrollTo(0) }
         settingsReturn = from
         pane = Pane.Settings
+    }
+
+    /** Kept here so the settings stay scrolled to the reference card while the reference is open. */
+    val settingsScroll = ScrollState(0)
+
+    /** Where the reference's close button goes: back to the settings it was opened from, or the empty pane (menu). */
+    private var referenceReturn: Pane = Pane.Empty
+
+    fun openReference() {
+        referenceReturn = pane.takeIf { it == Pane.Settings } ?: Pane.Empty
+        pane = Pane.Reference
+    }
+
+    fun closeReference() {
+        if (referenceReturn == Pane.Settings) openSettings(settingsReturn) else pane = Pane.Empty
     }
 
     fun closeSettings() {
@@ -1041,14 +1062,23 @@ class AppState {
 
     // ---------- online logbooks: LoTW, QRZ.com, eQSL, Club Log ----------
 
-    /** The logbook being uploaded to right now (a spinner on its button). */
+    /** The upload dialog is open: for [UploadTarget.only] records picked in the log, or the whole log when null. */
+    var uploadTarget by mutableStateOf<UploadTarget?>(null); private set
+
+    /** The logbook being uploaded to right now (a spinner in the dialog). */
     var uploading by mutableStateOf<OnlineLog?>(null); private set
 
-    /** The last result per logbook, shown under its button. */
-    var uploadStatus by mutableStateOf<Map<OnlineLog, String>>(emptyMap()); private set
+    fun openUpload(selectedOnly: Boolean) {
+        uploadTarget = UploadTarget(if (selectedOnly) selected else null)
+    }
 
-    /** Contacts not yet sent to [log]. */
-    fun pendingFor(log: OnlineLog): Int = allQsos.count { !log.isSent(it) }
+    fun closeUpload() {
+        if (uploading == null) uploadTarget = null
+    }
+
+    /** The contacts an upload to [log] takes: the picked ones or the whole log, without those already sent when [onlyNew]. */
+    fun uploadCandidates(log: OnlineLog, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
+        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !log.isSent(it)) }
 
     /** What is missing in the settings for [log], or null when it can be uploaded. */
     fun uploadProblem(log: OnlineLog): String? {
@@ -1062,37 +1092,39 @@ class AppState {
         }
     }
 
-    /** Sends the contacts that [log] has not got yet and marks them as sent there. */
-    fun uploadTo(log: OnlineLog) {
+    /** Sends the dialog's contacts to [log]; with [mark] the sent ones get the logbook's mark (date and time) in the card. */
+    fun upload(log: OnlineLog, onlyNew: Boolean, mark: Boolean) {
+        val target = uploadTarget ?: return
         if (uploading != null) return
-        uploadProblem(log)?.let {
-            uploadStatus = uploadStatus + (log to it)
-            say(it)
-            return
-        }
+        uploadProblem(log)?.let { say(it); return }
         val s = settings
+        val list = uploadCandidates(log, target.only, onlyNew)
+        if (list.isEmpty()) { say(tr("Новых связей для %s нет", log.title)); return }
         uploading = log
         scope.launch {
-            val list = withContext(Dispatchers.IO) { db.all() }.filter { !log.isSent(it) }
-            val msg = if (list.isEmpty()) tr("Новых связей для %s нет", log.title) else {
-                val r = when (log) {
-                    OnlineLog.QRZCOM -> OnlineLogs.uploadQrzCom(s.qrzcomKey, list, USER_AGENT)
-                    OnlineLog.EQSL -> OnlineLogs.uploadEqsl(s.eqslUser, s.eqslPassword, s.eqslNickname, list, USER_AGENT)
-                    OnlineLog.CLUBLOG -> OnlineLogs.uploadClubLog(s.clublogEmail, s.clublogPassword, s.myCall, s.clublogKey, list, USER_AGENT)
-                    OnlineLog.LOTW -> uploadLotw(list)
-                }
-                withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
-                reload()
-                buildString {
-                    append(tr("%s: отправлено %s", log.title, r.sent.size))
-                    if (r.duplicates > 0) append(tr(", уже были там: %s", r.duplicates))
-                    r.error?.let { append(". ").append(it) }
-                }
+            val r = when (log) {
+                OnlineLog.QRZCOM -> OnlineLogs.uploadQrzCom(s.qrzcomKey, list, USER_AGENT)
+                OnlineLog.EQSL -> OnlineLogs.uploadEqsl(s.eqslUser, s.eqslPassword, s.eqslNickname, list, USER_AGENT)
+                OnlineLog.CLUBLOG -> OnlineLogs.uploadClubLog(s.clublogEmail, s.clublogPassword, s.myCall, s.clublogKey, list, USER_AGENT)
+                OnlineLog.LOTW -> uploadLotw(list)
             }
-            uploadStatus = uploadStatus + (log to msg)
+            if (mark) withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
+            reload()
             uploading = null
-            say(msg)
+            uploadTarget = null
+            if (target.only != null && r.error == null) clearSelection()
+            say(buildString {
+                append(tr("%s: отправлено %s", log.title, r.sent.size))
+                if (r.duplicates > 0) append(tr(", уже были там: %s", r.duplicates))
+                if (mark && r.sent.isNotEmpty()) append(tr(", отметка поставлена"))
+                r.error?.let { append(". ").append(it) }
+            })
         }
+    }
+
+    /** Takes [log]'s mark off the open card (saved with the card), so the contact goes again next time. */
+    fun clearUploadMark(log: OnlineLog) {
+        form = form.copy(adif = log.unmarkFields(form.adif))
     }
 
     /** LoTW: the contacts are signed and sent by ARRL's TQSL, run in batch mode. */

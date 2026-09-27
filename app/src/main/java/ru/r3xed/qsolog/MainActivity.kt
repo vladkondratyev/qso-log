@@ -1,5 +1,8 @@
 package ru.r3xed.qsolog
 
+import ru.r3xed.qsolog.data.OnlineLog
+import ru.r3xed.qsolog.ui.UploadDialog
+
 import androidx.compose.runtime.key
 import android.Manifest
 import android.content.pm.PackageManager
@@ -144,7 +147,6 @@ class MainActivity : ComponentActivity() {
                                 onExportAdif = { exportAdif.launch(vm.adifFileName()) },
                                 onImportAdif = { importAdif.launch(arrayOf("*/*")) },
                                 onImportContest = { importContest.launch(arrayOf("*/*")) },
-                                onExportLotw = { exportLotw.launch(vm.lotwFileName()) },
                             )
                         }
                         vm.contestTarget?.let { target ->
@@ -153,6 +155,22 @@ class MainActivity : ComponentActivity() {
                                 count = target.only?.size ?: vm.total,
                                 onDismiss = vm::closeContestExport,
                                 onConfirm = { h -> exportContest.launch(vm.prepareContest(h)) },
+                            )
+                        }
+                        vm.uploadTarget?.let { target ->
+                            UploadDialog(
+                                selected = target.only?.size,
+                                total = vm.total,
+                                count = { log, onlyNew -> vm.uploadCandidates(log, target.only, onlyNew).size },
+                                problem = vm::uploadProblem,
+                                busy = vm.uploading,
+                                lotwNote = tr("LoTW принимает только связи, подписанные вашим сертификатом в программе TQSL от ARRL. Для Android её нет: сохраните файл, перенесите на компьютер и подпишите в TQSL («Sign a log and upload it») — или выгружайте из QSO-LOG для компьютера, он вызывает TQSL сам."),
+                                lotwAction = tr("Сохранить файл"),
+                                onOpenSettings = { vm.closeUpload(); vm.openSettings() },
+                                onDismiss = vm::closeUpload,
+                                onConfirm = { log, onlyNew, mark ->
+                                    if (log == OnlineLog.LOTW) exportLotw.launch(vm.prepareLotw(onlyNew, mark)) else vm.upload(log, onlyNew, mark)
+                                },
                             )
                         }
                         SnackbarHost(

@@ -1,5 +1,8 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.foundation.layout.heightIn
+import ru.r3xed.qsolog.data.OnlineLog
+
 import ru.r3xed.qsolog.tr
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.SuggestionChip
@@ -305,6 +308,9 @@ fun EditPane(vm: AppState) {
             // --- distance & map ---
             DistanceCard(vm, onOpenMap = { showMap = true })
 
+            // --- where this contact has been uploaded, with the date and time ---
+            if (!f.isNew) UploadMarks(f.adif, onClear = vm::clearUploadMark)
+
             // --- all fields: each group opens on its own, the header says how many fields are filled ---
             Label(tr("Все поля ADIF"))
             val filled = { keys: Collection<String> -> keys.count { !f.adif[it].isNullOrBlank() } }
@@ -339,7 +345,7 @@ fun EditPane(vm: AppState) {
             }
             FieldGroup(tr("Прохождение"), filled(AdifLabels.SPACE_WEATHER.keys)) { AdifFields(vm, AdifLabels.SPACE_WEATHER, perRow = 3) }
             // Anything else the imported log carried, shown under its ADIF name.
-            val other = f.adif.keys.filter { it !in AdifLabels.KNOWN }
+            val other = f.adif.keys.filter { it !in AdifLabels.KNOWN && it !in OnlineLog.FIELDS }
             if (other.isNotEmpty()) FieldGroup(tr("Другие поля ADIF"), filled(other)) { AdifFields(vm, other.associateWith { it }) }
             Spacer(Modifier.height(8.dp))
         }
@@ -729,6 +735,36 @@ private fun ChipRow(items: List<String>, selected: String, onPick: (String) -> U
     }
     LazyRow(state = state, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
         items(items) { item -> Chip(item, item == selected) { onPick(item) } }
+    }
+}
+
+/** One line per online logbook: when the contact went there, or that it has not; a mark can be taken off to send it again. */
+@Composable
+private fun UploadMarks(adif: Map<String, String>, onClear: (OnlineLog) -> Unit) {
+    val x = LocalExtra.current
+    Label(tr("Выгрузка в журналы"))
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field).padding(horizontal = 16.dp, vertical = 6.dp)) {
+        OnlineLog.entries.forEach { log ->
+            val at = log.sentAt(adif)
+            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(log.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(110.dp))
+                when {
+                    at == null -> Text(tr("не выгружалась"), style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.weight(1f))
+                    else -> {
+                        val queued = log.isQueued(adif)
+                        Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
+                            Text(
+                                if (queued) tr("файл для TQSL сохранён") else "✓ " + tr("выгружена"),
+                                style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold,
+                                color = if (queued) MaterialTheme.colorScheme.onSurface else x.ok,
+                            )
+                            if (at.isNotEmpty()) Text(at, style = MaterialTheme.typography.bodyMedium, color = x.muted)
+                        }
+                        TextButton(onClick = { onClear(log) }) { Text(tr("Снять")) }
+                    }
+                }
+            }
+        }
     }
 }
 

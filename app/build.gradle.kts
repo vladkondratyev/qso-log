@@ -11,8 +11,8 @@ android {
         applicationId = "ru.r3xed.qsolog"
         minSdk = 26
         targetSdk = 34
-        versionCode = 33
-        versionName = "0.24.1"
+        versionCode = 34
+        versionName = "0.25.0"
     }
 
     buildTypes {

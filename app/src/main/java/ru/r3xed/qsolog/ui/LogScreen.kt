@@ -1,6 +1,6 @@
 package ru.r3xed.qsolog.ui
 
-import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.CloudUpload
 import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.filled.Check
 import androidx.activity.compose.BackHandler
@@ -129,9 +129,9 @@ fun LogScreen(
                         OneLineText((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", vm.total), maxSize = 16.sp, minSize = 11.sp, color = x.muted)
                     }
                 }
-                // Three round buttons: reference, map, settings; 50 dp each so the logo keeps its room on a narrow phone.
-                FilledTonalIconButton(onClick = vm::openReference, modifier = Modifier.size(50.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = tr("Справка"), modifier = Modifier.size(26.dp))
+                // Three round buttons: upload to online logbooks, map, settings; 50 dp each so the logo keeps its room on a narrow phone.
+                FilledTonalIconButton(onClick = { vm.openUpload(selectedOnly = false) }, modifier = Modifier.size(50.dp)) {
+                    Icon(Icons.Filled.CloudUpload, contentDescription = tr("Выгрузка в онлайн-журналы"), modifier = Modifier.size(27.dp))
                 }
                 Spacer(Modifier.width(8.dp))
                 FilledTonalIconButton(onClick = vm::openMap, modifier = Modifier.size(50.dp)) {
@@ -333,7 +333,7 @@ private fun LogRow(qso: Qso, vm: AppViewModel, showDate: Boolean, modifier: Modi
     )
 }
 
-/** Replaces the log header while records are picked: count, select all, export to ADIF, cancel. */
+/** Replaces the log header while records are picked: count, select all, export (ADIF, contest report, online logbooks), cancel. */
 @Composable
 private fun SelectionBar(vm: AppViewModel, onExport: () -> Unit) {
     Row(
@@ -350,7 +350,7 @@ private fun SelectionBar(vm: AppViewModel, onExport: () -> Unit) {
         IconButton(onClick = vm::selectAllShown, modifier = Modifier.size(52.dp)) {
             Icon(Icons.Filled.SelectAll, tr("Выбрать все"), Modifier.size(28.dp))
         }
-        // Export of the picked records: ADIF, or a contest report (ЕРМАК / Cabrillo) via its settings dialog.
+        // Export of the picked records: ADIF, a contest report (ЕРМАК / Cabrillo) or an online logbook, each via its dialog.
         var menu by remember { mutableStateOf(false) }
         Box {
             Button(onClick = { menu = true }, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp)) {
@@ -361,6 +361,7 @@ private fun SelectionBar(vm: AppViewModel, onExport: () -> Unit) {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("ADIF (.adi)", fontSize = 17.sp) }, onClick = { menu = false; onExport() })
                 DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; vm.openContestExport(selectedOnly = true) })
+                DropdownMenuItem(text = { Text(tr("Онлайн-журналы: LoTW, QRZ.com, eQSL, Club Log"), fontSize = 17.sp) }, onClick = { menu = false; vm.openUpload(selectedOnly = true) })
             }
         }
     }

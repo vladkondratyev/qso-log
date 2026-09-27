@@ -1,6 +1,8 @@
 package ru.r3xed.qsolog.ui
 
 import ru.r3xed.qsolog.data.OnlineLog
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import ru.r3xed.qsolog.I18n
 import ru.r3xed.qsolog.Lang
 import ru.r3xed.qsolog.tr
@@ -94,7 +96,6 @@ fun SettingsScreen(
     onExportAdif: () -> Unit,
     onImportAdif: () -> Unit,
     onImportContest: () -> Unit,
-    onExportLotw: () -> Unit,
 ) {
     val s = vm.settings
     val x = LocalExtra.current
@@ -108,7 +109,7 @@ fun SettingsScreen(
             Text(tr("Настройки"), style = MaterialTheme.typography.headlineSmall)
         }
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
+            Modifier.weight(1f).verticalScroll(vm.settingsScroll).padding(horizontal = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Each block opens on its own; the header sums up what is set. A first start opens what must be filled.
@@ -300,31 +301,30 @@ fun SettingsScreen(
                 }
                 Note(tr("«Как в системе» переключается вместе с тёмной темой Android."))
             }
-            // Online logbooks: each with its account and "send the new ones"; the sent mark lives in the contact.
+            // Online logbooks: only the accounts here; uploads are made from the log (the cloud button or «Экспорт»).
             SettingsBlock(
                 tr("Онлайн-журналы"),
-                tr("новых для отправки: %s", OnlineLog.entries.maxOf { vm.pendingFor(it) }),
+                listOfNotNull(
+                    "QRZ.com".takeIf { vm.uploadProblem(OnlineLog.QRZCOM) == null },
+                    "eQSL".takeIf { vm.uploadProblem(OnlineLog.EQSL) == null },
+                    "Club Log".takeIf { vm.uploadProblem(OnlineLog.CLUBLOG) == null },
+                ).joinToString(", ").ifBlank { tr("учётные записи не указаны") },
             ) {
-                Note(tr("Отправляются только новые связи — те, которых ещё нет в этом журнале. Отметка об отправке хранится в самой связи (стандартные поля ADIF), поэтому переносится и при экспорте."))
-                Section("LoTW (ARRL)")
-                Note(tr("LoTW принимает только связи, подписанные вашим сертификатом в программе TQSL от ARRL. Для Android её нет: сохраните файл кнопкой ниже, перенесите на компьютер и подпишите в TQSL («Sign a log and upload it») — или выгружайте из QSO-LOG для компьютера, он вызывает TQSL сам."))
-                ActionButton(tr("Экспорт для LoTW (%s)", vm.pendingFor(OnlineLog.LOTW)), Icons.Filled.FileUpload, onExportLotw)
-                vm.uploadStatus[OnlineLog.LOTW]?.let { Note(it) }
+                Note(tr("Здесь — только учётные записи. Выгрузка — из журнала: кнопка с облаком вверху или «Экспорт» у выбранных записей. Отметка о выгрузке с датой и временем видна в карточке каждой связи."))
                 Section("QRZ.com Logbook")
                 SecretField(tr("API-ключ журнала QRZ.com"), s.qrzcomKey) { vm.updateSettings(s.copy(qrzcomKey = it)) }
                 Note(tr("Ключ: qrz.com → My Logbook → Settings → «API Access Key». Это QRZ.com, не QRZ.ru."))
-                UploadButton(vm, OnlineLog.QRZCOM)
                 Section("eQSL")
                 SettingField(tr("Логин eQSL"), s.eqslUser, { vm.updateSettings(s.copy(eqslUser = it.trim())) }, mono = true, caps = true)
                 SecretField(tr("Пароль eQSL"), s.eqslPassword) { vm.updateSettings(s.copy(eqslPassword = it)) }
                 SettingField(tr("QTH Nickname (если у вас несколько мест в eQSL)"), s.eqslNickname, { vm.updateSettings(s.copy(eqslNickname = it)) })
-                UploadButton(vm, OnlineLog.EQSL)
                 Section("Club Log")
                 SettingField(tr("E-mail Club Log"), s.clublogEmail, { vm.updateSettings(s.copy(clublogEmail = it.trim())) }, mono = true)
                 SecretField(tr("Пароль Club Log"), s.clublogPassword) { vm.updateSettings(s.copy(clublogPassword = it)) }
                 SecretField(tr("Ключ приложения Club Log (API key)"), s.clublogKey) { vm.updateSettings(s.copy(clublogKey = it)) }
                 Note(tr("Club Log пускает программы только с ключом приложения: его выдают по запросу на clublog.org (Help Desk → «Request an API key»). Позывной берётся из «Моей станции»."))
-                UploadButton(vm, OnlineLog.CLUBLOG)
+                Section("LoTW (ARRL)")
+                Note(tr("Для LoTW учётная запись не нужна: связи подписывает программа TQSL на компьютере. Телефон сохраняет для неё файл."))
             }
 
             SettingsBlock(tr("Журнал связей"), tr("записей: %s · ADIF, CSV, ЕРМАК", vm.total)) {
@@ -371,6 +371,8 @@ fun SettingsScreen(
                     )
                 }
             }
+            // The reference is not a setting: a filled card of its own, set apart from the blocks above.
+            ReferenceCard(vm::openReference)
             // About: version, tap to open the project page.
             val uri = LocalUriHandler.current
             Column(
@@ -612,15 +614,25 @@ internal fun SettingField(
     )
 }
 
-/** "Send the new ones to …" with the count, and the last result under it. */
+/** The way into the reference: a filled card with an icon, unlike the outlined settings blocks. */
 @Composable
-private fun UploadButton(vm: AppViewModel, log: OnlineLog) {
-    val busy = vm.uploading == log
-    ActionButton(
-        if (busy) tr("Отправляю в %s…", log.title) else tr("Отправить новые (%s)", vm.pendingFor(log)),
-        Icons.Filled.FileUpload,
-    ) { vm.uploadTo(log) }
-    vm.uploadStatus[log]?.let { Note(it) }
+private fun ReferenceCard(onOpen: () -> Unit) {
+    val ink = MaterialTheme.colorScheme.onPrimaryContainer
+    Row(
+        Modifier.fillMaxWidth().padding(top = 20.dp).clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .clickable(onClickLabel = tr("Открыть справку"), onClick = onOpen)
+            .padding(horizontal = 18.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.AutoMirrored.Filled.MenuBook, null, Modifier.size(34.dp), tint = ink)
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(tr("Справка и калькуляторы"), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = ink)
+            Text(tr("Частоты, Морзе, Q-коды, кабели, антенны, префиксы"), style = MaterialTheme.typography.bodyMedium, color = ink.copy(alpha = 0.8f))
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(28.dp), tint = ink)
+    }
 }
 
 /** A key or a password: hidden until the eye is tapped. */

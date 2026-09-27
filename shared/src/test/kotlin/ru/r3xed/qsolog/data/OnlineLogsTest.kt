@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.data
 
+import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -34,6 +35,26 @@ class OnlineLogsTest {
         assertEquals("Y", m.adif["EQSL_QSL_SENT"])
         assertEquals(8, m.adif["EQSL_QSLSDATE"]!!.length)
         assertTrue(OnlineLog.LOTW.isSent(OnlineLog.LOTW.mark(q, "Q")))
+    }
+
+    @Test
+    fun markKeepsTheTimeAndCanBeTakenOff() {
+        val at = LocalDateTime.of(2026, 9, 27, 10, 15)
+        val m = OnlineLog.CLUBLOG.mark(q, now = at)
+        assertEquals("20260927", m.adif["CLUBLOG_QSO_UPLOAD_DATE"])
+        assertEquals("2026-09-27 10:15", m.adif["APP_QSOLOG_CLUBLOG_SENT"])
+        assertEquals("27.09.2026 10:15 UTC", OnlineLog.CLUBLOG.sentAt(m.adif))
+        // A mark from another program has only the day; no mark at all is null.
+        assertEquals("", OnlineLog.QRZCOM.sentAt(q.adif))
+        assertEquals("01.09.2026", OnlineLog.EQSL.sentAt(mapOf("EQSL_QSL_SENT" to "Y", "EQSL_QSLSDATE" to "20260901")))
+        assertNull(OnlineLog.EQSL.sentAt(q.adif))
+        assertTrue(OnlineLog.LOTW.isQueued(OnlineLog.LOTW.mark(q, "Q").adif))
+        val off = OnlineLog.CLUBLOG.unmarkFields(m.adif)
+        assertFalse(OnlineLog.CLUBLOG.isSent(q.copy(adif = off)))
+        assertTrue(off.keys.none { it.startsWith("CLUBLOG") || it == "APP_QSOLOG_CLUBLOG_SENT" })
+        assertTrue("APP_QSOLOG_CLUBLOG_SENT" in OnlineLog.FIELDS)
+        // The upload time is ours: it does not go to the services.
+        assertFalse(OnlineLogs.record(m).contains("CLUBLOG"))
     }
 
     /** Answers as the services gave them to made-up credentials (September 2026). */
