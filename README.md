@@ -21,10 +21,10 @@
 | Платформа | Версия | Скачать |
 |---|---|---|
 | **Android** 8.0 и новее | 0.26.0 | [QSO-LOG-0.26.0.apk](../../releases/tag/v0.26.0) |
-| **macOS** 11 и новее, Apple Silicon (M1 и новее) | 1.10.0 | [QSO-LOG-1.10.0-macos-arm64.dmg](../../releases/tag/desktop-v1.10.0) |
-| **macOS** 11 и новее, Intel (в том числе Ventura) | 1.10.0 | [QSO-LOG-1.10.0-macos-x64.dmg](../../releases/tag/desktop-v1.10.0) |
-| **Windows** 10/11, 64 бит | 1.10.0 | [QSO-LOG-1.10.0-windows-x64.zip](../../releases/tag/desktop-v1.10.0) |
-| **Linux**: Ubuntu 22.04+, Debian 12, Mint (64 бит) | 1.10.0 | [QSO-LOG-1.10.0-linux-amd64.deb](../../releases/tag/desktop-v1.10.0) |
+| **macOS** 11 и новее, Apple Silicon (M1 и новее) | 1.11.0 | [QSO-LOG-1.11.0-macos-arm64.dmg](../../releases/tag/desktop-v1.11.0) |
+| **macOS** 11 и новее, Intel (в том числе Ventura) | 1.11.0 | [QSO-LOG-1.11.0-macos-x64.dmg](../../releases/tag/desktop-v1.11.0) |
+| **Windows** 10/11, 64 бит | 1.11.0 | [QSO-LOG-1.11.0-windows-x64.zip](../../releases/tag/desktop-v1.11.0) |
+| **Linux**: Ubuntu 22.04+, Debian 12, Mint (64 бит) | 1.11.0 | [QSO-LOG-1.11.0-linux-amd64.deb](../../releases/tag/desktop-v1.11.0) |
 
 Сайт: **[vladkondratyev.github.io/qso-log](https://vladkondratyev.github.io/qso-log/)** — скачать для своей системы в один клик.
 Установка: [Android](#установка-на-android) · [macOS](#установка-на-macos) · [Windows](#установка-на-windows) ·
@@ -50,7 +50,7 @@
 
 QSO-LOG написан на Kotlin: общая часть (журнал, ADIF, ЕРМАК/Cabrillo, расчёт расстояния, QRZ.ru, HamQTH) одна для
 всех систем, интерфейс — Jetpack Compose на Android и Compose Multiplatform на компьютере. Поэтому **версия для
-компьютера умеет то же, что и Android**: версия 1.10.0 для macOS, Windows и Linux соответствует Android 0.25.0; отметки об экспорте из Android 0.26.0 появятся в следующей версии для компьютера.
+компьютера умеет то же, что и Android**: версия 1.11.0 для macOS, Windows и Linux соответствует Android 0.26.0.
 
 - **Телефон** — в эфире, в походе, на даче: одна рука, крупные кнопки, голосовая заметка удержанием кнопки.
 - **Компьютер** — в шеке: окно в две колонки (журнал слева, карточка справа), ввод с клавиатуры, горячие клавиши.
@@ -331,6 +331,8 @@ the same on the phone and on the computer.
 <img src="docs/screenshots/desktop-05-all-fields.png" width="440" alt="Все поля ADIF">
 <img src="docs/screenshots/desktop-06-map.png" width="440" alt="Карта QSO">
 <img src="docs/screenshots/desktop-07-select.png" width="440" alt="Выбор записей для экспорта">
+<img src="docs/screenshots/desktop-13-export-dialog.png" width="440" alt="Экспорт: только новые и отметка в карточках">
+<img src="docs/screenshots/desktop-12-export-marks.png" width="440" alt="Отметки об экспорте внизу карточки">
 <img src="docs/screenshots/desktop-08-settings.png" width="440" alt="Настройки">
 <img src="docs/screenshots/desktop-09-about.png" width="440" alt="Версия и ссылка на проект">
 <img src="docs/screenshots/desktop-10-dark.png" width="440" alt="Тёмная тема">
@@ -346,8 +348,8 @@ the same on the phone and on the computer.
 
 ## Установка на macOS
 
-1. Скачайте со страницы [релиза](../../releases/tag/desktop-v1.10.0) файл для своего Mac (macOS 11 и новее):
-   `QSO-LOG-1.10.0-macos-arm64.dmg` — процессор Apple (M1 и новее), `QSO-LOG-1.10.0-macos-x64.dmg` — процессор Intel.
+1. Скачайте со страницы [релиза](../../releases/tag/desktop-v1.11.0) файл для своего Mac (macOS 11 и новее):
+   `QSO-LOG-1.11.0-macos-arm64.dmg` — процессор Apple (M1 и новее), `QSO-LOG-1.11.0-macos-x64.dmg` — процессор Intel.
    Какой у вас: меню  → «Об этом Mac», строка «Чип» (Apple) или «Процессор» (Intel).
 2. Откройте DMG и перетащите QSO-LOG в «Программы».
 3. Программа не подписана сертификатом Apple, поэтому первый запуск macOS заблокирует. Откройте
@@ -360,7 +362,7 @@ the same on the phone and on the computer.
 
 ## Установка на Windows
 
-1. Скачайте `QSO-LOG-1.10.0-windows-x64.zip` со страницы [релиза](../../releases/tag/desktop-v1.10.0).
+1. Скачайте `QSO-LOG-1.11.0-windows-x64.zip` со страницы [релиза](../../releases/tag/desktop-v1.11.0).
 2. Распакуйте архив целиком, например в «Документы». Из самого архива программа не запустится.
 3. Запустите `QSO-LOG.exe` в папке QSO-LOG. Java устанавливать не нужно, она внутри.
 4. Windows покажет «Система Windows защитила ваш компьютер», потому что программа не подписана:
@@ -373,10 +375,10 @@ the same on the phone and on the computer.
 
 ## Установка на Linux (Ubuntu, Debian)
 
-1. Скачайте `QSO-LOG-1.10.0-linux-amd64.deb` со страницы [релиза](../../releases/tag/desktop-v1.10.0).
+1. Скачайте `QSO-LOG-1.11.0-linux-amd64.deb` со страницы [релиза](../../releases/tag/desktop-v1.11.0).
 2. Установите в терминале из папки с файлом:
    ```bash
-   sudo apt install ./QSO-LOG-1.10.0-linux-amd64.deb
+   sudo apt install ./QSO-LOG-1.11.0-linux-amd64.deb
    ```
    Или двойным щелчком по файлу в «Центре приложений».
 3. QSO-LOG появится в меню приложений (раздел «Любительское радио» / «Интернет»).

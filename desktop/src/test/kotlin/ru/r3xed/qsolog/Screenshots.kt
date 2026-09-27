@@ -17,10 +17,12 @@ import org.jetbrains.skia.EncodedImageFormat
 import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.Qso
+import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.ui.QsoTheme
 import java.io.File
 import java.nio.file.Files
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneOffset
 import kotlin.math.PI
@@ -42,7 +44,7 @@ fun main(args: Array<String>) {
             val state = AppState()
             // Russian shots first (the README is in Russian), a few English ones at the end.
             state.changeLanguage(Lang.RU)
-            val files = Exports({}, {}, {}, {}, {}, {}, {})
+            val files = Exports({}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _ -> })
             var dark by mutableStateOf(false)
             // Sized in pixels: a 1280×860 window at 2× (Retina) scale.
             val big = ImageComposeScene(2560, 1720, Density(2f)) { QsoTheme(dark) { key(state.language) { App(state, files) } } }
@@ -85,6 +87,9 @@ fun main(args: Array<String>) {
             shot("04-card-map", 6000)
             scrollRight(60)
             shot("05-all-fields")
+            // The very bottom of the card: when the contact went into ADIF, CSV and contest-report files.
+            scrollRight(400)
+            shot("12-export-marks")
 
             state.openMap()
             shot("06-map", 8000)
@@ -95,6 +100,10 @@ fun main(args: Array<String>) {
             shot("07-select")
             state.clearSelection()
             state.sort(SortBy.DATE)
+
+            state.openExport(ExportFormat.ADIF, selectedOnly = false)
+            shot("13-export-dialog")
+            state.closeExport()
 
             state.pane = Pane.Settings
             shot("08-settings")
@@ -153,7 +162,15 @@ private fun seed(dir: File) {
         qso("LY2DEMO", at(6, "16:48"), "20m", "SSB", "14.195", ssb, "Tomas", "Vilnius", "Lithuania", LatLon(54.69, 25.28)),
         qso("R6DEMO", at(7, "12:30"), "80m", "SSB", "3.650", "59" to "57", "Олег", "Ростов-на-Дону", "Россия", LatLon(47.23, 39.72)),
         qso("R0DEMO", at(8, "06:02"), "20m", "CW", "14.025", "579" to "559", "Павел", "Владивосток", "Россия", LatLon(43.12, 131.89)),
-    ).forEach { db.save(it) }
+    ).map { q ->
+        // Older contacts were already exported: ADIF a day later, CSV and a contest report for some of them.
+        val day = LocalDateTime.ofEpochSecond(q.timeUtc / 1000, 0, ZoneOffset.UTC).plusDays(1).withHour(9).withMinute(30)
+        var m = q
+        if (q.timeUtc < at(0, "00:00")) m = ExportFormat.ADIF.mark(m, day)
+        if (q.timeUtc < at(3, "00:00")) m = ExportFormat.CSV.mark(m, day)
+        if (q.call == "R9DEMO" && q.timeUtc > at(0, "00:00")) m = ExportFormat.ADIF.mark(ExportFormat.CONTEST.mark(m, day.minusDays(1).withHour(14)), day.minusDays(1).withHour(14))
+        m
+    }.forEach { db.save(it) }
 
     // A made-up voice note: a short two-tone beep, 4 seconds.
     val samples = 64_000
