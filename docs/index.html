@@ -73,8 +73,8 @@ footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px so
     <div>
       <h1><span data-l="ru">Аппаратный журнал радиолюбителя для телефона и компьютера</span><span data-l="en">A ham radio logbook for your phone and your computer</span></h1>
       <p class="lead">
-        <span data-l="ru">Быстрый ввод связи в эфире, данные абонента с QRZ.ru, расстояние и карта трассы, голосовые заметки, ADIF и отчёты ЕРМАК / Cabrillo. Бесплатно, с открытым исходным кодом.</span>
-        <span data-l="en">Fast QSO entry on the air, station data from QRZ.ru, distance and path map, voice notes, ADIF and ERMAK / Cabrillo contest reports. Free and open source.</span>
+        <span data-l="ru">Записывайте связи за несколько нажатий. Имя и город абонента программа возьмёт с QRZ.ru, расстояние посчитает сама, журнал выгрузит в ADIF или в отчёт для соревнований. Бесплатно, исходный код открыт.</span>
+        <span data-l="en">Log a QSO in a few taps. QSO-LOG looks the station up on QRZ.ru, works out the distance and exports your log to ADIF or a contest report. Free and open source.</span>
       </p>
       <div class="dl">
         <a class="primary" id="dl-android" href="https://github.com/vladkondratyev/qso-log/releases/latest"><b>Android</b><span data-l="ru">8.0 и новее · APK</span><span data-l="en">8.0 and newer · APK</span></a>
@@ -91,13 +91,13 @@ footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px so
   <section>
     <h2><span data-l="ru">Что умеет</span><span data-l="en">Features</span></h2>
     <div class="grid">
-      <div class="card"><h3><span data-l="ru">Ввод в эфире</span><span data-l="en">Logging on the air</span></h3><p><span data-l="ru">Позывной → частота → RST. Подсказки из журнала, «Повтор», частота в кГц, «＋ Следующая» для пайлапа.</span><span data-l="en">Callsign → frequency → RST. Log suggestions, dupe warning, kHz input, “＋ Next” for pile-ups.</span></p></div>
-      <div class="card"><h3>QRZ.ru · HamQTH</h3><p><span data-l="ru">Имя, город и локатор абонента через XML API QRZ.ru; запасной вход по учётной записи сайта; страна и область с HamQTH.</span><span data-l="en">Name, city and locator via the QRZ.ru XML API; a fallback site login; country and region from HamQTH.</span></p></div>
-      <div class="card"><h3><span data-l="ru">Голосовые заметки</span><span data-l="en">Voice notes</span></h3><p><span data-l="ru">Удержите «Добавить QSO» или нажмите микрофон — запись прикрепится к связи. Отправка в мессенджер вместе с данными связи.</span><span data-l="en">Hold “Add QSO” or tap the mic — the recording is attached to the QSO. Share it with the QSO details.</span></p></div>
-      <div class="card"><h3><span data-l="ru">Расстояние и карты</span><span data-l="en">Distance and maps</span></h3><p><span data-l="ru">Азимут и трасса по дуге большого круга, карта всех абонентов журнала на OpenStreetMap.</span><span data-l="en">Bearing and great-circle path, a map of every station in your log on OpenStreetMap.</span></p></div>
-      <div class="card"><h3><span data-l="ru">Справка</span><span data-l="en">Reference</span></h3><p><span data-l="ru">Диапазоны РФ и план IARU, частоты FT8 и маяков, Морзе, Q-коды, калькуляторы dBm/ЭИИМ, потерь в кабеле, КСВ и антенн, страна и регион по позывному без интернета.</span><span data-l="en">Russian bands and the IARU plan, FT8 and beacon frequencies, Morse, Q codes, calculators for dBm/EIRP, cable loss, SWR and antennas, country and region by callsign offline.</span></p></div>
-      <div class="card"><h3><span data-l="ru">Журнал</span><span data-l="en">Log</span></h3><p><span data-l="ru">Поиск и сортировка по дате, расстоянию, позывному и диапазону.</span><span data-l="en">Search and sorting by date, distance, callsign and band.</span></p></div>
-      <div class="card"><h3><span data-l="ru">ADIF · ЕРМАК · Cabrillo; отметка об экспорте с датой и временем в каждой карточке, по умолчанию — только новые связи.</span><span data-l="en">ADIF · ERMAK · Cabrillo</span></h3><p><span data-l="ru">Обмен с LogHX, UR5EQF, N1MM и между телефоном и ПК; отчёты для российских и международных соревнований.</span><span data-l="en">Exchange with LogHX, UR5EQF, N1MM and between phone and PC; reports for Russian and international contests; an export mark with date and time in each card, only new QSOs by default.</span></p></div>
+      <div class="card"><h3><span data-l="ru">Ввод в эфире</span><span data-l="en">Logging on the air</span></h3><p><span data-l="ru">Позывной, частота, RST — и всё. Подсказки из журнала, предупреждение о повторе, частота в килогерцах, кнопка «Следующая» для пайлапа.</span><span data-l="en">Callsign, frequency, RST, done. Suggestions from your log, a dupe warning, kHz input and a “Next” button for pile-ups.</span></p></div>
+      <div class="card"><h3><span data-l="ru">QRZ.ru и HamQTH</span><span data-l="en">QRZ.ru and HamQTH</span></h3><p><span data-l="ru">Имя, город и локатор приходят с QRZ.ru через XML API или по учётной записи сайта. Если там пусто, страну и область подскажет HamQTH.</span><span data-l="en">Name, city and locator come from QRZ.ru, via the XML API or your site login. If there is nothing there, HamQTH fills in the country and region.</span></p></div>
+      <div class="card"><h3><span data-l="ru">Голосовые заметки</span><span data-l="en">Voice notes</span></h3><p><span data-l="ru">Удержите «Добавить QSO» и говорите. Запись останется в карточке связи, её можно отправить в мессенджер.</span><span data-l="en">Hold “Add QSO” and talk. The recording stays with the QSO and can be sent to a messenger.</span></p></div>
+      <div class="card"><h3><span data-l="ru">Расстояние и карты</span><span data-l="en">Distance and maps</span></h3><p><span data-l="ru">Азимут, расстояние и трасса на карте. Отдельная карта показывает всех, с кем вы работали.</span><span data-l="en">Bearing, distance and the path on a map. Another map shows every station in your log.</span></p></div>
+      <div class="card"><h3><span data-l="ru">Журнал</span><span data-l="en">Log</span></h3><p><span data-l="ru">Поиск по позывному, имени и городу. Сортировка по дате, расстоянию, позывному или диапазону.</span><span data-l="en">Search by callsign, name or city. Sort by date, distance, callsign or band.</span></p></div>
+      <div class="card"><h3><span data-l="ru">Экспорт</span><span data-l="en">Export</span></h3><p><span data-l="ru">ADIF, CSV, ЕРМАК и Cabrillo. По умолчанию выгружаются только новые связи, а в карточке остаётся отметка с датой.</span><span data-l="en">ADIF, CSV, ERMAK and Cabrillo. Only new QSOs go out by default, and each card keeps a dated export mark.</span></p></div>
+      <div class="card"><h3><span data-l="ru">Справочник</span><span data-l="en">Reference</span></h3><p><span data-l="ru">Диапазоны РФ, план IARU, Морзе, Q-коды, калькуляторы кабелей, КСВ и антенн, страна по позывному. Работает без интернета.</span><span data-l="en">Russian bands, the IARU plan, Morse, Q codes, calculators for cables, SWR and antennas, country by callsign. Works offline.</span></p></div>
     </div>
   </section>
 
@@ -116,13 +116,13 @@ footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px so
 
   <section>
     <h2><span data-l="ru">Компьютер: macOS, Windows, Linux</span><span data-l="en">Computer: macOS, Windows, Linux</span></h2>
-    <p style="color:var(--muted);margin-top:-6px"><span data-l="ru">Окно в две колонки и ввод с клавиатуры: Enter — следующее поле, Alt+1…9 — диапазон, ⇧⌘S — сохранить и следующая.</span><span data-l="en">A two-column window and keyboard entry: Enter moves to the next field, Alt+1…9 picks a band, ⇧⌘S saves and opens the next card.</span></p>
+    <p style="color:var(--muted);margin-top:-6px"><span data-l="ru">То же самое, что на телефоне, но в окне на две части и с клавиатуры: Enter переходит к следующему полю, Alt+1…9 выбирает диапазон.</span><span data-l="en">Everything the phone version does, in a two-part window and from the keyboard: Enter moves to the next field, Alt+1…9 picks a band.</span></p>
     <div class="desk"><img src="screenshots/desktop-04-card-map.png" alt="QSO-LOG на компьютере / on a computer" loading="lazy"></div>
   </section>
 
   <footer>
-    <span data-l="ru">QSO-LOG — открытый проект, лицензия MIT. Инструкция, исходный код и сообщения об ошибках —</span>
-    <span data-l="en">QSO-LOG is open source under the MIT licence. Manual, source code and bug reports —</span>
+    <span data-l="ru">QSO-LOG распространяется бесплатно по лицензии MIT. Подробная инструкция, исходный код и место для сообщений об ошибках:</span>
+    <span data-l="en">QSO-LOG is free, under the MIT licence. The full manual, source code and bug reports:</span>
     <a href="https://github.com/vladkondratyev/qso-log">github.com/vladkondratyev/qso-log</a>.
   </footer>
 </div>
