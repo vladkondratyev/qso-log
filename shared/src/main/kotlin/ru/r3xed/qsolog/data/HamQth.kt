@@ -45,7 +45,7 @@ object HamQth {
         return parse(body)
     }
 
-    /** The answer is one flat JSON object of strings: {"callsign":"R3XEB", "name":"Russia (European)", …}. */
+    /** The answer is one flat JSON object of strings: {"callsign":"R3DEMO", "name":"Russia (European)", …}. */
     fun parse(json: String): DxccInfo? {
         val v = Regex("\"(\\w+)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").findAll(json)
             .associate { it.groupValues[1] to it.groupValues[2].replace("\\/", "/").replace("\\\"", "\"") }

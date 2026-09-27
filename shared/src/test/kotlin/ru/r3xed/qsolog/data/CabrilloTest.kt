@@ -54,8 +54,8 @@ class CabrilloTest {
             QSO: 28009 CW 2008-09-23 0711 UA1XYZ        599 001    UA2XYZ        599 001    0
             QSO: 28009 CW 2008-09-23 0712 UA1XYZ        599  AC123 UA2XYZ        599  001
             QSO: 28009 CW 2008-09-23 0713 UA1XYZ        KR 10 001  UA2XYZ        KR 2  005
-            QSO: 28009 CW 2008-09-23 0714 UA1XYZ        599 27  UA0KAA/U 33  UA2XYZ        599  45 UA3VCS   33
-            QSO:  3559 RY 2007-10-19 1611 UA8AA         599 KO85MM 50 UA3XYZ        599 LO65AA 35
+            QSO: 28009 CW 2008-09-23 0714 UA1XYZ        599 27  UA0XYZ/U 33  UA2XYZ        599  45 UA5XYZ   33
+            QSO:  3559 RY 2007-10-19 1611 UA8XYZ        599 KO85MM 50 UA3XYZ        599 LO65AA 35
             QSO: 144   PH 2008-09-23 0715 UA1XYZ        59  001    UA4XYZ        59  002
             END-OF-LOG:
         """.trimIndent()

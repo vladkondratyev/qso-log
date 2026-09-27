@@ -52,25 +52,25 @@ class ReferenceCalcTest {
 
     @Test
     fun countryFile() {
-        assertEquals("European Russia", Cty.lookup("RA3XAB")!!.entity.name)
+        assertEquals("European Russia", Cty.lookup("RA3XDEMO")!!.entity.name)
         assertEquals("Asiatic Russia", Cty.lookup("R9DEMO")!!.entity.name)
-        assertEquals("Kaliningrad", Cty.lookup("UA2FAA")!!.entity.name)
-        assertEquals("Fed. Rep. of Germany", Cty.lookup("DL1ABC")!!.entity.name)
-        assertEquals("Fed. Rep. of Germany", Cty.lookup("DL/RA3XAB")!!.entity.name)
-        assertEquals("European Russia", Cty.lookup("RA3XAB/P")!!.entity.name)
+        assertEquals("Kaliningrad", Cty.lookup("UA2FDEMO")!!.entity.name)
+        assertEquals("Fed. Rep. of Germany", Cty.lookup("DL1DEMO")!!.entity.name)
+        assertEquals("Fed. Rep. of Germany", Cty.lookup("DL/RA3XDEMO")!!.entity.name)
+        assertEquals("European Russia", Cty.lookup("RA3XDEMO/P")!!.entity.name)
         assertEquals("EU", Cty.lookup("OH2B")!!.entity.continent)
         assertTrue(Cty.entities.size > 300)
     }
 
     @Test
     fun russianRegions() {
-        assertEquals("KG", RussianRegions.of("RA3XAB")!!.rda)
+        assertEquals("KG", RussianRegions.of("RA3XDEMO")!!.rda)
         assertEquals("KG", RussianRegions.of("UA3XYZ")!!.rda)
-        assertEquals("MA", RussianRegions.of("R2A")?.rda ?: RussianRegions.of("RA2AAA")!!.rda)
-        assertEquals("KA", RussianRegions.of("UA2FAA")!!.rda)
-        assertEquals("BA", RussianRegions.of("RW9WA")!!.rda)
-        assertEquals("GA", RussianRegions.of("RA9ZZ")!!.rda)
-        assertNull(RussianRegions.of("DL1ABC"))
+        assertEquals("MA", RussianRegions.of("R2A")?.rda ?: RussianRegions.of("RA2ADEMO")!!.rda)
+        assertEquals("KA", RussianRegions.of("UA2FDEMO")!!.rda)
+        assertEquals("BA", RussianRegions.of("RW9WDEMO")!!.rda)
+        assertEquals("GA", RussianRegions.of("RA9ZDEMO")!!.rda)
+        assertNull(RussianRegions.of("DL1DEMO"))
         assertEquals(89, RussianRegions.ALL.size)
     }
 }
