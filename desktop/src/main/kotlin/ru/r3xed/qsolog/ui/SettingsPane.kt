@@ -4,7 +4,6 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import ru.r3xed.qsolog.data.OnlineLog
 import ru.r3xed.qsolog.I18n
 import ru.r3xed.qsolog.Lang
 import ru.r3xed.qsolog.tr
@@ -309,33 +308,6 @@ fun SettingsPane(
                 }
                 Note(tr("«Как в системе» переключается вместе с тёмной темой системы (в macOS и Windows; в Linux — светлая)."))
             }
-            // Online logbooks: only the accounts here; uploads are made from the log (the cloud button or «Экспорт»).
-            SettingsBlock(
-                tr("Онлайн-журналы"),
-                OnlineLog.entries.filter { vm.uploadProblem(it) == null }.joinToString(", ") { it.title }.ifBlank { tr("учётные записи не указаны") },
-            ) {
-                Note(tr("Здесь — только учётные записи. Выгрузка — из журнала: кнопка с облаком вверху или «Экспорт» у выбранных записей. Отметка о выгрузке с датой и временем видна в карточке каждой связи."))
-                Section("LoTW (ARRL)")
-                SettingField(tr("Station Location в TQSL"), s.lotwLocation, { vm.updateSettings(s.copy(lotwLocation = it)) })
-                SettingField(tr("Путь к TQSL (если не найден сам)"), s.tqslPath, { vm.updateSettings(s.copy(tqslPath = it)) }, mono = true)
-                Note(
-                    tr("Нужна программа TQSL с вашим сертификатом LoTW (lotw.arrl.org). QSO-LOG запускает её сама: TQSL подписывает связи и отправляет их в LoTW. Если сертификат защищён паролем, TQSL спросит его в своём окне.") +
-                        " " + (vm.tqslExecutable()?.let { tr("TQSL найден: %s", it) } ?: tr("TQSL не найден."))
-                )
-                Section("QRZ.com Logbook")
-                SecretField(tr("API-ключ журнала QRZ.com"), s.qrzcomKey) { vm.updateSettings(s.copy(qrzcomKey = it)) }
-                Note(tr("Ключ: qrz.com → My Logbook → Settings → «API Access Key». Это QRZ.com, не QRZ.ru."))
-                Section("eQSL")
-                SettingField(tr("Логин eQSL"), s.eqslUser, { vm.updateSettings(s.copy(eqslUser = it.trim())) }, mono = true, caps = true)
-                SecretField(tr("Пароль eQSL"), s.eqslPassword) { vm.updateSettings(s.copy(eqslPassword = it)) }
-                SettingField(tr("QTH Nickname (если у вас несколько мест в eQSL)"), s.eqslNickname, { vm.updateSettings(s.copy(eqslNickname = it)) })
-                Section("Club Log")
-                SettingField(tr("E-mail Club Log"), s.clublogEmail, { vm.updateSettings(s.copy(clublogEmail = it.trim())) }, mono = true)
-                SecretField(tr("Пароль Club Log"), s.clublogPassword) { vm.updateSettings(s.copy(clublogPassword = it)) }
-                SecretField(tr("Ключ приложения Club Log (API key)"), s.clublogKey) { vm.updateSettings(s.copy(clublogKey = it)) }
-                Note(tr("Club Log пускает программы только с ключом приложения: его выдают по запросу на clublog.org (Help Desk → «Request an API key»). Позывной берётся из «Моей станции»."))
-            }
-
             SettingsBlock(tr("Журнал связей"), tr("записей: %s · ADIF, CSV, ЕРМАК", vm.total)) {
                 ActionButton(tr("Экспорт в ADIF"), Icons.Filled.FileUpload, onExportAdif)
                 ActionButton(tr("Импорт из ADIF"), Icons.Filled.FileDownload, onImportAdif)
@@ -642,24 +614,3 @@ private fun ReferenceCard(onOpen: () -> Unit) {
     }
 }
 
-/** A key or a password: hidden until the eye is tapped. */
-@Composable
-private fun SecretField(label: String, value: String, onChange: (String) -> Unit) {
-    var show by remember { mutableStateOf(false) }
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(label) },
-        singleLine = true,
-        textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp),
-        visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        trailingIcon = {
-            IconButton(onClick = { show = !show }) {
-                Icon(if (show) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (show) tr("Скрыть пароль") else tr("Показать пароль"))
-            }
-        },
-        shape = RoundedCornerShape(12.dp),
-    )
-}

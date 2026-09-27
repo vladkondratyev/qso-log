@@ -1,6 +1,5 @@
 package ru.r3xed.qsolog.ui
 
-import androidx.compose.material.icons.filled.CloudUpload
 import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.DropdownMenu
@@ -84,6 +83,7 @@ import ru.r3xed.qsolog.AppState
 import ru.r3xed.qsolog.DATE_FMT
 import ru.r3xed.qsolog.IS_MAC
 import ru.r3xed.qsolog.Pane
+import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.SortBy
 import ru.r3xed.qsolog.TIME_FMT
 import ru.r3xed.qsolog.data.BANDS
@@ -118,12 +118,6 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                 val me = state.settings.myCall
                 Text((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", state.total), style = MaterialTheme.typography.bodyMedium, color = x.muted)
             }
-            Tip(tr("Выгрузка в онлайн-журналы")) {
-                FilledTonalIconButton(onClick = { state.openUpload(selectedOnly = false) }, modifier = Modifier.size(52.dp)) {
-                    Icon(Icons.Filled.CloudUpload, contentDescription = tr("Выгрузка в онлайн-журналы"), modifier = Modifier.size(28.dp))
-                }
-            }
-            Spacer(Modifier.width(8.dp))
             Tip(tr("Карта QSO")) {
                 FilledTonalIconButton(onClick = state::openMap, modifier = Modifier.size(52.dp)) {
                     Icon(Icons.Filled.Map, contentDescription = tr("Карта QSO"), modifier = Modifier.size(28.dp))
@@ -335,8 +329,8 @@ private fun SelectionBar(state: AppState, onExport: () -> Unit) {
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("ADIF (.adi)", fontSize = 17.sp) }, onClick = { menu = false; onExport() })
-                DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; state.openContestExport(selectedOnly = true) })
-                DropdownMenuItem(text = { Text(tr("Онлайн-журналы: LoTW, QRZ.com, eQSL, Club Log"), fontSize = 17.sp) }, onClick = { menu = false; state.openUpload(selectedOnly = true) })
+                DropdownMenuItem(text = { Text("CSV", fontSize = 17.sp) }, onClick = { menu = false; state.openExport(ExportFormat.CSV, selectedOnly = true) })
+                DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; state.openExport(ExportFormat.CONTEST, selectedOnly = true) })
             }
         }
     }
@@ -398,7 +392,9 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
                     }
                     Spacer(Modifier.width(8.dp))
                 }
-                // Outside the date sort there are no day headers, so the row carries its own date.
+                // Exported to ADIF / CSV / a contest report: a small dot of each format's colour.
+            ExportDots(qso.adif)
+            // Outside the date sort there are no day headers, so the row carries its own date.
                 val t = utc(qso.timeUtc)
                 Text(
                     (if (showDate) SHORT_DATE.format(t) + " " else "") + TIME_FMT.format(t) + " UTC",

@@ -18,6 +18,7 @@ import ru.r3xed.qsolog.data.Adif
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.Cabrillo
+import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.data.CallHistory
 import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.QrzInfo
@@ -28,9 +29,6 @@ import ru.r3xed.qsolog.data.approxPosition
 import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
-import ru.r3xed.qsolog.data.UploadResult
-import ru.r3xed.qsolog.data.OnlineLogs
-import ru.r3xed.qsolog.data.OnlineLog
 import ru.r3xed.qsolog.data.QrzException
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.data.StationSettings
@@ -68,8 +66,8 @@ sealed interface SearchLookup {
 /** Records for a contest report: [only] the picked ones, or the whole log when null. */
 data class ContestTarget(val only: Set<Long>?)
 
-/** Records the online-logbook upload is for; null = the whole log. */
-data class UploadTarget(val only: Set<Long>?)
+/** The ADIF / CSV export dialog: which format, for [only] records picked in the log (null = the whole log). */
+data class ExportTarget(val format: ExportFormat, val only: Set<Long>?)
 
 enum class ThemeMode(private val ru: String) {
     SYSTEM("Как в системе"), // no-tr
@@ -351,13 +349,7 @@ class AppState {
             // Read once even without an e-mail: the settings only save a password that has been loaded.
             val sitePw = withContext(Dispatchers.IO) { prefs.sitePassword() }
             if (settings.qrzSitePassword.isEmpty()) settings = settings.copy(qrzSitePassword = sitePw)
-            val sec = withContext(Dispatchers.IO) { prefs.loadSecrets() }
-            settings = settings.copy(
-                qrzcomKey = settings.qrzcomKey.ifEmpty { sec["qrzcom_key"].orEmpty() },
-                eqslPassword = settings.eqslPassword.ifEmpty { sec["eqsl_password"].orEmpty() },
-                clublogPassword = settings.clublogPassword.ifEmpty { sec["clublog_password"].orEmpty() },
-                clublogKey = settings.clublogKey.ifEmpty { sec["clublog_key"].orEmpty() },
-            )
+            withContext(Dispatchers.IO) { prefs.forgetOnlineLogAccounts() }
         }
     }
 
@@ -533,8 +525,8 @@ class AppState {
     /** The contest-report dialog is open: for [ContestTarget.only] records, or the whole log when null. */
     var contestTarget by mutableStateOf<ContestTarget?>(null); private set
 
-    /** Header chosen in the dialog, waiting for the file picker. */
-    private var pendingContest: Pair<Cabrillo.Header, Set<Long>?>? = null
+    /** Header and choices from the dialog, waiting for the file picker. */
+    private var pendingContest: Pair<Cabrillo.Header, PendingExport>? = null
 
     fun openContestExport(selectedOnly: Boolean) {
         contestTarget = ContestTarget(if (selectedOnly) selected else null)
@@ -556,11 +548,11 @@ class AppState {
     )
 
     /** Remembers the dialog's choice and returns the file name to offer. */
-    fun prepareContest(h: Cabrillo.Header): String {
+    fun prepareContest(h: Cabrillo.Header, onlyNew: Boolean, mark: Boolean): String {
         prefs.contestFormat = h.format.name
         prefs.contestCode = h.contest
         prefs.contestOperator = h.categoryOperator
-        pendingContest = h to contestTarget?.only
+        pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark)
         contestTarget = null
         val code = h.contest.uppercase().ifBlank { "LOG" }.replace('/', '-')
         return "${h.callsign.ifBlank { "log" }.replace('/', '-')}_$code.${h.format.extension}"
@@ -572,22 +564,81 @@ class AppState {
     }
 
     fun exportContest(file: File) {
-        val (h, only) = pendingContest ?: return
+        val (h, p) = pendingContest ?: return
         pendingContest = null
-        if (only != null) clearSelection()
+        writeExport(p, file, h.format.title) { list, out -> out.write(Cabrillo.export(list, h).toByteArray(Cabrillo.charset(h.format))) }
+    }
+
+    // ---------- export marks: ADIF, CSV, ЕРМАК / Cabrillo ----------
+
+    /** The ADIF / CSV export dialog is open: for [ExportTarget.only] records picked in the log, or the whole log when null. */
+    var exportTarget by mutableStateOf<ExportTarget?>(null); private set
+
+    /** Choices of an export dialog, waiting for the file picker. */
+    class PendingExport(val format: ExportFormat, val only: Set<Long>?, val onlyNew: Boolean, val mark: Boolean)
+
+    private var pendingExport: PendingExport? = null
+
+    fun openExport(format: ExportFormat, selectedOnly: Boolean) {
+        if (format == ExportFormat.CONTEST) openContestExport(selectedOnly)
+        else exportTarget = ExportTarget(format, if (selectedOnly) selected else null)
+    }
+
+    fun closeExport() {
+        exportTarget = null
+    }
+
+    /** The contacts an export takes: the picked ones or the whole log, without those already exported to [format] when [onlyNew]. */
+    fun exportCandidates(format: ExportFormat, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
+        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !format.isExported(it.adif)) }
+
+    /** Remembers the dialog's choice and returns the format and the file name to offer in the save dialog. */
+    fun prepareExport(onlyNew: Boolean, mark: Boolean): Pair<ExportFormat, String>? {
+        val t = exportTarget ?: return null
+        pendingExport = PendingExport(t.format, t.only, onlyNew, mark)
+        exportTarget = null
+        val call = settings.myCall.ifBlank { "log" }.replace('/', '-')
+        val n = exportCandidates(t.format, t.only, onlyNew).size
+        return t.format to when (t.format) {
+            ExportFormat.CSV -> "qso_${call}_${LocalDate.now()}.csv"
+            else -> if (t.only != null || onlyNew) "${call}_${n}qso_${LocalDate.now()}.adi" else "${call}_${LocalDate.now()}.adi"
+        }
+    }
+
+    /** Saves the ADIF or CSV file chosen after [prepareExport]; null (the save dialog was cancelled) drops the choice. */
+    fun exportFile(file: File?) {
+        val p = pendingExport ?: return
+        pendingExport = null
+        if (file == null) return
+        writeExport(p, file, p.format.title) { list, out ->
+            if (p.format == ExportFormat.CSV) Csv.export(list, out)
+            else Adif.export(list, out, program = "QSO-LOG", version = APP_VERSION)
+        }
+    }
+
+    /** Writes the export, then (if asked) marks the exported contacts with the date and time. */
+    private fun writeExport(p: PendingExport, file: File, title: String, write: (List<Qso>, java.io.OutputStream) -> Unit) {
+        if (p.only != null) clearSelection()
         scope.launch {
             val msg = try {
                 val count = withContext(Dispatchers.IO) {
-                    val list = db.all().let { all -> if (only == null) all else all.filter { it.id in only } }
-                    file.writeBytes(Cabrillo.export(list, h).toByteArray(Cabrillo.charset(h.format)))
+                    val list = db.all().filter { (p.only == null || it.id in p.only) && (!p.onlyNew || !p.format.isExported(it.adif)) }
+                    file.outputStream().use { write(list, it) }
+                    if (p.mark) list.forEach { db.save(p.format.mark(it)) }
                     list.size
                 }
-                tr("Экспортировано в %s: %s, файл %s", h.format.title, count, file.name)
+                reload()
+                tr("Экспортировано в %s: %s, файл %s", title, count, file.name) + if (p.mark && count > 0) tr(", отметка поставлена") else ""
             } catch (e: Exception) {
                 tr("Не удалось сохранить файл: %s", e.message)
             }
             say(msg)
         }
+    }
+
+    /** Takes the [format] export mark off the open card (saved with the card), so the next "only new" export takes it. */
+    fun clearExportMark(format: ExportFormat) {
+        form = form.copy(adif = format.unmarkFields(form.adif))
     }
 
     fun importContest(file: File) {
@@ -1060,121 +1111,6 @@ class AppState {
     }
 
 
-    // ---------- online logbooks: LoTW, QRZ.com, eQSL, Club Log ----------
-
-    /** The upload dialog is open: for [UploadTarget.only] records picked in the log, or the whole log when null. */
-    var uploadTarget by mutableStateOf<UploadTarget?>(null); private set
-
-    /** The logbook being uploaded to right now (a spinner in the dialog). */
-    var uploading by mutableStateOf<OnlineLog?>(null); private set
-
-    fun openUpload(selectedOnly: Boolean) {
-        uploadTarget = UploadTarget(if (selectedOnly) selected else null)
-    }
-
-    fun closeUpload() {
-        if (uploading == null) uploadTarget = null
-    }
-
-    /** The contacts an upload to [log] takes: the picked ones or the whole log, without those already sent when [onlyNew]. */
-    fun uploadCandidates(log: OnlineLog, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
-        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !log.isSent(it)) }
-
-    /** What is missing in the settings for [log], or null when it can be uploaded. */
-    fun uploadProblem(log: OnlineLog): String? {
-        val s = settings
-        return when (log) {
-            OnlineLog.QRZCOM -> if (s.qrzcomKey.isBlank()) tr("Укажите API-ключ журнала QRZ.com") else null
-            OnlineLog.EQSL -> if (s.eqslUser.isBlank() || s.eqslPassword.isBlank()) tr("Укажите логин и пароль eQSL") else null
-            OnlineLog.CLUBLOG -> if (s.clublogEmail.isBlank() || s.clublogPassword.isBlank() || s.clublogKey.isBlank() || s.myCall.isBlank())
-                tr("Укажите e-mail, пароль и ключ приложения Club Log, а также свой позывной") else null
-            OnlineLog.LOTW -> LOTW_PROBLEM
-        }
-    }
-
-    /** Sends the dialog's contacts to [log]; with [mark] the sent ones get the logbook's mark (date and time) in the card. */
-    fun upload(log: OnlineLog, onlyNew: Boolean, mark: Boolean) {
-        val target = uploadTarget ?: return
-        if (uploading != null) return
-        uploadProblem(log)?.let { say(it); return }
-        val s = settings
-        val list = uploadCandidates(log, target.only, onlyNew)
-        if (list.isEmpty()) { say(tr("Новых связей для %s нет", log.title)); return }
-        uploading = log
-        scope.launch {
-            val r = when (log) {
-                OnlineLog.QRZCOM -> OnlineLogs.uploadQrzCom(s.qrzcomKey, list, USER_AGENT)
-                OnlineLog.EQSL -> OnlineLogs.uploadEqsl(s.eqslUser, s.eqslPassword, s.eqslNickname, list, USER_AGENT)
-                OnlineLog.CLUBLOG -> OnlineLogs.uploadClubLog(s.clublogEmail, s.clublogPassword, s.myCall, s.clublogKey, list, USER_AGENT)
-                OnlineLog.LOTW -> uploadLotw(list)
-            }
-            if (mark) withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
-            reload()
-            uploading = null
-            uploadTarget = null
-            if (target.only != null && r.error == null) clearSelection()
-            say(buildString {
-                append(tr("%s: отправлено %s", log.title, r.sent.size))
-                if (r.duplicates > 0) append(tr(", уже были там: %s", r.duplicates))
-                if (mark && r.sent.isNotEmpty()) append(tr(", отметка поставлена"))
-                r.error?.let { append(". ").append(it) }
-            })
-        }
-    }
-
-    /** Takes [log]'s mark off the open card (saved with the card), so the contact goes again next time. */
-    fun clearUploadMark(log: OnlineLog) {
-        form = form.copy(adif = log.unmarkFields(form.adif))
-    }
-
-    /** LoTW: the contacts are signed and sent by ARRL's TQSL, run in batch mode. */
-    private val LOTW_PROBLEM: String?
-        get() = when {
-            tqslExecutable() == null -> tr("Не найдена программа TQSL. Установите её с lotw.arrl.org или укажите путь к ней")
-            settings.lotwLocation.isBlank() -> tr("Укажите Station Location — название места станции из TQSL")
-            else -> null
-        }
-
-    /** tqsl from the settings, else the usual install places. */
-    fun tqslExecutable(): String? = listOfNotNull(
-        settings.tqslPath.trim().ifBlank { null },
-        "/Applications/TrustedQSL/tqsl.app/Contents/MacOS/tqsl",
-        "C:\\Program Files (x86)\\TrustedQSL\\tqsl.exe",
-        "C:\\Program Files\\TrustedQSL\\tqsl.exe",
-        "/usr/bin/tqsl", "/usr/local/bin/tqsl",
-    ).firstOrNull { File(it).canExecute() }
-
-    /**
-     * `tqsl -d -u -a compliant -x -l LOCATION file`: sign, upload, exit. Exit codes (TQSL manual): 0 — done,
-     * 8 — all already in LoTW (or out of the certificate's dates), 9 — some of them; anything else is an error.
-     */
-    private suspend fun uploadLotw(list: List<Qso>): UploadResult = withContext(Dispatchers.IO) {
-        val exe = tqslExecutable() ?: return@withContext UploadResult(emptyList(), 0, LOTW_PROBLEM)
-        val f = File.createTempFile("qsolog-lotw", ".adi")
-        try {
-            f.writeText(OnlineLogs.file(list), Charsets.UTF_8)
-            val p = ProcessBuilder(exe, "-d", "-u", "-a", "compliant", "-x", "-l", settings.lotwLocation.trim(), f.absolutePath)
-                .redirectErrorStream(true).start()
-            val out = StringBuilder()
-            val reader = kotlin.concurrent.thread(isDaemon = true) { p.inputStream.bufferedReader().forEachLine { out.appendLine(it) } }
-            if (!p.waitFor(10, java.util.concurrent.TimeUnit.MINUTES)) {
-                p.destroyForcibly()
-                return@withContext UploadResult(emptyList(), 0, tr("TQSL не закончил работу за 10 минут"))
-            }
-            reader.join(1000)
-            when (val code = p.exitValue()) {
-                0 -> UploadResult(list, 0, null)
-                8 -> UploadResult(list, list.size, null)
-                9 -> UploadResult(list, 0, tr("часть связей LoTW уже получал раньше"))
-                else -> UploadResult(emptyList(), 0, tr("TQSL завершился с кодом %s: %s", code, out.lines().lastOrNull { it.isNotBlank() }.orEmpty().take(160)))
-            }
-        } catch (e: Exception) {
-            UploadResult(emptyList(), 0, tr("Не удалось запустить TQSL: %s", e.message ?: e.javaClass.simpleName))
-        } finally {
-            f.delete()
-        }
-    }
-
     // ---------- settings ----------
 
     fun updateSettings(s: StationSettings) {
@@ -1292,40 +1228,6 @@ class AppState {
 
     // ---------- CSV ----------
 
-    fun csvFileName(): String {
-        val call = settings.myCall.ifBlank { "log" }.replace('/', '-')
-        return "qso_${call}_${LocalDate.now()}.csv"
-    }
-
-    fun adifFileName(): String {
-        val call = settings.myCall.ifBlank { "log" }.replace('/', '-')
-        return "${call}_${LocalDate.now()}.adi"
-    }
-
-    fun selectedAdifFileName(): String {
-        val call = settings.myCall.ifBlank { "log" }.replace('/', '-')
-        return "${call}_${selected.size}qso_${LocalDate.now()}.adi"
-    }
-
-    /** Exports only the records picked in the log, then leaves selection mode. */
-    fun exportSelectedAdif(file: File) = exportAdif(file, only = selected).also { clearSelection() }
-
-    fun exportAdif(file: File, only: Set<Long>? = null) {
-        scope.launch {
-            val msg = try {
-                val count = withContext(Dispatchers.IO) {
-                    val list = db.all().let { all -> if (only == null) all else all.filter { it.id in only } }
-                    file.outputStream().use { Adif.export(list, it, program = "QSO-LOG", version = APP_VERSION) }
-                    list.size
-                }
-                tr("Экспортировано в ADIF: %s, файл %s", count, file.name)
-            } catch (e: Exception) {
-                tr("Не удалось сохранить файл: %s", e.message)
-            }
-            say(msg)
-        }
-    }
-
     fun importAdif(file: File) {
         scope.launch {
             val msg = try {
@@ -1348,22 +1250,6 @@ class AppState {
                 tr("Не удалось прочитать файл: %s", e.message)
             }
             reload()
-            say(msg)
-        }
-    }
-
-    fun exportCsv(file: File) {
-        scope.launch {
-            val msg = try {
-                val count = withContext(Dispatchers.IO) {
-                    val list = db.all()
-                    file.outputStream().use { Csv.export(list, it) }
-                    list.size
-                }
-                tr("Экспортировано записей: %s в %s", count, file.name)
-            } catch (e: Exception) {
-                tr("Не удалось сохранить файл: %s", e.message)
-            }
             say(msg)
         }
     }

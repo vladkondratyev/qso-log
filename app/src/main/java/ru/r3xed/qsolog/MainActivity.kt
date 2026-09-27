@@ -1,8 +1,5 @@
 package ru.r3xed.qsolog
 
-import ru.r3xed.qsolog.data.OnlineLog
-import ru.r3xed.qsolog.ui.UploadDialog
-
 import androidx.compose.runtime.key
 import android.Manifest
 import android.content.pm.PackageManager
@@ -39,6 +36,8 @@ import ru.r3xed.qsolog.ui.EditScreen
 import ru.r3xed.qsolog.ui.LogScreen
 import ru.r3xed.qsolog.ui.MapScreen
 import ru.r3xed.qsolog.ui.ContestExportDialog
+import ru.r3xed.qsolog.ui.ExportDialog
+import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.ui.QsoTheme
 import ru.r3xed.qsolog.ui.SettingsScreen
 import ru.r3xed.qsolog.ui.WelcomeScreen
@@ -71,26 +70,19 @@ class MainActivity : ComponentActivity() {
             QsoTheme(dark) {
                 val snackbar = remember { SnackbarHostState() }
                 val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
-                    uri?.let(vm::exportCsv)
+                    uri?.let(vm::exportFile)
                 }
                 val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                     uri?.let(vm::importCsv)
                 }
                 // .adi has no registered MIME type; octet-stream keeps the file name as given.
                 val exportAdif = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
-                    uri?.let(vm::exportAdif)
+                    uri?.let(vm::exportFile)
                 }
                 val importAdif = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                     uri?.let(vm::importAdif)
                 }
-                val exportSelectedAdif = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
-                    uri?.let(vm::exportSelectedAdif)
-                }
                 // Contest reports: .txt (ЕРМАК) and .cbr (Cabrillo) are plain text.
-                // LoTW: an ADIF file to sign in TQSL on a computer.
-                val exportLotw = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
-                    uri?.let(vm::exportLotw)
-                }
                 val exportContest = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
                     uri?.let(vm::exportContest)
                 }
@@ -127,7 +119,6 @@ class MainActivity : ComponentActivity() {
                                     ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                                 },
                                 requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
-                                onExportSelected = { exportSelectedAdif.launch(vm.selectedAdifFileName()) },
                             )
                             Screen.Map -> MapScreen(vm)
                             Screen.Welcome -> WelcomeScreen(vm)
@@ -142,9 +133,7 @@ class MainActivity : ComponentActivity() {
                             ) }
                             Screen.Settings -> SettingsScreen(
                                 vm,
-                                onExportCsv = { export.launch(vm.csvFileName()) },
                                 onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
-                                onExportAdif = { exportAdif.launch(vm.adifFileName()) },
                                 onImportAdif = { importAdif.launch(arrayOf("*/*")) },
                                 onImportContest = { importContest.launch(arrayOf("*/*")) },
                             )
@@ -152,24 +141,21 @@ class MainActivity : ComponentActivity() {
                         vm.contestTarget?.let { target ->
                             ContestExportDialog(
                                 defaults = vm.contestDefaults(),
-                                count = target.only?.size ?: vm.total,
+                                selected = target.only?.size,
+                                count = { onlyNew -> vm.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew).size },
                                 onDismiss = vm::closeContestExport,
-                                onConfirm = { h -> exportContest.launch(vm.prepareContest(h)) },
+                                onConfirm = { h, onlyNew, mark -> exportContest.launch(vm.prepareContest(h, onlyNew, mark)) },
                             )
                         }
-                        vm.uploadTarget?.let { target ->
-                            UploadDialog(
+                        vm.exportTarget?.let { target ->
+                            ExportDialog(
+                                format = target.format,
                                 selected = target.only?.size,
-                                total = vm.total,
-                                count = { log, onlyNew -> vm.uploadCandidates(log, target.only, onlyNew).size },
-                                problem = vm::uploadProblem,
-                                busy = vm.uploading,
-                                lotwNote = tr("LoTW принимает только связи, подписанные вашим сертификатом в программе TQSL от ARRL. Для Android её нет: сохраните файл, перенесите на компьютер и подпишите в TQSL («Sign a log and upload it») — или выгружайте из QSO-LOG для компьютера, он вызывает TQSL сам."),
-                                lotwAction = tr("Сохранить файл"),
-                                onOpenSettings = { vm.closeUpload(); vm.openSettings() },
-                                onDismiss = vm::closeUpload,
-                                onConfirm = { log, onlyNew, mark ->
-                                    if (log == OnlineLog.LOTW) exportLotw.launch(vm.prepareLotw(onlyNew, mark)) else vm.upload(log, onlyNew, mark)
+                                count = { onlyNew -> vm.exportCandidates(target.format, target.only, onlyNew).size },
+                                onDismiss = vm::closeExport,
+                                onConfirm = { onlyNew, mark ->
+                                    val name = vm.prepareExport(onlyNew, mark)
+                                    if (target.format == ExportFormat.CSV) export.launch(name) else exportAdif.launch(name)
                                 },
                             )
                         }

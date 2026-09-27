@@ -1,7 +1,7 @@
 package ru.r3xed.qsolog.ui
 
-import androidx.compose.material.icons.filled.CloudUpload
 import ru.r3xed.qsolog.tr
+import ru.r3xed.qsolog.data.ExportFormat
 import androidx.compose.material.icons.filled.Check
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.unit.TextUnit
@@ -104,14 +104,13 @@ fun LogScreen(
     vm: AppViewModel,
     hasMicPermission: () -> Boolean,
     requestMicPermission: () -> Unit,
-    onExportSelected: () -> Unit,
 ) {
     val x = LocalExtra.current
     BackHandler(enabled = vm.selecting) { vm.clearSelection() }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // imePadding: with the keyboard open (search) the list shrinks and "Добавить QSO" stays above the keyboard.
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
-            if (vm.selecting) SelectionBar(vm, onExportSelected) else Row(
+            if (vm.selecting) SelectionBar(vm) else Row(
                 Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -129,11 +128,7 @@ fun LogScreen(
                         OneLineText((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", vm.total), maxSize = 16.sp, minSize = 11.sp, color = x.muted)
                     }
                 }
-                // Three round buttons: upload to online logbooks, map, settings; 50 dp each so the logo keeps its room on a narrow phone.
-                FilledTonalIconButton(onClick = { vm.openUpload(selectedOnly = false) }, modifier = Modifier.size(50.dp)) {
-                    Icon(Icons.Filled.CloudUpload, contentDescription = tr("Выгрузка в онлайн-журналы"), modifier = Modifier.size(27.dp))
-                }
-                Spacer(Modifier.width(8.dp))
+                // Two round buttons: map and settings; 50 dp each so the logo keeps its room on a narrow phone.
                 FilledTonalIconButton(onClick = vm::openMap, modifier = Modifier.size(50.dp)) {
                     Icon(Icons.Filled.Map, contentDescription = tr("Карта QSO"), modifier = Modifier.size(27.dp))
                 }
@@ -333,9 +328,9 @@ private fun LogRow(qso: Qso, vm: AppViewModel, showDate: Boolean, modifier: Modi
     )
 }
 
-/** Replaces the log header while records are picked: count, select all, export (ADIF, contest report, online logbooks), cancel. */
+/** Replaces the log header while records are picked: count, select all, export (ADIF, CSV, contest report), cancel. */
 @Composable
-private fun SelectionBar(vm: AppViewModel, onExport: () -> Unit) {
+private fun SelectionBar(vm: AppViewModel) {
     Row(
         Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -350,7 +345,7 @@ private fun SelectionBar(vm: AppViewModel, onExport: () -> Unit) {
         IconButton(onClick = vm::selectAllShown, modifier = Modifier.size(52.dp)) {
             Icon(Icons.Filled.SelectAll, tr("Выбрать все"), Modifier.size(28.dp))
         }
-        // Export of the picked records: ADIF, a contest report (ЕРМАК / Cabrillo) or an online logbook, each via its dialog.
+        // Export of the picked records: ADIF, CSV or a contest report (ЕРМАК / Cabrillo), each via its dialog.
         var menu by remember { mutableStateOf(false) }
         Box {
             Button(onClick = { menu = true }, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp)) {
@@ -359,9 +354,9 @@ private fun SelectionBar(vm: AppViewModel, onExport: () -> Unit) {
                 Text(tr("Экспорт"), fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("ADIF (.adi)", fontSize = 17.sp) }, onClick = { menu = false; onExport() })
-                DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; vm.openContestExport(selectedOnly = true) })
-                DropdownMenuItem(text = { Text(tr("Онлайн-журналы: LoTW, QRZ.com, eQSL, Club Log"), fontSize = 17.sp) }, onClick = { menu = false; vm.openUpload(selectedOnly = true) })
+                DropdownMenuItem(text = { Text("ADIF (.adi)", fontSize = 17.sp) }, onClick = { menu = false; vm.openExport(ExportFormat.ADIF, selectedOnly = true) })
+                DropdownMenuItem(text = { Text("CSV", fontSize = 17.sp) }, onClick = { menu = false; vm.openExport(ExportFormat.CSV, selectedOnly = true) })
+                DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; vm.openExport(ExportFormat.CONTEST, selectedOnly = true) })
             }
         }
     }
@@ -424,6 +419,8 @@ private fun QsoRow(
                 }
                 Spacer(Modifier.width(8.dp))
             }
+            // Exported to ADIF / CSV / a contest report: a small dot of each format's colour.
+            ExportDots(qso.adif)
             // Outside the date sort there are no day headers, so the row carries its own date.
             val t = utc(qso.timeUtc)
             Text(

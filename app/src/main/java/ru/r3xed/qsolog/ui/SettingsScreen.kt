@@ -1,9 +1,9 @@
 package ru.r3xed.qsolog.ui
 
-import ru.r3xed.qsolog.data.OnlineLog
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import ru.r3xed.qsolog.I18n
+import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.Lang
 import ru.r3xed.qsolog.tr
 import androidx.activity.compose.BackHandler
@@ -91,9 +91,7 @@ import ru.r3xed.qsolog.data.MODES
 @Composable
 fun SettingsScreen(
     vm: AppViewModel,
-    onExportCsv: () -> Unit,
     onImportCsv: () -> Unit,
-    onExportAdif: () -> Unit,
     onImportAdif: () -> Unit,
     onImportContest: () -> Unit,
 ) {
@@ -301,37 +299,11 @@ fun SettingsScreen(
                 }
                 Note(tr("«Как в системе» переключается вместе с тёмной темой Android."))
             }
-            // Online logbooks: only the accounts here; uploads are made from the log (the cloud button or «Экспорт»).
-            SettingsBlock(
-                tr("Онлайн-журналы"),
-                listOfNotNull(
-                    "QRZ.com".takeIf { vm.uploadProblem(OnlineLog.QRZCOM) == null },
-                    "eQSL".takeIf { vm.uploadProblem(OnlineLog.EQSL) == null },
-                    "Club Log".takeIf { vm.uploadProblem(OnlineLog.CLUBLOG) == null },
-                ).joinToString(", ").ifBlank { tr("учётные записи не указаны") },
-            ) {
-                Note(tr("Здесь — только учётные записи. Выгрузка — из журнала: кнопка с облаком вверху или «Экспорт» у выбранных записей. Отметка о выгрузке с датой и временем видна в карточке каждой связи."))
-                Section("QRZ.com Logbook")
-                SecretField(tr("API-ключ журнала QRZ.com"), s.qrzcomKey) { vm.updateSettings(s.copy(qrzcomKey = it)) }
-                Note(tr("Ключ: qrz.com → My Logbook → Settings → «API Access Key». Это QRZ.com, не QRZ.ru."))
-                Section("eQSL")
-                SettingField(tr("Логин eQSL"), s.eqslUser, { vm.updateSettings(s.copy(eqslUser = it.trim())) }, mono = true, caps = true)
-                SecretField(tr("Пароль eQSL"), s.eqslPassword) { vm.updateSettings(s.copy(eqslPassword = it)) }
-                SettingField(tr("QTH Nickname (если у вас несколько мест в eQSL)"), s.eqslNickname, { vm.updateSettings(s.copy(eqslNickname = it)) })
-                Section("Club Log")
-                SettingField(tr("E-mail Club Log"), s.clublogEmail, { vm.updateSettings(s.copy(clublogEmail = it.trim())) }, mono = true)
-                SecretField(tr("Пароль Club Log"), s.clublogPassword) { vm.updateSettings(s.copy(clublogPassword = it)) }
-                SecretField(tr("Ключ приложения Club Log (API key)"), s.clublogKey) { vm.updateSettings(s.copy(clublogKey = it)) }
-                Note(tr("Club Log пускает программы только с ключом приложения: его выдают по запросу на clublog.org (Help Desk → «Request an API key»). Позывной берётся из «Моей станции»."))
-                Section("LoTW (ARRL)")
-                Note(tr("Для LoTW учётная запись не нужна: связи подписывает программа TQSL на компьютере. Телефон сохраняет для неё файл."))
-            }
-
             SettingsBlock(tr("Журнал связей"), tr("записей: %s · ADIF, CSV, ЕРМАК", vm.total)) {
-                ActionButton(tr("Экспорт в ADIF"), Icons.Filled.FileUpload, onExportAdif)
+                ActionButton(tr("Экспорт в ADIF"), Icons.Filled.FileUpload) { vm.openExport(ExportFormat.ADIF, selectedOnly = false) }
                 ActionButton(tr("Импорт из ADIF"), Icons.Filled.FileDownload, onImportAdif)
                 Note(tr("ADIF (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com. Файл сохраняется в кодировке Windows-1251, как у LogHX. При импорте кодировка определяется сама (Windows-1251 или UTF-8). Все поля файла сохраняются в карточке."))
-                ActionButton(tr("Экспорт в CSV"), Icons.Filled.FileUpload, onExportCsv)
+                ActionButton(tr("Экспорт в CSV"), Icons.Filled.FileUpload) { vm.openExport(ExportFormat.CSV, selectedOnly = false) }
                 ActionButton(tr("Импорт из CSV"), Icons.Filled.FileDownload, onImportCsv)
                 Note(tr("CSV открывается в Excel: разделитель «;», все поля каждой связи, включая дополнительные поля ADIF. При любом импорте повторы пропускаются."))
                 ActionButton(tr("Экспорт в ЕРМАК / Cabrillo"), Icons.Filled.FileUpload) { vm.openContestExport(selectedOnly = false) }
@@ -635,24 +607,3 @@ private fun ReferenceCard(onOpen: () -> Unit) {
     }
 }
 
-/** A key or a password: hidden until the eye is tapped. */
-@Composable
-private fun SecretField(label: String, value: String, onChange: (String) -> Unit) {
-    var show by remember { mutableStateOf(false) }
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(label) },
-        singleLine = true,
-        textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp),
-        visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        trailingIcon = {
-            IconButton(onClick = { show = !show }) {
-                Icon(if (show) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (show) tr("Скрыть пароль") else tr("Показать пароль"))
-            }
-        },
-        shape = RoundedCornerShape(12.dp),
-    )
-}

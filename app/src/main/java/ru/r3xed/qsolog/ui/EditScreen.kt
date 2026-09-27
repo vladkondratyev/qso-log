@@ -1,8 +1,8 @@
 package ru.r3xed.qsolog.ui
 
-import ru.r3xed.qsolog.data.OnlineLog
 
 import ru.r3xed.qsolog.tr
+import ru.r3xed.qsolog.data.ExportFormat
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.foundation.layout.PaddingValues
@@ -271,9 +271,6 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             // --- distance & map ---
             DistanceCard(vm, onOpenMap = { showMap = true })
 
-            // --- where this contact has been uploaded, with the date and time ---
-            if (!f.isNew) UploadMarks(f.adif, onClear = vm::clearUploadMark)
-
             // --- all fields: each group opens on its own, the header says how many fields are filled ---
             Label(tr("Все поля ADIF"))
             val filled = { keys: Collection<String> -> keys.count { !f.adif[it].isNullOrBlank() } }
@@ -308,8 +305,11 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             }
             FieldGroup(tr("Прохождение"), filled(AdifLabels.SPACE_WEATHER.keys)) { AdifFields(vm, AdifLabels.SPACE_WEATHER, perRow = 3) }
             // Anything else the imported log carried, shown under its ADIF name.
-            val other = f.adif.keys.filter { it !in AdifLabels.KNOWN && it !in OnlineLog.FIELDS }
+            val other = f.adif.keys.filter { it !in AdifLabels.KNOWN && it !in ExportFormat.FIELDS }
             if (other.isNotEmpty()) FieldGroup(tr("Другие поля ADIF"), filled(other)) { AdifFields(vm, other.associateWith { it }) }
+
+            // --- at the very bottom: when this contact went into ADIF, CSV and contest-report files ---
+            if (!f.isNew) ExportMarks(f.adif, onClear = vm::clearExportMark)
             Spacer(Modifier.height(8.dp))
         }
 
@@ -710,31 +710,22 @@ private fun ChipRow(items: List<String>, selected: String, onPick: (String) -> U
     }
 }
 
-/** One line per online logbook: when the contact went there, or that it has not; a mark can be taken off to send it again. */
+/** One line per export format: when the contact was exported to it, or that it has not been; a mark can be taken off. */
 @Composable
-private fun UploadMarks(adif: Map<String, String>, onClear: (OnlineLog) -> Unit) {
+private fun ExportMarks(adif: Map<String, String>, onClear: (ExportFormat) -> Unit) {
     val x = LocalExtra.current
-    Label(tr("Выгрузка в журналы"))
+    Label(tr("Экспорт"))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field).padding(horizontal = 16.dp, vertical = 6.dp)) {
-        OnlineLog.entries.forEach { log ->
-            val at = log.sentAt(adif)
+        ExportFormat.entries.forEach { format ->
+            val at = format.exportedAt(adif)
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(log.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(96.dp))
-                when {
-                    at == null -> Text(tr("не выгружалась"), style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.weight(1f))
-                    else -> {
-                        val queued = log.isQueued(adif)
-                        Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
-                            Text(
-                                if (queued) tr("файл для TQSL сохранён") else "✓ " + tr("выгружена"),
-                                style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold,
-                                color = if (queued) MaterialTheme.colorScheme.onSurface else x.ok,
-                            )
-                            if (at.isNotEmpty()) Text(at, style = MaterialTheme.typography.bodyMedium, color = x.muted)
-                        }
-                        TextButton(onClick = { onClear(log) }) { Text(tr("Снять")) }
-                    }
+                ExportDot(format, on = at != null)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
+                    Text(format.title, style = MaterialTheme.typography.titleMedium)
+                    Text(at ?: tr("не экспортировалась"), style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
                 }
+                if (at != null) TextButton(onClick = { onClear(format) }) { Text(tr("Снять")) }
             }
         }
     }

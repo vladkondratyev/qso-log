@@ -22,6 +22,7 @@ import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.CallHistory
 import ru.r3xed.qsolog.data.Cabrillo
+import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.data.Csv
 import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.HamQth
@@ -29,9 +30,6 @@ import ru.r3xed.qsolog.data.approxPosition
 import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
-import ru.r3xed.qsolog.data.UploadResult
-import ru.r3xed.qsolog.data.OnlineLogs
-import ru.r3xed.qsolog.data.OnlineLog
 import ru.r3xed.qsolog.data.QrzException
 import ru.r3xed.qsolog.data.QrzInfo
 import ru.r3xed.qsolog.data.Qso
@@ -80,8 +78,8 @@ sealed interface SearchLookup {
 /** Records for a contest report: [only] the picked ones, or the whole log when null. */
 data class ContestTarget(val only: Set<Long>?)
 
-/** Records the online-logbook upload is for; null = the whole log. */
-data class UploadTarget(val only: Set<Long>?)
+/** The ADIF / CSV export dialog: which format, for [only] records picked in the log (null = the whole log). */
+data class ExportTarget(val format: ExportFormat, val only: Set<Long>?)
 
 sealed interface UpdateState {
     data object Idle : UpdateState
@@ -111,7 +109,6 @@ sealed interface Screen {
 }
 
 /** User-Agent for the online logbooks: they ask programs to name themselves. */
-private val ONLINE_AGENT = "QSO-LOG/${BuildConfig.VERSION_NAME} (+https://github.com/vladkondratyev/qso-log)"
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val db = QsoDb(app)
@@ -254,8 +251,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The contest-report dialog is open: for [ContestTarget.only] records, or the whole log when null. */
     var contestTarget by mutableStateOf<ContestTarget?>(null); private set
 
-    /** Header chosen in the dialog, waiting for the file picker. */
-    private var pendingContest: Pair<Cabrillo.Header, Set<Long>?>? = null
+    /** Header and choices from the dialog, waiting for the file picker. */
+    private var pendingContest: Pair<Cabrillo.Header, PendingExport>? = null
 
     fun openContestExport(selectedOnly: Boolean) {
         contestTarget = ContestTarget(if (selectedOnly) selected else null)
@@ -277,30 +274,81 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     /** Remembers the dialog's choice and returns the file name to offer. */
-    fun prepareContest(h: Cabrillo.Header): String {
+    fun prepareContest(h: Cabrillo.Header, onlyNew: Boolean, mark: Boolean): String {
         prefs.contestFormat = h.format.name
         prefs.contestCode = h.contest
         prefs.contestOperator = h.categoryOperator
-        pendingContest = h to contestTarget?.only
+        pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark)
         contestTarget = null
         val code = h.contest.uppercase().ifBlank { "LOG" }.replace('/', '-')
         return "${h.callsign.ifBlank { "log" }.replace('/', '-')}_$code.${h.format.extension}"
     }
 
     fun exportContest(uri: Uri) {
-        val (h, only) = pendingContest ?: return
+        val (h, p) = pendingContest ?: return
         pendingContest = null
-        if (only != null) clearSelection()
+        writeExport(p, uri, h.format.title) { list, out -> out.write(Cabrillo.export(list, h).toByteArray(Cabrillo.charset(h.format))) }
+    }
+
+    // ---------- export marks: ADIF, CSV, ЕРМАК / Cabrillo ----------
+
+    /** The ADIF / CSV export dialog is open: for [ExportTarget.only] records picked in the log, or the whole log when null. */
+    var exportTarget by mutableStateOf<ExportTarget?>(null); private set
+
+    /** Choices of an export dialog, waiting for the file picker. */
+    class PendingExport(val format: ExportFormat, val only: Set<Long>?, val onlyNew: Boolean, val mark: Boolean)
+
+    private var pendingExport: PendingExport? = null
+
+    fun openExport(format: ExportFormat, selectedOnly: Boolean) {
+        if (format == ExportFormat.CONTEST) openContestExport(selectedOnly)
+        else exportTarget = ExportTarget(format, if (selectedOnly) selected else null)
+    }
+
+    fun closeExport() {
+        exportTarget = null
+    }
+
+    /** The contacts an export takes: the picked ones or the whole log, without those already exported to [format] when [onlyNew]. */
+    fun exportCandidates(format: ExportFormat, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
+        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !format.isExported(it.adif)) }
+
+    /** Remembers the dialog's choice and returns the file name to offer. */
+    fun prepareExport(onlyNew: Boolean, mark: Boolean): String {
+        val t = exportTarget ?: return "log"
+        pendingExport = PendingExport(t.format, t.only, onlyNew, mark)
+        exportTarget = null
+        val call = settings.myCall.ifBlank { "log" }.replace('/', '-')
+        val n = exportCandidates(t.format, t.only, onlyNew).size
+        return when (t.format) {
+            ExportFormat.CSV -> "qso_${call}_${LocalDate.now()}.csv"
+            else -> if (t.only != null || onlyNew) "${call}_${n}qso_${LocalDate.now()}.adi" else "${call}_${LocalDate.now()}.adi"
+        }
+    }
+
+    /** Saves the ADIF or CSV file chosen in [prepareExport]. */
+    fun exportFile(uri: Uri) {
+        val p = pendingExport ?: return
+        pendingExport = null
+        writeExport(p, uri, p.format.title) { list, out ->
+            if (p.format == ExportFormat.CSV) Csv.export(list, out)
+            else Adif.export(list, out, program = "QSO-LOG", version = BuildConfig.VERSION_NAME)
+        }
+    }
+
+    /** Writes the export, then (if asked) marks the exported contacts with the date and time. */
+    private fun writeExport(p: PendingExport, uri: Uri, title: String, write: (List<Qso>, java.io.OutputStream) -> Unit) {
+        if (p.only != null) clearSelection()
         viewModelScope.launch {
             val msg = try {
                 val count = withContext(Dispatchers.IO) {
-                    val list = db.all().let { all -> if (only == null) all else all.filter { it.id in only } }
-                    getApplication<Application>().contentResolver.openOutputStream(uri)!!.use {
-                        it.write(Cabrillo.export(list, h).toByteArray(Cabrillo.charset(h.format)))
-                    }
+                    val list = db.all().filter { (p.only == null || it.id in p.only) && (!p.onlyNew || !p.format.isExported(it.adif)) }
+                    getApplication<Application>().contentResolver.openOutputStream(uri)!!.use { write(list, it) }
+                    if (p.mark) list.forEach { db.save(p.format.mark(it)) }
                     list.size
                 }
-                tr("Экспортировано в %s: %s", h.format.title, count)
+                reload()
+                tr("Экспортировано в %s: %s", title, count) + if (p.mark && count > 0) tr(", отметка поставлена") else ""
             } catch (e: Exception) {
                 tr("Не удалось сохранить файл: %s", e.message)
             }
@@ -434,6 +482,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // First start: a short three-step setup; later, without a callsign, the settings as before.
         if (settings.myCall.isBlank()) screen = if (prefs.welcomeDone) Screen.Settings else Screen.Welcome
         viewModelScope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
+        // Keys and passwords of the online logbooks the app no longer uploads to.
+        viewModelScope.launch(Dispatchers.IO) { prefs.forgetOnlineLogAccounts() }
     }
 
     override fun onCleared() {
@@ -882,6 +932,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         form = form.copy(adif = form.adif + (key to value))
     }
 
+    /** Takes the [format] export mark off the open card (saved with the card), so the next "only new" export takes it. */
+    fun clearExportMark(format: ExportFormat) {
+        form = form.copy(adif = format.unmarkFields(form.adif))
+    }
+
     /** Detaches the voice note. The file itself goes when the card is saved, so closing without saving keeps it. */
     fun removeAudio() {
         val f = form
@@ -1045,107 +1100,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
 
-    // ---------- online logbooks: LoTW, QRZ.com, eQSL, Club Log ----------
-
-    /** The upload dialog is open: for [UploadTarget.only] records picked in the log, or the whole log when null. */
-    var uploadTarget by mutableStateOf<UploadTarget?>(null); private set
-
-    /** The logbook being uploaded to right now (a spinner in the dialog). */
-    var uploading by mutableStateOf<OnlineLog?>(null); private set
-
-    fun openUpload(selectedOnly: Boolean) {
-        uploadTarget = UploadTarget(if (selectedOnly) selected else null)
-    }
-
-    fun closeUpload() {
-        if (uploading == null) uploadTarget = null
-    }
-
-    /** The contacts an upload to [log] takes: the picked ones or the whole log, without those already sent when [onlyNew]. */
-    fun uploadCandidates(log: OnlineLog, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
-        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !log.isSent(it)) }
-
-    /** What is missing in the settings for [log], or null when it can be uploaded. */
-    fun uploadProblem(log: OnlineLog): String? {
-        val s = settings
-        return when (log) {
-            OnlineLog.QRZCOM -> if (s.qrzcomKey.isBlank()) tr("Укажите API-ключ журнала QRZ.com") else null
-            OnlineLog.EQSL -> if (s.eqslUser.isBlank() || s.eqslPassword.isBlank()) tr("Укажите логин и пароль eQSL") else null
-            OnlineLog.CLUBLOG -> if (s.clublogEmail.isBlank() || s.clublogPassword.isBlank() || s.clublogKey.isBlank() || s.myCall.isBlank())
-                tr("Укажите e-mail, пароль и ключ приложения Club Log, а также свой позывной") else null
-            OnlineLog.LOTW -> null
-        }
-    }
-
-    /**
-     * Sends the dialog's contacts to [log]; with [mark] the sent ones get the logbook's mark (date and time) in the card.
-     * LoTW goes through [exportLotw] instead: TQSL, which signs the contacts, has no Android version.
-     */
-    fun upload(log: OnlineLog, onlyNew: Boolean, mark: Boolean) {
-        val target = uploadTarget ?: return
-        if (uploading != null || log == OnlineLog.LOTW) return
-        uploadProblem(log)?.let { say(it); return }
-        val s = settings
-        val list = uploadCandidates(log, target.only, onlyNew)
-        if (list.isEmpty()) { say(tr("Новых связей для %s нет", log.title)); return }
-        uploading = log
-        viewModelScope.launch {
-            val r = when (log) {
-                OnlineLog.QRZCOM -> OnlineLogs.uploadQrzCom(s.qrzcomKey, list, ONLINE_AGENT)
-                OnlineLog.EQSL -> OnlineLogs.uploadEqsl(s.eqslUser, s.eqslPassword, s.eqslNickname, list, ONLINE_AGENT)
-                OnlineLog.CLUBLOG -> OnlineLogs.uploadClubLog(s.clublogEmail, s.clublogPassword, s.myCall, s.clublogKey, list, ONLINE_AGENT)
-                OnlineLog.LOTW -> UploadResult(emptyList(), 0, null)
-            }
-            if (mark) withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
-            reload()
-            uploading = null
-            uploadTarget = null
-            if (target.only != null && r.error == null) clearSelection()
-            say(buildString {
-                append(tr("%s: отправлено %s", log.title, r.sent.size))
-                if (r.duplicates > 0) append(tr(", уже были там: %s", r.duplicates))
-                if (mark && r.sent.isNotEmpty()) append(tr(", отметка поставлена"))
-                r.error?.let { append(". ").append(it) }
-            })
-        }
-    }
-
-    /** The LoTW file chosen in the dialog, waiting for the file picker: which contacts and whether to mark them. */
-    private var pendingLotw: Triple<Set<Long>?, Boolean, Boolean>? = null
-
-    /** Remembers the dialog's choice and returns the file name to offer. */
-    fun prepareLotw(onlyNew: Boolean, mark: Boolean): String {
-        pendingLotw = Triple(uploadTarget?.only, onlyNew, mark)
-        uploadTarget = null
-        return "${settings.myCall.ifBlank { "log" }.replace('/', '-')}_lotw_${LocalDate.now()}.adi"
-    }
-
-    /** The ADIF file for TQSL; with the mark, the exported contacts are "queued" (Q) so the next export has only new ones. */
-    fun exportLotw(uri: Uri) {
-        val (only, onlyNew, mark) = pendingLotw ?: return
-        pendingLotw = null
-        if (only != null) clearSelection()
-        viewModelScope.launch {
-            val msg = try {
-                val list = uploadCandidates(OnlineLog.LOTW, only, onlyNew)
-                withContext(Dispatchers.IO) {
-                    getApplication<Application>().contentResolver.openOutputStream(uri)!!.use { it.write(OnlineLogs.file(list).toByteArray(Charsets.UTF_8)) }
-                    if (mark) list.forEach { db.save(OnlineLog.LOTW.mark(it, "Q")) }
-                }
-                reload()
-                tr("Для LoTW сохранено связей: %s. Подпишите файл в TQSL и отправьте в LoTW", list.size)
-            } catch (e: Exception) {
-                tr("Не удалось сохранить файл: %s", e.message)
-            }
-            say(msg)
-        }
-    }
-
-    /** Takes [log]'s mark off the open card (saved with the card), so the contact goes again next time. */
-    fun clearUploadMark(log: OnlineLog) {
-        form = form.copy(adif = log.unmarkFields(form.adif))
-    }
-
     // ---------- settings ----------
 
     fun updateSettings(s: StationSettings) {
@@ -1246,42 +1200,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- CSV ----------
 
-    fun csvFileName(): String {
-        val call = settings.myCall.ifBlank { "log" }.replace('/', '-')
-        return "qso_${call}_${LocalDate.now()}.csv"
-    }
-
-    fun adifFileName(): String {
-        val call = settings.myCall.ifBlank { "log" }.replace('/', '-')
-        return "${call}_${LocalDate.now()}.adi"
-    }
-
-    fun selectedAdifFileName(): String {
-        val call = settings.myCall.ifBlank { "log" }.replace('/', '-')
-        return "${call}_${selected.size}qso_${LocalDate.now()}.adi"
-    }
-
-    /** Exports only the records picked in the log, then leaves selection mode. */
-    fun exportSelectedAdif(uri: Uri) = exportAdif(uri, only = selected).also { clearSelection() }
-
-    fun exportAdif(uri: Uri, only: Set<Long>? = null) {
-        viewModelScope.launch {
-            val msg = try {
-                val count = withContext(Dispatchers.IO) {
-                    val list = db.all().let { all -> if (only == null) all else all.filter { it.id in only } }
-                    getApplication<Application>().contentResolver.openOutputStream(uri)!!.use {
-                        Adif.export(list, it, program = "QSO-LOG", version = BuildConfig.VERSION_NAME)
-                    }
-                    list.size
-                }
-                tr("Экспортировано в ADIF: %s", count)
-            } catch (e: Exception) {
-                tr("Не удалось сохранить файл: %s", e.message)
-            }
-            _messages.send(Message(msg))
-        }
-    }
-
     fun importAdif(uri: Uri) {
         viewModelScope.launch {
             val msg = try {
@@ -1304,22 +1222,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 tr("Не удалось прочитать файл: %s", e.message)
             }
             reload()
-            _messages.send(Message(msg))
-        }
-    }
-
-    fun exportCsv(uri: Uri) {
-        viewModelScope.launch {
-            val msg = try {
-                val count = withContext(Dispatchers.IO) {
-                    val list = db.all()
-                    getApplication<Application>().contentResolver.openOutputStream(uri)!!.use { Csv.export(list, it) }
-                    list.size
-                }
-                tr("Экспортировано записей: %s", count)
-            } catch (e: Exception) {
-                tr("Не удалось сохранить файл: %s", e.message)
-            }
             _messages.send(Message(msg))
         }
     }

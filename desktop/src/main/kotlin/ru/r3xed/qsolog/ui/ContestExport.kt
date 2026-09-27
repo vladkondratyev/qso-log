@@ -33,23 +33,32 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.r3xed.qsolog.data.Cabrillo
+import ru.r3xed.qsolog.data.ExportFormat
 
 /**
  * Settings of a contest report before the file is saved: format, CONTEST code from the contest rules,
- * CATEGORY-OPERATOR and LOCATION (RDA). [count] is how many records go into the report.
+ * CATEGORY-OPERATOR and LOCATION (RDA); then, as for every export, only new contacts or all and the export mark.
+ * [selected] is the number of records picked in the log, null for the whole log.
  */
 @Composable
-fun ContestExportDialog(defaults: Cabrillo.Header, count: Int, onDismiss: () -> Unit, onConfirm: (Cabrillo.Header) -> Unit) {
+fun ContestExportDialog(
+    defaults: Cabrillo.Header,
+    selected: Int?,
+    count: (onlyNew: Boolean) -> Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Cabrillo.Header, onlyNew: Boolean, mark: Boolean) -> Unit,
+) {
     var format by remember { mutableStateOf(defaults.format) }
     var contest by remember { mutableStateOf(defaults.contest) }
     var operator by remember { mutableStateOf(defaults.categoryOperator) }
     var location by remember { mutableStateOf(defaults.location) }
+    var onlyNew by remember { mutableStateOf(true) }
+    var mark by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(tr("Отчёт для соревнований")) },
         text = {
             Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(tr("Записей в отчёте: %s", count), style = MaterialTheme.typography.bodyLarge)
                 Options(
                     listOf(Cabrillo.Format.ERMAK to tr("ЕРМАК"), Cabrillo.Format.CABRILLO to "Cabrillo"),
                     format,
@@ -85,12 +94,14 @@ fun ContestExportDialog(defaults: Cabrillo.Header, count: Int, onDismiss: () -> 
                     tr("Контрольные номера берутся из полей карточки «Контрольный номер передан/принят»; если переданного нет, ставится порядковый номер 001, 002… Связи идут по времени, как требует формат."),
                     style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted,
                 )
+                ExportChoices(ExportFormat.CONTEST, selected, count, onlyNew, { onlyNew = it }, mark, { mark = it })
             }
         },
         confirmButton = {
-            Button(onClick = {
-                onConfirm(defaults.copy(format = format, contest = contest.trim(), categoryOperator = operator, location = location.trim()))
-            }) { Text(tr("Сохранить файл")) }
+            Button(
+                onClick = { onConfirm(defaults.copy(format = format, contest = contest.trim(), categoryOperator = operator, location = location.trim()), onlyNew, mark) },
+                enabled = count(onlyNew) > 0,
+            ) { Text(tr("Сохранить файл (%s)", count(onlyNew))) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Отмена")) } },
     )

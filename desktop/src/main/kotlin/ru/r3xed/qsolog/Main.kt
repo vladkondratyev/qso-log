@@ -38,6 +38,8 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import ru.r3xed.qsolog.ui.ContestExportDialog
+import ru.r3xed.qsolog.ui.ExportDialog
+import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.ui.EditPane
 import ru.r3xed.qsolog.ui.LocalExtra
 import ru.r3xed.qsolog.ui.LogPane
@@ -46,7 +48,6 @@ import ru.r3xed.qsolog.ui.QsoTheme
 import ru.r3xed.qsolog.ui.SettingsPane
 import ru.r3xed.qsolog.ui.WelcomePane
 import ru.r3xed.qsolog.ui.ReferencePane
-import ru.r3xed.qsolog.ui.UploadDialog
 import java.awt.Dimension
 import java.awt.FileDialog
 import java.io.File
@@ -83,12 +84,16 @@ fun main() {
             },
         ) {
             LaunchedEffect(Unit) { window.minimumSize = Dimension(980, 640) }
-            val exportCsv = {
-                chooseFile(window, tr("Экспорт лога в CSV"), save = true, suggested = state.csvFileName())?.let(state::exportCsv)
-                Unit
-            }
-            val exportAdif = {
-                chooseFile(window, tr("Экспорт лога в ADIF"), save = true, suggested = state.adifFileName(), ext = "adi")?.let(state::exportAdif)
+            // ADIF and CSV: first the dialog (only new or all, the export mark), then the save dialog.
+            val exportCsv = { state.openExport(ExportFormat.CSV, selectedOnly = false) }
+            val exportAdif = { state.openExport(ExportFormat.ADIF, selectedOnly = false) }
+            val saveExport = { onlyNew: Boolean, mark: Boolean ->
+                state.prepareExport(onlyNew, mark)?.let { (format, name) ->
+                    state.exportFile(
+                        if (format == ExportFormat.CSV) chooseFile(window, tr("Экспорт в %s", format.title), save = true, suggested = name)
+                        else chooseFile(window, tr("Экспорт в %s", format.title), save = true, suggested = name, ext = "adi"),
+                    )
+                }
                 Unit
             }
             val importAdif = {
@@ -99,14 +104,10 @@ fun main() {
                 chooseFile(window, tr("Импорт лога из CSV"), save = false)?.let(state::importCsv)
                 Unit
             }
-            val exportSelected = {
-                chooseFile(window, tr("Экспорт выбранных связей в ADIF"), save = true, suggested = state.selectedAdifFileName(), ext = "adi")
-                    ?.let(state::exportSelectedAdif)
-                Unit
-            }
+            val exportSelected = { state.openExport(ExportFormat.ADIF, selectedOnly = true) }
             // Contest reports: the dialog picks the header, then the save dialog; .txt (ЕРМАК) or .cbr (Cabrillo).
-            val exportContest = { h: ru.r3xed.qsolog.data.Cabrillo.Header ->
-                val file = chooseFile(window, tr("Экспорт в %s", h.format.title), save = true, suggested = state.prepareContest(h), ext = h.format.extension)
+            val exportContest = { h: ru.r3xed.qsolog.data.Cabrillo.Header, onlyNew: Boolean, mark: Boolean ->
+                val file = chooseFile(window, tr("Экспорт в %s", h.format.title), save = true, suggested = state.prepareContest(h, onlyNew, mark), ext = h.format.extension)
                 if (file != null) state.exportContest(file) else state.cancelContest()
             }
             val importContest = {
@@ -133,7 +134,6 @@ fun main() {
                     Item(tr("Импорт из ЕРМАК / Cabrillo…"), onClick = importContest)
                     Separator()
                     Item(tr("Карта QSO"), shortcut = shortcut(Key.M), onClick = state::openMap)
-                    Item(tr("Выгрузка в онлайн-журналы…"), onClick = { state.openUpload(selectedOnly = false) })
                     Item(tr("Справка и калькуляторы"), onClick = state::openReference)
                     Item(tr("Настройки"), shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
                     if (!IS_MAC) {
@@ -148,7 +148,7 @@ fun main() {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
-            QsoTheme(dark) { key(state.language) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest)) } }
+            QsoTheme(dark) { key(state.language) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest, saveExport)) } }
         }
     }
 }
@@ -160,8 +160,10 @@ class Exports(
     val exportAdif: () -> Unit,
     val importAdif: () -> Unit,
     val exportSelected: () -> Unit,
-    val exportContest: (ru.r3xed.qsolog.data.Cabrillo.Header) -> Unit,
+    val exportContest: (ru.r3xed.qsolog.data.Cabrillo.Header, Boolean, Boolean) -> Unit,
     val importContest: () -> Unit,
+    /** Saves the ADIF / CSV export chosen in its dialog: only new or all, with or without the export mark. */
+    val saveExport: (onlyNew: Boolean, mark: Boolean) -> Unit,
 )
 
 @Composable
@@ -198,23 +200,19 @@ fun App(state: AppState, files: Exports) {
             state.contestTarget?.let { target ->
                 ContestExportDialog(
                     defaults = state.contestDefaults(),
-                    count = target.only?.size ?: state.total,
+                    selected = target.only?.size,
+                    count = { onlyNew -> state.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew).size },
                     onDismiss = state::closeContestExport,
                     onConfirm = files.exportContest,
                 )
             }
-            state.uploadTarget?.let { target ->
-                UploadDialog(
+            state.exportTarget?.let { target ->
+                ExportDialog(
+                    format = target.format,
                     selected = target.only?.size,
-                    total = state.total,
-                    count = { log, onlyNew -> state.uploadCandidates(log, target.only, onlyNew).size },
-                    problem = state::uploadProblem,
-                    busy = state.uploading,
-                    lotwNote = tr("QSO-LOG запускает программу TQSL: она подписывает связи вашим сертификатом и отправляет их в LoTW. Station Location и путь к TQSL — в настройках, блок «Онлайн-журналы»."),
-                    lotwAction = tr("Отправить через TQSL"),
-                    onOpenSettings = { state.closeUpload(); state.openSettings() },
-                    onDismiss = state::closeUpload,
-                    onConfirm = state::upload,
+                    count = { onlyNew -> state.exportCandidates(target.format, target.only, onlyNew).size },
+                    onDismiss = state::closeExport,
+                    onConfirm = files.saveExport,
                 )
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).widthIn(max = 640.dp))
