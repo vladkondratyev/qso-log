@@ -153,6 +153,8 @@ class MainActivity : ComponentActivity() {
                                 selected = target.only?.size,
                                 count = { onlyNew -> vm.exportCandidates(target.format, target.only, onlyNew).size },
                                 onDismiss = vm::closeExport,
+                                utf8 = vm.adifUtf8,
+                                onUtf8 = vm::chooseAdifUtf8,
                                 onConfirm = { onlyNew, mark ->
                                     val name = vm.prepareExport(onlyNew, mark)
                                     if (target.format == ExportFormat.CSV) export.launch(name) else exportAdif.launch(name)

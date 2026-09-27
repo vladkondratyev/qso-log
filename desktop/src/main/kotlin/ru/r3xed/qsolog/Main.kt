@@ -213,6 +213,8 @@ fun App(state: AppState, files: Exports) {
                     count = { onlyNew -> state.exportCandidates(target.format, target.only, onlyNew).size },
                     onDismiss = state::closeExport,
                     onConfirm = files.saveExport,
+                    utf8 = state.adifUtf8,
+                    onUtf8 = state::chooseAdifUtf8,
                 )
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).widthIn(max = 640.dp))

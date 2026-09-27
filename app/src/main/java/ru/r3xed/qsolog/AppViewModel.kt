@@ -300,6 +300,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private var pendingExport: PendingExport? = null
 
+    /** Encoding of ADIF files: UTF-8 by default; Windows-1251 for LogHX and UR5EQF. Remembered between exports. */
+    var adifUtf8 by mutableStateOf(prefs.adifUtf8); private set
+
+    fun chooseAdifUtf8(utf8: Boolean) {
+        adifUtf8 = utf8
+        prefs.adifUtf8 = utf8
+    }
+
     fun openExport(format: ExportFormat, selectedOnly: Boolean) {
         if (format == ExportFormat.CONTEST) openContestExport(selectedOnly)
         else exportTarget = ExportTarget(format, if (selectedOnly) selected else null)
@@ -332,7 +340,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         pendingExport = null
         writeExport(p, uri, p.format.title) { list, out ->
             if (p.format == ExportFormat.CSV) Csv.export(list, out)
-            else Adif.export(list, out, program = "QSO-LOG", version = BuildConfig.VERSION_NAME)
+            else Adif.export(list, out, if (adifUtf8) Charsets.UTF_8 else Adif.WINDOWS_1251, program = "QSO-LOG", version = BuildConfig.VERSION_NAME)
         }
     }
 

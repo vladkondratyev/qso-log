@@ -180,7 +180,7 @@ internal val EN: Map<String, String> = hashMapOf(
     "записей: %s · ADIF, CSV, ЕРМАК" to "records: %s · ADIF, CSV, ERMAK",
     "Экспорт в ADIF" to "Export to ADIF",
     "Импорт из ADIF" to "Import from ADIF",
-    "ADIF (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com. Файл сохраняется в кодировке Windows-1251, как у LogHX. При импорте кодировка определяется сама (Windows-1251 или UTF-8). Все поля файла сохраняются в карточке." to "ADIF (.adi) is read by LogHX, UR5EQF, HamLog, N1MM, QRZ.com. The file is saved in Windows-1251, like LogHX. On import the encoding is detected automatically (Windows-1251 or UTF-8). All fields of the file are kept in the card.",
+    "ADIF (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com. При экспорте можно выбрать кодировку: UTF-8 для большинства программ или Windows-1251 для LogHX и UR5EQF. При импорте кодировка определяется сама. Все поля файла сохраняются в карточке." to "ADIF (.adi) is read by LogHX, UR5EQF, HamLog, N1MM and QRZ.com. On export you pick the encoding: UTF-8 for most programs or Windows-1251 for LogHX and UR5EQF. On import the encoding is detected automatically. Every field of the file is kept in the card.",
     "Экспорт в CSV" to "Export to CSV",
     "Импорт из CSV" to "Import from CSV",
     "CSV открывается в Excel: разделитель «;», все поля каждой связи, включая дополнительные поля ADIF. При любом импорте повторы пропускаются." to "CSV opens in Excel: “;” separator, all fields of every QSO including extra ADIF fields. Any import skips duplicates.",
@@ -649,4 +649,7 @@ internal val EN: Map<String, String> = hashMapOf(
     "«Новые» — связи без отметки об экспорте в %s. Отметка видна внизу карточки связи." to "“New” are contacts without the %s export mark. The mark shows at the bottom of the contact’s card.",
     "Экспорт: %s" to "Exported: %s",
     "не экспортировалась" to "not exported",
+    "Кодировка файла" to "File encoding",
+    "UTF-8 — для большинства программ и сайтов" to "UTF-8 — for most programs and sites",
+    "Windows-1251 — для LogHX и UR5EQF" to "Windows-1251 — for LogHX and UR5EQF",
 )

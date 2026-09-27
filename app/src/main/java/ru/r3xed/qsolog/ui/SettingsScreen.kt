@@ -302,7 +302,7 @@ fun SettingsScreen(
             SettingsBlock(tr("Журнал связей"), tr("записей: %s · ADIF, CSV, ЕРМАК", vm.total)) {
                 ActionButton(tr("Экспорт в ADIF"), Icons.Filled.FileUpload) { vm.openExport(ExportFormat.ADIF, selectedOnly = false) }
                 ActionButton(tr("Импорт из ADIF"), Icons.Filled.FileDownload, onImportAdif)
-                Note(tr("ADIF (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com. Файл сохраняется в кодировке Windows-1251, как у LogHX. При импорте кодировка определяется сама (Windows-1251 или UTF-8). Все поля файла сохраняются в карточке."))
+                Note(tr("ADIF (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com. При экспорте можно выбрать кодировку: UTF-8 для большинства программ или Windows-1251 для LogHX и UR5EQF. При импорте кодировка определяется сама. Все поля файла сохраняются в карточке."))
                 ActionButton(tr("Экспорт в CSV"), Icons.Filled.FileUpload) { vm.openExport(ExportFormat.CSV, selectedOnly = false) }
                 ActionButton(tr("Импорт из CSV"), Icons.Filled.FileDownload, onImportCsv)
                 Note(tr("CSV открывается в Excel: разделитель «;», все поля каждой связи, включая дополнительные поля ADIF. При любом импорте повторы пропускаются."))

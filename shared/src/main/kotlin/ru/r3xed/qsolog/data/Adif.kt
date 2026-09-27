@@ -21,7 +21,8 @@ import kotlin.math.abs
  *
  * Fields with a place in the contact card map onto [Qso]; every other field is kept verbatim in [Qso.adif],
  * so a log goes through import → export without losing data.
- * Russian logs (LogHX, UR5EQF) write Windows-1251; import detects UTF-8 vs Windows-1251, export uses Windows-1251 by default.
+ * Russian logs (LogHX, UR5EQF) write Windows-1251, most other programs UTF-8; import detects which one a file is,
+ * export writes the one the user picked (UTF-8 by default in the apps).
  */
 object Adif {
     val WINDOWS_1251: Charset = Charset.forName("windows-1251")

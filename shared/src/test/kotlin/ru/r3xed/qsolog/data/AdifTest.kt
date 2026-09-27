@@ -90,4 +90,21 @@ class AdifTest {
         val m = linkedMapOf("QSL_VIA" to "L;E", "NOTES" to "a <b> c", "MY_CNTY" to "DEMO-DISTRICT")
         assertEquals(m, Adif.decodeFields(Adif.encodeFields(m)))
     }
+
+    /** A contact looked up on QRZ.ru: Cyrillic name and town survive both encodings; lengths are in the file's bytes. */
+    @Test
+    fun cyrillicInBothEncodings() {
+        val q = Qso(call = "UB3DEMO", timeUtc = 1_790_000_000_000, band = "20m", mode = "SSB", name = "Никита Агатьев", qth = "Ливны", country = "Россия")
+        for (cs in listOf(Charsets.UTF_8, Adif.WINDOWS_1251)) {
+            val out = ByteArrayOutputStream()
+            Adif.export(listOf(q), out, cs)
+            val bytes = out.toByteArray()
+            val text = String(bytes, cs)
+            assertEquals(true, text.contains("<NAME:${"Никита Агатьев".toByteArray(cs).size}>Никита Агатьев"), cs.name())
+            val r = Adif.import(bytes.inputStream())
+            assertEquals(cs, r.charset)
+            assertEquals("Никита Агатьев", r.rows.single().name)
+            assertEquals("Ливны", r.rows.single().qth)
+        }
+    }
 }

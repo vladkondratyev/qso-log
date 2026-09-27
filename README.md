@@ -22,11 +22,11 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 
 | Система | Версия | Файл |
 |---|---|---|
-| Android 8.0 и новее | 0.26.0 | [QSO-LOG-0.26.0.apk](../../releases/tag/v0.26.0) |
-| macOS 11 и новее, процессор Apple (M1 и новее) | 1.11.0 | [QSO-LOG-1.11.0-macos-arm64.dmg](../../releases/tag/desktop-v1.11.0) |
-| macOS 11 и новее, процессор Intel | 1.11.0 | [QSO-LOG-1.11.0-macos-x64.dmg](../../releases/tag/desktop-v1.11.0) |
-| Windows 10 и 11, 64 бит | 1.11.0 | [QSO-LOG-1.11.0-windows-x64.zip](../../releases/tag/desktop-v1.11.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.11.0 | [QSO-LOG-1.11.0-linux-amd64.deb](../../releases/tag/desktop-v1.11.0) |
+| Android 8.0 и новее | 0.26.1 | [QSO-LOG-0.26.1.apk](../../releases/tag/v0.26.1) |
+| macOS 11 и новее, процессор Apple (M1 и новее) | 1.11.1 | [QSO-LOG-1.11.1-macos-arm64.dmg](../../releases/tag/desktop-v1.11.1) |
+| macOS 11 и новее, процессор Intel | 1.11.1 | [QSO-LOG-1.11.1-macos-x64.dmg](../../releases/tag/desktop-v1.11.1) |
+| Windows 10 и 11, 64 бит | 1.11.1 | [QSO-LOG-1.11.1-windows-x64.zip](../../releases/tag/desktop-v1.11.1) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.11.1 | [QSO-LOG-1.11.1-linux-amd64.deb](../../releases/tag/desktop-v1.11.1) |
 
 Как установить: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 Есть и [страница программы](https://vladkondratyev.github.io/qso-log/), она сама предложит файл для вашей системы.
@@ -179,7 +179,8 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 Поддерживаются три формата:
 
 - **ADIF** (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com и другие журналы. Через ADIF же удобно переносить
-  лог между телефоном и компьютером. Файл сохраняется в кодировке Windows-1251, как у LogHX. При импорте кодировка
+  лог между телефоном и компьютером. Кодировку файла выбираете при экспорте: UTF-8 подходит для большинства программ
+  и сайтов, Windows-1251 нужна для LogHX и UR5EQF. Программа запоминает ваш выбор. При импорте кодировка
   определяется сама, и все поля файла сохраняются, даже незнакомые.
 - **CSV** открывается в Excel, разделитель — точка с запятой.
 - **ЕРМАК** ([ermak.srr.ru](https://ermak.srr.ru/)) для российских соревнований и **Cabrillo 3.0** для
@@ -343,14 +344,14 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 
 ### Android
 
-1. Скачайте `QSO-LOG-0.26.0.apk` со [страницы релиза](../../releases/tag/v0.26.0).
+1. Скачайте `QSO-LOG-0.26.1.apk` со [страницы релиза](../../releases/tag/v0.26.1).
 2. Откройте файл на телефоне. Android может попросить разрешить установку из этого источника — разрешите.
 
 ### macOS
 
-1. Скачайте со [страницы релиза](../../releases/tag/desktop-v1.11.0) файл для своего Mac:
-   - `QSO-LOG-1.11.0-macos-arm64.dmg`, если процессор Apple (M1 и новее);
-   - `QSO-LOG-1.11.0-macos-x64.dmg`, если Intel.
+1. Скачайте со [страницы релиза](../../releases/tag/desktop-v1.11.1) файл для своего Mac:
+   - `QSO-LOG-1.11.1-macos-arm64.dmg`, если процессор Apple (M1 и новее);
+   - `QSO-LOG-1.11.1-macos-x64.dmg`, если Intel.
 
    Узнать, какой у вас, можно в меню  → «Об этом Mac».
 2. Откройте DMG и перетащите QSO-LOG в «Программы».
@@ -360,7 +361,7 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 
 ### Windows
 
-1. Скачайте `QSO-LOG-1.11.0-windows-x64.zip` со [страницы релиза](../../releases/tag/desktop-v1.11.0).
+1. Скачайте `QSO-LOG-1.11.1-windows-x64.zip` со [страницы релиза](../../releases/tag/desktop-v1.11.1).
 2. Распакуйте архив целиком, например в «Документы». Прямо из архива программа не запустится.
 3. Запустите `QSO-LOG.exe`. Java ставить не нужно, она уже в папке.
 4. Windows может показать «Система Windows защитила ваш компьютер», потому что программа не подписана.
@@ -372,10 +373,10 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 
 ### Linux
 
-1. Скачайте `QSO-LOG-1.11.0-linux-amd64.deb` со [страницы релиза](../../releases/tag/desktop-v1.11.0).
+1. Скачайте `QSO-LOG-1.11.1-linux-amd64.deb` со [страницы релиза](../../releases/tag/desktop-v1.11.1).
 2. Установите двойным щелчком или из терминала:
    ```bash
-   sudo apt install ./QSO-LOG-1.11.0-linux-amd64.deb
+   sudo apt install ./QSO-LOG-1.11.1-linux-amd64.deb
    ```
 3. QSO-LOG появится в меню приложений, в разделе «Любительское радио».
 

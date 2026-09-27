@@ -41,6 +41,7 @@ import ru.r3xed.qsolog.tr
 /**
  * Before an ADIF or CSV file is saved: only the contacts not exported to this format yet (the default) or all of them,
  * and whether to mark the exported cards. [selected] is the number of records picked in the log, null for the whole log.
+ * For ADIF also the encoding: [utf8] true — UTF-8, false — Windows-1251 (LogHX, UR5EQF).
  * The same file is used by the phone and the desktop.
  */
 @Composable
@@ -50,13 +51,26 @@ fun ExportDialog(
     count: (onlyNew: Boolean) -> Int,
     onDismiss: () -> Unit,
     onConfirm: (onlyNew: Boolean, mark: Boolean) -> Unit,
+    utf8: Boolean = true,
+    onUtf8: (Boolean) -> Unit = {},
 ) {
     var onlyNew by remember { mutableStateOf(true) }
     var mark by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(tr("Экспорт в %s", format.title)) },
-        text = { ExportChoices(format, selected, count, onlyNew, { onlyNew = it }, mark, { mark = it }) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                ExportChoices(format, selected, count, onlyNew, { onlyNew = it }, mark, { mark = it })
+                if (format == ExportFormat.ADIF) {
+                    Column {
+                        Text(tr("Кодировка файла"), style = MaterialTheme.typography.titleSmall)
+                        Choice(tr("UTF-8 — для большинства программ и сайтов"), utf8) { onUtf8(true) }
+                        Choice(tr("Windows-1251 — для LogHX и UR5EQF"), !utf8) { onUtf8(false) }
+                    }
+                }
+            }
+        },
         confirmButton = { Button(onClick = { onConfirm(onlyNew, mark) }, enabled = count(onlyNew) > 0) { Text(tr("Сохранить файл (%s)", count(onlyNew))) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Отмена")) } },
     )

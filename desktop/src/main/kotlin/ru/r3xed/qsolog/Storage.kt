@@ -354,6 +354,10 @@ class Settings {
         set(v) = put("hamqth_enabled", v.toString())
 
     /** Last ЕРМАК / Cabrillo export: format name, CONTEST code, CATEGORY-OPERATOR. */
+    /** ADIF export encoding: UTF-8 (most programs and sites) or Windows-1251 (LogHX, UR5EQF). */
+    var adifUtf8: Boolean
+        get() = get("adif_utf8", "1") == "1"
+        set(v) = put("adif_utf8", if (v) "1" else "0")
     var contestFormat: String
         get() = get("contest_format", "ERMAK")
         set(v) = put("contest_format", v)
