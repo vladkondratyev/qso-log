@@ -262,6 +262,12 @@ class Settings {
     private var cachedPassword: String? = null
     private var cachedSitePassword: String? = null
 
+    /** Keys and passwords of the online logbooks, each its own keychain entry; null until loaded by [loadSecrets]. */
+    private var secrets: Map<String, String>? = null
+
+    /** Reads the online-logbook secrets (may wait on a keychain prompt) and returns them. */
+    fun loadSecrets(): Map<String, String> = secrets ?: SECRET_KEYS.associateWith { loadPassword(it, it) }.also { secrets = it }
+
     /** Everything except the password, which may wait on a keychain prompt; read it with [password]. */
     fun load() = StationSettings(
         myCall = get("my_call"),
@@ -271,6 +277,15 @@ class Settings {
         qrzPassword = cachedPassword.orEmpty(),
         qrzSiteEmail = get("qrz_site_email"),
         qrzSitePassword = cachedSitePassword.orEmpty(),
+        qrzcomKey = secrets?.get("qrzcom_key").orEmpty(),
+        eqslUser = get("eqsl_user"),
+        eqslPassword = secrets?.get("eqsl_password").orEmpty(),
+        eqslNickname = get("eqsl_nickname"),
+        clublogEmail = get("clublog_email"),
+        clublogPassword = secrets?.get("clublog_password").orEmpty(),
+        clublogKey = secrets?.get("clublog_key").orEmpty(),
+        lotwLocation = get("lotw_location"),
+        tqslPath = get("tqsl_path"),
         power = get("my_power"),
         station = AdifLabels.MINE.keys.associateWith { get("station_$it") }.filterValues { it.isNotEmpty() },
     )
@@ -285,6 +300,17 @@ class Settings {
         props.setProperty("my_power", s.power.trim())
         for (key in AdifLabels.MINE.keys) props.setProperty("station_$key", s.station[key].orEmpty().trim())
         props.setProperty("qrz_site_email", s.qrzSiteEmail.trim())
+        props.setProperty("eqsl_user", s.eqslUser.trim())
+        props.setProperty("eqsl_nickname", s.eqslNickname.trim())
+        props.setProperty("clublog_email", s.clublogEmail.trim())
+        props.setProperty("lotw_location", s.lotwLocation.trim())
+        props.setProperty("tqsl_path", s.tqslPath.trim())
+        // Until the secrets have been read, empty fields mean "not loaded yet", not "cleared".
+        secrets?.let { old ->
+            val now = mapOf("qrzcom_key" to s.qrzcomKey.trim(), "eqsl_password" to s.eqslPassword, "clublog_password" to s.clublogPassword, "clublog_key" to s.clublogKey.trim())
+            for ((k, v) in now) if (old[k] != v) savePassword(v, k, k)
+            secrets = now
+        }
         put("qrz_login", s.qrzLogin.trim())
         if (cachedSitePassword != null && s.qrzSitePassword != cachedSitePassword) {
             cachedSitePassword = s.qrzSitePassword
@@ -362,5 +388,7 @@ class Settings {
         const val ACCOUNT = "qrz.ru"
         /** The site's own login (e-mail), separate from the XML API one. */
         const val SITE_ACCOUNT = "www.qrz.ru"
+        /** Keychain accounts (and fallback property names) of the online-logbook secrets. */
+        val SECRET_KEYS = listOf("qrzcom_key", "eqsl_password", "clublog_password", "clublog_key")
     }
 }

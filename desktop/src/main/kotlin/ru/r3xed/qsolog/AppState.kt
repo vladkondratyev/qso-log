@@ -27,6 +27,9 @@ import ru.r3xed.qsolog.data.approxPosition
 import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
+import ru.r3xed.qsolog.data.UploadResult
+import ru.r3xed.qsolog.data.OnlineLogs
+import ru.r3xed.qsolog.data.OnlineLog
 import ru.r3xed.qsolog.data.QrzException
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.data.StationSettings
@@ -45,7 +48,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneOffset
 
-enum class Pane { Empty, Edit, Settings, Map, Welcome }
+enum class Pane { Empty, Edit, Settings, Map, Welcome, Reference }
 
 /** Callsign length at which the QRZ.ru / HamQTH lookup starts. */
 const val MIN_LOOKUP_LENGTH = 4
@@ -336,6 +339,13 @@ class AppState {
             // Read once even without an e-mail: the settings only save a password that has been loaded.
             val sitePw = withContext(Dispatchers.IO) { prefs.sitePassword() }
             if (settings.qrzSitePassword.isEmpty()) settings = settings.copy(qrzSitePassword = sitePw)
+            val sec = withContext(Dispatchers.IO) { prefs.loadSecrets() }
+            settings = settings.copy(
+                qrzcomKey = settings.qrzcomKey.ifEmpty { sec["qrzcom_key"].orEmpty() },
+                eqslPassword = settings.eqslPassword.ifEmpty { sec["eqsl_password"].orEmpty() },
+                clublogPassword = settings.clublogPassword.ifEmpty { sec["clublog_password"].orEmpty() },
+                clublogKey = settings.clublogKey.ifEmpty { sec["clublog_key"].orEmpty() },
+            )
         }
     }
 
@@ -1058,6 +1068,111 @@ class AppState {
             val qso = withContext(Dispatchers.IO) { db.get(id) } ?: return@launch
             pane = editReturn
             delete(qso)
+        }
+    }
+
+
+    // ---------- online logbooks: LoTW, QRZ.com, eQSL, Club Log ----------
+
+    /** The logbook being uploaded to right now (a spinner on its button). */
+    var uploading by mutableStateOf<OnlineLog?>(null); private set
+
+    /** The last result per logbook, shown under its button. */
+    var uploadStatus by mutableStateOf<Map<OnlineLog, String>>(emptyMap()); private set
+
+    /** Contacts not yet sent to [log]. */
+    fun pendingFor(log: OnlineLog): Int = allQsos.count { !log.isSent(it) }
+
+    /** What is missing in the settings for [log], or null when it can be uploaded. */
+    fun uploadProblem(log: OnlineLog): String? {
+        val s = settings
+        return when (log) {
+            OnlineLog.QRZCOM -> if (s.qrzcomKey.isBlank()) tr("Укажите API-ключ журнала QRZ.com") else null
+            OnlineLog.EQSL -> if (s.eqslUser.isBlank() || s.eqslPassword.isBlank()) tr("Укажите логин и пароль eQSL") else null
+            OnlineLog.CLUBLOG -> if (s.clublogEmail.isBlank() || s.clublogPassword.isBlank() || s.clublogKey.isBlank() || s.myCall.isBlank())
+                tr("Укажите e-mail, пароль и ключ приложения Club Log, а также свой позывной") else null
+            OnlineLog.LOTW -> LOTW_PROBLEM
+        }
+    }
+
+    /** Sends the contacts that [log] has not got yet and marks them as sent there. */
+    fun uploadTo(log: OnlineLog) {
+        if (uploading != null) return
+        uploadProblem(log)?.let {
+            uploadStatus = uploadStatus + (log to it)
+            say(it)
+            return
+        }
+        val s = settings
+        uploading = log
+        scope.launch {
+            val list = withContext(Dispatchers.IO) { db.all() }.filter { !log.isSent(it) }
+            val msg = if (list.isEmpty()) tr("Новых связей для %s нет", log.title) else {
+                val r = when (log) {
+                    OnlineLog.QRZCOM -> OnlineLogs.uploadQrzCom(s.qrzcomKey, list, USER_AGENT)
+                    OnlineLog.EQSL -> OnlineLogs.uploadEqsl(s.eqslUser, s.eqslPassword, s.eqslNickname, list, USER_AGENT)
+                    OnlineLog.CLUBLOG -> OnlineLogs.uploadClubLog(s.clublogEmail, s.clublogPassword, s.myCall, s.clublogKey, list, USER_AGENT)
+                    OnlineLog.LOTW -> uploadLotw(list)
+                }
+                withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
+                reload()
+                buildString {
+                    append(tr("%s: отправлено %s", log.title, r.sent.size))
+                    if (r.duplicates > 0) append(tr(", уже были там: %s", r.duplicates))
+                    r.error?.let { append(". ").append(it) }
+                }
+            }
+            uploadStatus = uploadStatus + (log to msg)
+            uploading = null
+            say(msg)
+        }
+    }
+
+    /** LoTW: the contacts are signed and sent by ARRL's TQSL, run in batch mode. */
+    private val LOTW_PROBLEM: String?
+        get() = when {
+            tqslExecutable() == null -> tr("Не найдена программа TQSL. Установите её с lotw.arrl.org или укажите путь к ней")
+            settings.lotwLocation.isBlank() -> tr("Укажите Station Location — название места станции из TQSL")
+            else -> null
+        }
+
+    /** tqsl from the settings, else the usual install places. */
+    fun tqslExecutable(): String? = listOfNotNull(
+        settings.tqslPath.trim().ifBlank { null },
+        "/Applications/TrustedQSL/tqsl.app/Contents/MacOS/tqsl",
+        "C:\\Program Files (x86)\\TrustedQSL\\tqsl.exe",
+        "C:\\Program Files\\TrustedQSL\\tqsl.exe",
+        "/usr/bin/tqsl", "/usr/local/bin/tqsl",
+    ).firstOrNull { File(it).canExecute() }
+
+    /**
+     * `tqsl -d -u -a compliant -x -l LOCATION file`: sign, upload, exit. Exit codes (TQSL manual): 0 — done,
+     * 8 — all already in LoTW (or out of the certificate's dates), 9 — some of them; anything else is an error.
+     */
+    private suspend fun uploadLotw(list: List<Qso>): UploadResult = withContext(Dispatchers.IO) {
+        val exe = tqslExecutable() ?: return@withContext UploadResult(emptyList(), 0, LOTW_PROBLEM)
+        val f = File.createTempFile("qsolog-lotw", ".adi")
+        try {
+            f.writeText(OnlineLogs.file(list), Charsets.UTF_8)
+            val p = ProcessBuilder(exe, "-d", "-u", "-a", "compliant", "-x", "-l", settings.lotwLocation.trim(), f.absolutePath)
+                .redirectErrorStream(true).start()
+            val out = StringBuilder()
+            val reader = kotlin.concurrent.thread(isDaemon = true) { p.inputStream.bufferedReader().forEachLine { out.appendLine(it) } }
+            if (!p.waitFor(10, java.util.concurrent.TimeUnit.MINUTES)) {
+                p.destroyForcibly()
+                return@withContext UploadResult(emptyList(), 0, tr("TQSL не закончил работу за 10 минут"))
+            }
+            reader.join(1000)
+            when (val code = p.exitValue()) {
+                0 -> UploadResult(list, 0, null)
+                8 -> UploadResult(list, list.size, null)
+                9 -> UploadResult(list, 0, tr("часть связей LoTW уже получал раньше"))
+                else -> UploadResult(emptyList(), 0, tr("TQSL завершился с кодом %s: %s", code, out.lines().lastOrNull { it.isNotBlank() }.orEmpty().take(160)))
+            }
+        } catch (e: Exception) {
+            UploadResult(emptyList(), 0, tr("Не удалось запустить TQSL: %s", e.message ?: e.javaClass.simpleName))
+        } finally {
+            f.delete()
         }
     }
 

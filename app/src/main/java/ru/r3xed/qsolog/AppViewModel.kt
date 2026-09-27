@@ -28,6 +28,9 @@ import ru.r3xed.qsolog.data.approxPosition
 import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
+import ru.r3xed.qsolog.data.UploadResult
+import ru.r3xed.qsolog.data.OnlineLogs
+import ru.r3xed.qsolog.data.OnlineLog
 import ru.r3xed.qsolog.data.QrzException
 import ru.r3xed.qsolog.data.QrzInfo
 import ru.r3xed.qsolog.data.Qso
@@ -109,7 +112,11 @@ sealed interface Screen {
     data object Settings : Screen
     data object Map : Screen
     data object Welcome : Screen
+    data object Reference : Screen
 }
+
+/** User-Agent for the online logbooks: they ask programs to name themselves. */
+private val ONLINE_AGENT = "QSO-LOG/${BuildConfig.VERSION_NAME} (+https://github.com/vladkondratyev/qso-log)"
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val db = QsoDb(app)
@@ -382,6 +389,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Where "Назад" in the settings returns: the log, or the card that sent the user there. */
     private var settingsReturn: Screen = Screen.Log
+
+    /** The reference screen (bands, Morse, spelling alphabets). */
+    fun openReference() {
+        screen = Screen.Reference
+    }
+
+    fun closeReference() {
+        screen = Screen.Log
+    }
 
     /** Leaves the first-start setup (done or "Настроить позже"); it is not shown again. */
     fun finishWelcome() {
@@ -1048,6 +1064,93 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val qso = withContext(Dispatchers.IO) { db.get(id) } ?: return@launch
             screen = editReturn
             delete(qso)
+        }
+    }
+
+
+    // ---------- online logbooks: LoTW, QRZ.com, eQSL, Club Log ----------
+
+    /** The logbook being uploaded to right now (a spinner on its button). */
+    var uploading by mutableStateOf<OnlineLog?>(null); private set
+
+    /** The last result per logbook, shown under its button. */
+    var uploadStatus by mutableStateOf<Map<OnlineLog, String>>(emptyMap()); private set
+
+    /** Contacts not yet sent to [log]. */
+    fun pendingFor(log: OnlineLog): Int = allQsos.count { !log.isSent(it) }
+
+    /** What is missing in the settings for [log], or null when it can be uploaded. */
+    fun uploadProblem(log: OnlineLog): String? {
+        val s = settings
+        return when (log) {
+            OnlineLog.QRZCOM -> if (s.qrzcomKey.isBlank()) tr("Укажите API-ключ журнала QRZ.com") else null
+            OnlineLog.EQSL -> if (s.eqslUser.isBlank() || s.eqslPassword.isBlank()) tr("Укажите логин и пароль eQSL") else null
+            OnlineLog.CLUBLOG -> if (s.clublogEmail.isBlank() || s.clublogPassword.isBlank() || s.clublogKey.isBlank() || s.myCall.isBlank())
+                tr("Укажите e-mail, пароль и ключ приложения Club Log, а также свой позывной") else null
+            OnlineLog.LOTW -> LOTW_PROBLEM
+        }
+    }
+
+    /** Sends the contacts that [log] has not got yet and marks them as sent there. */
+    fun uploadTo(log: OnlineLog) {
+        if (uploading != null) return
+        uploadProblem(log)?.let {
+            uploadStatus = uploadStatus + (log to it)
+            say(it)
+            return
+        }
+        val s = settings
+        uploading = log
+        viewModelScope.launch {
+            val list = withContext(Dispatchers.IO) { db.all() }.filter { !log.isSent(it) }
+            val msg = if (list.isEmpty()) tr("Новых связей для %s нет", log.title) else {
+                val r = when (log) {
+                    OnlineLog.QRZCOM -> OnlineLogs.uploadQrzCom(s.qrzcomKey, list, ONLINE_AGENT)
+                    OnlineLog.EQSL -> OnlineLogs.uploadEqsl(s.eqslUser, s.eqslPassword, s.eqslNickname, list, ONLINE_AGENT)
+                    OnlineLog.CLUBLOG -> OnlineLogs.uploadClubLog(s.clublogEmail, s.clublogPassword, s.myCall, s.clublogKey, list, ONLINE_AGENT)
+                    OnlineLog.LOTW -> uploadLotw(list)
+                }
+                withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
+                reload()
+                buildString {
+                    append(tr("%s: отправлено %s", log.title, r.sent.size))
+                    if (r.duplicates > 0) append(tr(", уже были там: %s", r.duplicates))
+                    r.error?.let { append(". ").append(it) }
+                }
+            }
+            uploadStatus = uploadStatus + (log to msg)
+            uploading = null
+            say(msg)
+        }
+    }
+
+    /** LoTW takes only contacts signed by ARRL's TQSL, which has no Android version: the phone exports them for it. */
+    private val LOTW_PROBLEM: String? = null
+
+    private suspend fun uploadLotw(list: List<Qso>): UploadResult =
+        UploadResult(emptyList(), 0, tr("LoTW принимает только связи, подписанные программой TQSL: используйте «Экспорт для LoTW»"))
+
+    /** The ADIF file for TQSL; the exported contacts are marked "queued" (Q) so the next export has only new ones. */
+    private var pendingLotw: List<Qso> = emptyList()
+
+    fun lotwFileName(): String = "${settings.myCall.ifBlank { "log" }.replace('/', '-')}_lotw_${LocalDate.now()}.adi"
+
+    fun exportLotw(uri: Uri) {
+        viewModelScope.launch {
+            val msg = try {
+                val list = withContext(Dispatchers.IO) {
+                    val list = db.all().filter { !OnlineLog.LOTW.isSent(it) }
+                    getApplication<Application>().contentResolver.openOutputStream(uri)!!.use { it.write(OnlineLogs.file(list).toByteArray(Charsets.UTF_8)) }
+                    list.forEach { db.save(OnlineLog.LOTW.mark(it, "Q")) }
+                    list
+                }
+                reload()
+                tr("Для LoTW сохранено связей: %s. Подпишите файл в TQSL и отправьте в LoTW", list.size)
+            } catch (e: Exception) {
+                tr("Не удалось сохранить файл: %s", e.message)
+            }
+            uploadStatus = uploadStatus + (OnlineLog.LOTW to msg)
+            say(msg)
         }
     }
 

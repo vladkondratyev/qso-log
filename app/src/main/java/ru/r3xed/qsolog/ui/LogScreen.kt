@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.filled.Check
 import ru.r3xed.qsolog.LogFilter
@@ -129,12 +130,17 @@ fun LogScreen(
                         OneLineText((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", vm.total), maxSize = 16.sp, minSize = 11.sp, color = x.muted)
                     }
                 }
-                FilledTonalIconButton(onClick = vm::openMap, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Filled.Map, contentDescription = tr("Карта QSO"), modifier = Modifier.size(30.dp))
+                // Three round buttons: reference, map, settings; 50 dp each so the logo keeps its room on a narrow phone.
+                FilledTonalIconButton(onClick = vm::openReference, modifier = Modifier.size(50.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = tr("Справка"), modifier = Modifier.size(26.dp))
                 }
-                Spacer(Modifier.width(10.dp))
-                FilledTonalIconButton(onClick = { vm.openSettings() }, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Filled.Settings, contentDescription = tr("Настройки"), modifier = Modifier.size(30.dp))
+                Spacer(Modifier.width(8.dp))
+                FilledTonalIconButton(onClick = vm::openMap, modifier = Modifier.size(50.dp)) {
+                    Icon(Icons.Filled.Map, contentDescription = tr("Карта QSO"), modifier = Modifier.size(27.dp))
+                }
+                Spacer(Modifier.width(8.dp))
+                FilledTonalIconButton(onClick = { vm.openSettings() }, modifier = Modifier.size(50.dp)) {
+                    Icon(Icons.Filled.Settings, contentDescription = tr("Настройки"), modifier = Modifier.size(27.dp))
                 }
             }
 

@@ -28,6 +28,13 @@ class Settings(context: Context) {
         qrzPassword = secret.getString("qrz_password", "") ?: "",
         qrzSiteEmail = prefs.getString("qrz_site_email", "") ?: "",
         qrzSitePassword = secret.getString("qrz_site_password", "") ?: "",
+        qrzcomKey = secret.getString("qrzcom_key", "") ?: "",
+        eqslUser = prefs.getString("eqsl_user", "") ?: "",
+        eqslPassword = secret.getString("eqsl_password", "") ?: "",
+        eqslNickname = prefs.getString("eqsl_nickname", "") ?: "",
+        clublogEmail = prefs.getString("clublog_email", "") ?: "",
+        clublogPassword = secret.getString("clublog_password", "") ?: "",
+        clublogKey = secret.getString("clublog_key", "") ?: "",
         power = prefs.getString("my_power", "") ?: "",
         station = AdifLabels.MINE.keys.associateWith { prefs.getString("station_$it", "") ?: "" }.filterValues { it.isNotEmpty() },
     )
@@ -39,12 +46,17 @@ class Settings(context: Context) {
             .putString("my_qth", s.myQth.trim())
             .putString("qrz_login", s.qrzLogin.trim())
             .putString("qrz_site_email", s.qrzSiteEmail.trim())
+            .putString("eqsl_user", s.eqslUser.trim())
+            .putString("eqsl_nickname", s.eqslNickname.trim())
+            .putString("clublog_email", s.clublogEmail.trim())
             .putString("my_power", s.power.trim())
             .apply {
                 for (key in AdifLabels.MINE.keys) putString("station_$key", s.station[key].orEmpty().trim())
             }
             .apply()
-        secret.edit().putString("qrz_password", s.qrzPassword).putString("qrz_site_password", s.qrzSitePassword).apply()
+        secret.edit().putString("qrz_password", s.qrzPassword).putString("qrz_site_password", s.qrzSitePassword)
+            .putString("qrzcom_key", s.qrzcomKey.trim()).putString("eqsl_password", s.eqslPassword)
+            .putString("clublog_password", s.clublogPassword).putString("clublog_key", s.clublogKey.trim()).apply()
     }
 
     /** Band, mode and frequency from the previous contact, so the next one starts pre-filled. */

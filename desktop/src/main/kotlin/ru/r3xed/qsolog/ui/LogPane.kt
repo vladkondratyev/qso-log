@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.filled.Check
 import ru.r3xed.qsolog.LogFilter
@@ -118,6 +119,12 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                 val me = state.settings.myCall
                 Text((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", state.total), style = MaterialTheme.typography.bodyMedium, color = x.muted)
             }
+            Tip(tr("Справка")) {
+                FilledTonalIconButton(onClick = { state.pane = Pane.Reference }, modifier = Modifier.size(52.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = tr("Справка"), modifier = Modifier.size(26.dp))
+                }
+            }
+            Spacer(Modifier.width(8.dp))
             Tip(tr("Карта QSO")) {
                 FilledTonalIconButton(onClick = state::openMap, modifier = Modifier.size(52.dp)) {
                     Icon(Icons.Filled.Map, contentDescription = tr("Карта QSO"), modifier = Modifier.size(28.dp))

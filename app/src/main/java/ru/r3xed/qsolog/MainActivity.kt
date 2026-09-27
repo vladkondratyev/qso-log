@@ -39,6 +39,7 @@ import ru.r3xed.qsolog.ui.ContestExportDialog
 import ru.r3xed.qsolog.ui.QsoTheme
 import ru.r3xed.qsolog.ui.SettingsScreen
 import ru.r3xed.qsolog.ui.WelcomeScreen
+import ru.r3xed.qsolog.ui.ReferenceScreen
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -83,6 +84,10 @@ class MainActivity : ComponentActivity() {
                     uri?.let(vm::exportSelectedAdif)
                 }
                 // Contest reports: .txt (ЕРМАК) and .cbr (Cabrillo) are plain text.
+                // LoTW: an ADIF file to sign in TQSL on a computer.
+                val exportLotw = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+                    uri?.let(vm::exportLotw)
+                }
                 val exportContest = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
                     uri?.let(vm::exportContest)
                 }
@@ -123,6 +128,7 @@ class MainActivity : ComponentActivity() {
                             )
                             Screen.Map -> MapScreen(vm)
                             Screen.Welcome -> WelcomeScreen(vm)
+                            Screen.Reference -> ReferenceScreen(onClose = vm::closeReference)
                             // A fresh card (also "＋ Следующая") starts with fresh fields, focus and scroll.
                             Screen.Edit -> key(vm.editSession) { EditScreen(
                                 vm,
@@ -138,6 +144,7 @@ class MainActivity : ComponentActivity() {
                                 onExportAdif = { exportAdif.launch(vm.adifFileName()) },
                                 onImportAdif = { importAdif.launch(arrayOf("*/*")) },
                                 onImportContest = { importContest.launch(arrayOf("*/*")) },
+                                onExportLotw = { exportLotw.launch(vm.lotwFileName()) },
                             )
                         }
                         vm.contestTarget?.let { target ->

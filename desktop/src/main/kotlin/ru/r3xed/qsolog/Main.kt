@@ -45,6 +45,7 @@ import ru.r3xed.qsolog.ui.MapPane
 import ru.r3xed.qsolog.ui.QsoTheme
 import ru.r3xed.qsolog.ui.SettingsPane
 import ru.r3xed.qsolog.ui.WelcomePane
+import ru.r3xed.qsolog.ui.ReferencePane
 import java.awt.Dimension
 import java.awt.FileDialog
 import java.io.File
@@ -131,6 +132,7 @@ fun main() {
                     Item(tr("Импорт из ЕРМАК / Cabrillo…"), onClick = importContest)
                     Separator()
                     Item(tr("Карта QSO"), shortcut = shortcut(Key.M), onClick = state::openMap)
+                    Item(tr("Справка: частоты, Морзе, позывные"), onClick = { state.pane = Pane.Reference })
                     Item(tr("Настройки"), shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
                     if (!IS_MAC) {
                         Separator()
@@ -187,6 +189,7 @@ fun App(state: AppState, files: Exports) {
                         Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif, files.importContest)
                         Pane.Map -> MapPane(state)
                         Pane.Welcome -> WelcomePane(state)
+                        Pane.Reference -> ReferencePane(onClose = { state.pane = Pane.Empty })
                     }
                 }
             }
