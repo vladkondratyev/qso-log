@@ -14,10 +14,6 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 
 Программа бесплатная, исходный код открыт. Интерфейс на русском и английском.
 
-> **In English:** QSO-LOG is a free ham radio logbook for Android, macOS, Windows and Linux. It looks up stations
-> on QRZ.ru and HamQTH, shows the distance and path map, records voice notes, and exports ADIF, CSV and
-> ERMAK / Cabrillo contest reports. Switch the interface to English in Settings → “Language / Язык”.
-
 <p align="center">
 <img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG на компьютере и на телефоне">
 </p>
@@ -275,9 +271,9 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 </p>
 
 <p>
-<img src="docs/screenshots/en-01-log.png" width="200" alt="Log in English">
-<img src="docs/screenshots/en-02-new-qso.png" width="200" alt="New QSO in English">
-<img src="docs/screenshots/en-03-language.png" width="200" alt="Language setting">
+<img src="docs/screenshots/en-01-log.png" width="200" alt="Журнал на английском">
+<img src="docs/screenshots/en-02-new-qso.png" width="200" alt="Новая связь на английском">
+<img src="docs/screenshots/en-03-language.png" width="200" alt="Выбор языка">
 </p>
 
 <details>
@@ -337,7 +333,7 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 <img src="docs/screenshots/desktop-09-about.png" width="440" alt="Версия и ссылка на проект">
 <img src="docs/screenshots/desktop-10-dark.png" width="440" alt="Тёмная тема">
 <img src="docs/screenshots/desktop-11-ubuntu.png" width="440" alt="QSO-LOG в Ubuntu">
-<img src="docs/screenshots/desktop-en-02-new-qso.png" width="440" alt="Desktop version in English">
+<img src="docs/screenshots/desktop-en-02-new-qso.png" width="440" alt="Версия для компьютера на английском">
 </p>
 </details>
 

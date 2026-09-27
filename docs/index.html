@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QSO-LOG — аппаратный журнал радиолюбителя</title>
-<meta name="description" content="Бесплатный аппаратный журнал радиолюбителя для Android, macOS, Windows и Linux: QRZ.ru, карта трассы, голосовые заметки, ADIF, ЕРМАК/Cabrillo. Free ham radio logbook.">
+<meta name="description" content="Бесплатный аппаратный журнал радиолюбителя для Android, macOS, Windows и Linux: QRZ.ru, карта трассы, голосовые заметки, ADIF, ЕРМАК/Cabrillo.">
 <meta property="og:title" content="QSO-LOG — аппаратный журнал радиолюбителя">
 <meta property="og:description" content="Android · macOS · Windows · Linux. QRZ.ru, карта трассы, голосовые заметки, ADIF, ЕРМАК/Cabrillo.">
 <meta property="og:image" content="https://vladkondratyev.github.io/qso-log/social-preview.png">
@@ -29,8 +29,6 @@ header{display:flex;align-items:center;justify-content:space-between;gap:16px;pa
 header img.logo{height:40px}
 .dark-logo{display:none}
 @media (prefers-color-scheme:dark){.light-logo{display:none}.dark-logo{display:inline}}
-.lang button{font:inherit;font-weight:700;border:1.5px solid var(--line);background:transparent;color:var(--ink);border-radius:10px;padding:6px 12px;cursor:pointer}
-.lang button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .hero{display:grid;grid-template-columns:1fr;gap:28px;align-items:center;padding:24px 0 40px}
 @media (min-width:900px){.hero{grid-template-columns:5fr 7fr}}
 h1{font-size:clamp(2rem,4.5vw,3rem);line-height:1.1;margin:0 0 14px;text-wrap:balance}
@@ -53,7 +51,6 @@ h2{font-size:1.6rem;margin:0 0 18px}
 .shots img{height:440px;border-radius:14px;scroll-snap-align:start;border:1px solid var(--line)}
 .desk img{width:100%;border-radius:14px;border:1px solid var(--line)}
 footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px solid var(--line)}
-[data-l]:not(.on){display:none}
 </style>
 </head>
 <body>
@@ -63,21 +60,16 @@ footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px so
       <img class="logo light-logo" src="logo-light.png" alt="QSO-LOG">
       <img class="logo dark-logo" src="logo-dark.png" alt="QSO-LOG">
     </div>
-    <div class="lang" role="group" aria-label="Language">
-      <button type="button" data-set="ru">RU</button>
-      <button type="button" data-set="en">EN</button>
-    </div>
   </header>
 
   <div class="hero">
     <div>
-      <h1><span data-l="ru">Аппаратный журнал радиолюбителя для телефона и компьютера</span><span data-l="en">A ham radio logbook for your phone and your computer</span></h1>
+      <h1>Аппаратный журнал радиолюбителя для телефона и компьютера</h1>
       <p class="lead">
-        <span data-l="ru">Записывайте связи за несколько нажатий. Имя и город абонента программа возьмёт с QRZ.ru, расстояние посчитает сама, журнал выгрузит в ADIF или в отчёт для соревнований. Бесплатно, исходный код открыт.</span>
-        <span data-l="en">Log a QSO in a few taps. QSO-LOG looks the station up on QRZ.ru, works out the distance and exports your log to ADIF or a contest report. Free and open source.</span>
+        Записывайте связи за несколько нажатий. Имя и город абонента программа возьмёт с QRZ.ru, расстояние посчитает сама, журнал выгрузит в ADIF или в отчёт для соревнований. Бесплатно, исходный код открыт.
       </p>
       <div class="dl">
-        <a class="primary" id="dl-android" href="https://github.com/vladkondratyev/qso-log/releases/latest"><b>Android</b><span data-l="ru">8.0 и новее · APK</span><span data-l="en">8.0 and newer · APK</span></a>
+        <a class="primary" id="dl-android" href="https://github.com/vladkondratyev/qso-log/releases/latest"><b>Android</b>8.0 и новее · APK</a>
         <a id="dl-mac-arm" href="https://github.com/vladkondratyev/qso-log/releases"><b>macOS · Apple Silicon</b><span>M1+ · DMG</span></a>
         <a id="dl-mac-x64" href="https://github.com/vladkondratyev/qso-log/releases"><b>macOS · Intel</b><span>Ventura+ · DMG</span></a>
         <a id="dl-win" href="https://github.com/vladkondratyev/qso-log/releases"><b>Windows 10/11</b><span>x64 · ZIP</span></a>
@@ -85,71 +77,55 @@ footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px so
       </div>
       <p style="color:var(--muted);font-size:.95rem;margin-top:12px" id="versions"></p>
     </div>
-    <img src="screenshots/00-platforms.png" alt="QSO-LOG на компьютере и на телефоне / on a computer and a phone">
+    <img src="screenshots/00-platforms.png" alt="QSO-LOG на компьютере и на телефоне">
   </div>
 
   <section>
-    <h2><span data-l="ru">Что умеет</span><span data-l="en">Features</span></h2>
+    <h2>Что умеет</h2>
     <div class="grid">
-      <div class="card"><h3><span data-l="ru">Ввод в эфире</span><span data-l="en">Logging on the air</span></h3><p><span data-l="ru">Позывной, частота, RST — и всё. Подсказки из журнала, предупреждение о повторе, частота в килогерцах, кнопка «Следующая» для пайлапа.</span><span data-l="en">Callsign, frequency, RST, done. Suggestions from your log, a dupe warning, kHz input and a “Next” button for pile-ups.</span></p></div>
-      <div class="card"><h3><span data-l="ru">QRZ.ru и HamQTH</span><span data-l="en">QRZ.ru and HamQTH</span></h3><p><span data-l="ru">Имя, город и локатор приходят с QRZ.ru через XML API или по учётной записи сайта. Если там пусто, страну и область подскажет HamQTH.</span><span data-l="en">Name, city and locator come from QRZ.ru, via the XML API or your site login. If there is nothing there, HamQTH fills in the country and region.</span></p></div>
-      <div class="card"><h3><span data-l="ru">Голосовые заметки</span><span data-l="en">Voice notes</span></h3><p><span data-l="ru">Удержите «Добавить QSO» и говорите. Запись останется в карточке связи, её можно отправить в мессенджер.</span><span data-l="en">Hold “Add QSO” and talk. The recording stays with the QSO and can be sent to a messenger.</span></p></div>
-      <div class="card"><h3><span data-l="ru">Расстояние и карты</span><span data-l="en">Distance and maps</span></h3><p><span data-l="ru">Азимут, расстояние и трасса на карте. Отдельная карта показывает всех, с кем вы работали.</span><span data-l="en">Bearing, distance and the path on a map. Another map shows every station in your log.</span></p></div>
-      <div class="card"><h3><span data-l="ru">Журнал</span><span data-l="en">Log</span></h3><p><span data-l="ru">Поиск по позывному, имени и городу. Сортировка по дате, расстоянию, позывному или диапазону.</span><span data-l="en">Search by callsign, name or city. Sort by date, distance, callsign or band.</span></p></div>
-      <div class="card"><h3><span data-l="ru">Экспорт</span><span data-l="en">Export</span></h3><p><span data-l="ru">ADIF, CSV, ЕРМАК и Cabrillo. По умолчанию выгружаются только новые связи, а в карточке остаётся отметка с датой.</span><span data-l="en">ADIF, CSV, ERMAK and Cabrillo. Only new QSOs go out by default, and each card keeps a dated export mark.</span></p></div>
-      <div class="card"><h3><span data-l="ru">Справочник</span><span data-l="en">Reference</span></h3><p><span data-l="ru">Диапазоны РФ, план IARU, Морзе, Q-коды, калькуляторы кабелей, КСВ и антенн, страна по позывному. Работает без интернета.</span><span data-l="en">Russian bands, the IARU plan, Morse, Q codes, calculators for cables, SWR and antennas, country by callsign. Works offline.</span></p></div>
+      <div class="card"><h3>Ввод в эфире</h3><p>Позывной, частота, RST — и всё. Подсказки из журнала, предупреждение о повторе, частота в килогерцах, кнопка «Следующая» для пайлапа.</p></div>
+      <div class="card"><h3>QRZ.ru и HamQTH</h3><p>Имя, город и локатор приходят с QRZ.ru через XML API или по учётной записи сайта. Если там пусто, страну и область подскажет HamQTH.</p></div>
+      <div class="card"><h3>Голосовые заметки</h3><p>Удержите «Добавить QSO» и говорите. Запись останется в карточке связи, её можно отправить в мессенджер.</p></div>
+      <div class="card"><h3>Расстояние и карты</h3><p>Азимут, расстояние и трасса на карте. Отдельная карта показывает всех, с кем вы работали.</p></div>
+      <div class="card"><h3>Журнал</h3><p>Поиск по позывному, имени и городу. Сортировка по дате, расстоянию, позывному или диапазону.</p></div>
+      <div class="card"><h3>Экспорт</h3><p>ADIF, CSV, ЕРМАК и Cabrillo. По умолчанию выгружаются только новые связи, а в карточке остаётся отметка с датой.</p></div>
+      <div class="card"><h3>Справочник</h3><p>Диапазоны РФ, план IARU, Морзе, Q-коды, калькуляторы кабелей, КСВ и антенн, страна по позывному. Работает без интернета.</p></div>
     </div>
   </section>
 
   <section>
-    <h2><span data-l="ru">Телефон</span><span data-l="en">Phone</span></h2>
+    <h2>Телефон</h2>
     <div class="shots">
-      <img src="screenshots/01-log.png" alt="Журнал / Log" loading="lazy">
-      <img src="screenshots/23-dupe.png" alt="Новый QSO / New QSO" loading="lazy">
-      <img src="screenshots/03-card-map.png" alt="Карта трассы / Path map" loading="lazy">
-      <img src="screenshots/24-voice-menu.png" alt="Голосовая заметка / Voice note" loading="lazy">
+      <img src="screenshots/01-log.png" alt="Журнал" loading="lazy">
+      <img src="screenshots/23-dupe.png" alt="Новый QSO" loading="lazy">
+      <img src="screenshots/03-card-map.png" alt="Карта трассы" loading="lazy">
+      <img src="screenshots/24-voice-menu.png" alt="Голосовая заметка" loading="lazy">
       <img src="screenshots/26-sources.png" alt="QRZ.ru" loading="lazy">
-      <img src="screenshots/32-ref-morse.png" alt="Морзе / Morse" loading="lazy">
-      <img src="screenshots/en-02-new-qso.png" alt="English" loading="lazy">
+      <img src="screenshots/32-ref-morse.png" alt="Морзе" loading="lazy">
+      <img src="screenshots/en-02-new-qso.png" alt="Интерфейс на английском" loading="lazy">
     </div>
   </section>
 
   <section>
-    <h2><span data-l="ru">Компьютер: macOS, Windows, Linux</span><span data-l="en">Computer: macOS, Windows, Linux</span></h2>
-    <p style="color:var(--muted);margin-top:-6px"><span data-l="ru">То же самое, что на телефоне, но в окне на две части и с клавиатуры: Enter переходит к следующему полю, Alt+1…9 выбирает диапазон.</span><span data-l="en">Everything the phone version does, in a two-part window and from the keyboard: Enter moves to the next field, Alt+1…9 picks a band.</span></p>
-    <div class="desk"><img src="screenshots/desktop-04-card-map.png" alt="QSO-LOG на компьютере / on a computer" loading="lazy"></div>
+    <h2>Компьютер: macOS, Windows, Linux</h2>
+    <p style="color:var(--muted);margin-top:-6px">То же самое, что на телефоне, но в окне на две части и с клавиатуры: Enter переходит к следующему полю, Alt+1…9 выбирает диапазон.</p>
+    <div class="desk"><img src="screenshots/desktop-04-card-map.png" alt="QSO-LOG на компьютере" loading="lazy"></div>
   </section>
 
   <footer>
-    <span data-l="ru">QSO-LOG распространяется бесплатно по лицензии MIT. Подробная инструкция, исходный код и место для сообщений об ошибках:</span>
-    <span data-l="en">QSO-LOG is free, under the MIT licence. The full manual, source code and bug reports:</span>
+    QSO-LOG распространяется бесплатно по лицензии MIT. Подробная инструкция, исходный код и место для сообщений об ошибках:
     <a href="https://github.com/vladkondratyev/qso-log">github.com/vladkondratyev/qso-log</a>.
   </footer>
 </div>
 
 <script>
 (function () {
-  // Language: saved choice, else the browser's.
-  var saved = null;
-  try { saved = localStorage.getItem('lang'); } catch (e) {}
-  var lang = saved || ((navigator.language || 'ru').slice(0, 2) === 'ru' ? 'ru' : 'en');
-  function apply(l) {
-    lang = l;
-    document.documentElement.lang = l;
-    document.querySelectorAll('[data-l]').forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-l') === l); });
-    document.querySelectorAll('[data-set]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-set') === l ? 'true' : 'false'); });
-    try { localStorage.setItem('lang', l); } catch (e) {}
-    showVersions();
-  }
-  document.querySelectorAll('[data-set]').forEach(function (b) { b.addEventListener('click', function () { apply(b.getAttribute('data-set')); }); });
-
   // Direct download links from the newest releases: Android is tagged vX.Y.Z, the desktop desktop-vX.Y.Z.
   var found = {};
   function showVersions() {
     var el = document.getElementById('versions');
     if (!found.android && !found.desktop) { el.textContent = ''; return; }
-    el.textContent = (lang === 'ru' ? 'Версии: Android ' : 'Versions: Android ') + (found.android || '—') +
-      (lang === 'ru' ? ', компьютер ' : ', desktop ') + (found.desktop || '—');
+    el.textContent = 'Версии: Android ' + (found.android || '—') + ', компьютер ' + (found.desktop || '—');
   }
   fetch('https://api.github.com/repos/vladkondratyev/qso-log/releases?per_page=30')
     .then(function (r) { return r.ok ? r.json() : []; })
@@ -174,7 +150,6 @@ footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px so
       showVersions();
     })
     .catch(function () {});
-  apply(lang);
 })();
 </script>
 </body>
