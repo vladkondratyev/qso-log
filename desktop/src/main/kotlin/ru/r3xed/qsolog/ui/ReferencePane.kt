@@ -1,5 +1,9 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.ScrollState
+import ru.r3xed.qsolog.data.LatLon
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,7 +46,7 @@ import ru.r3xed.qsolog.tr
  * reading callsigns. Three tabs; the tables come from [Reference].
  */
 @Composable
-fun ReferencePane(onClose: () -> Unit) {
+fun ReferencePane(onClose: () -> Unit, myPosition: LatLon? = null) {
     val x = LocalExtra.current
     var tab by rememberSaveable { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -53,13 +57,21 @@ fun ReferencePane(onClose: () -> Unit) {
             Text(tr("Справка"), style = MaterialTheme.typography.headlineSmall)
         }
         // Three tabs as a row of pills; the chosen one is filled.
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(tr("Частоты РФ"), tr("Морзе"), tr("Позывные")).forEachIndexed { i, title ->
+        // Ten tabs: a row of pills that scrolls sideways.
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(
+                tr("Частоты РФ"), tr("План и активность"), tr("Морзе"), tr("Позывные"), tr("Коды"),
+                tr("Уровни"), tr("Кабели"), tr("Антенны"), tr("Префиксы"), tr("Прохождение"),
+            ).forEachIndexed { i, title ->
                 val on = tab == i
                 Box(
-                    Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp))
+                    Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).padding(horizontal = 0.dp)
                         .background(if (on) MaterialTheme.colorScheme.primary else x.field)
-                        .selectable(selected = on, role = Role.Tab) { tab = i },
+                        .selectable(selected = on, role = Role.Tab) { tab = i }
+                        .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -70,13 +82,21 @@ fun ReferencePane(onClose: () -> Unit) {
             }
         }
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+            // Each tab starts at its top.
+            Modifier.weight(1f).verticalScroll(remember(tab) { ScrollState(0) }).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             when (tab) {
                 0 -> BandsTable()
-                1 -> MorseTables()
-                else -> PhoneticTable()
+                1 -> PlanTab()
+                2 -> MorseTables()
+                3 -> PhoneticTable()
+                4 -> CodesTab()
+                5 -> LevelsTab()
+                6 -> CablesTab()
+                7 -> AntennasTab()
+                8 -> PrefixTab(myPosition)
+                else -> PropagationTab()
             }
             Spacer(Modifier.height(16.dp))
         }

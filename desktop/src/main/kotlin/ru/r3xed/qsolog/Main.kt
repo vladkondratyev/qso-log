@@ -189,7 +189,7 @@ fun App(state: AppState, files: Exports) {
                         Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif, files.importContest)
                         Pane.Map -> MapPane(state)
                         Pane.Welcome -> WelcomePane(state)
-                        Pane.Reference -> ReferencePane(onClose = { state.pane = Pane.Empty })
+                        Pane.Reference -> ReferencePane(onClose = { state.pane = Pane.Empty }, myPosition = state.settings.myPosition)
                     }
                 }
             }

@@ -128,7 +128,7 @@ class MainActivity : ComponentActivity() {
                             )
                             Screen.Map -> MapScreen(vm)
                             Screen.Welcome -> WelcomeScreen(vm)
-                            Screen.Reference -> ReferenceScreen(onClose = vm::closeReference)
+                            Screen.Reference -> ReferenceScreen(onClose = vm::closeReference, myPosition = vm.settings.myPosition)
                             // A fresh card (also "＋ Следующая") starts with fresh fields, focus and scroll.
                             Screen.Edit -> key(vm.editSession) { EditScreen(
                                 vm,
