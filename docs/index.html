@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QSO-LOG — аппаратный журнал радиолюбителя</title>
-<meta name="description" content="Бесплатный аппаратный журнал радиолюбителя для Android, macOS, Windows и Linux: QRZ.ru, карта трассы, голосовые заметки, ADIF, ЕРМАК/Cabrillo.">
+<meta name="description" content="Бесплатный аппаратный журнал радиолюбителя для Android, macOS, Windows и Linux: QRZ.ru и QRZ.com, режим соревнований, карта трассы, голосовые заметки, ADIF, ЕРМАК/Cabrillo.">
 <meta property="og:title" content="QSO-LOG — аппаратный журнал радиолюбителя">
-<meta property="og:description" content="Android · macOS · Windows · Linux. QRZ.ru, карта трассы, голосовые заметки, ADIF, ЕРМАК/Cabrillo.">
+<meta property="og:description" content="Android · macOS · Windows · Linux. QRZ.ru и QRZ.com, режим соревнований, карта трассы, голосовые заметки, ADIF, ЕРМАК/Cabrillo.">
 <meta property="og:image" content="https://vladkondratyev.github.io/qso-log/social-preview.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
@@ -66,7 +66,7 @@ footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px so
     <div>
       <h1>Аппаратный журнал радиолюбителя для телефона и компьютера</h1>
       <p class="lead">
-        Записывайте связи за несколько нажатий. Имя и город абонента программа возьмёт с QRZ.ru, расстояние посчитает сама, журнал выгрузит в ADIF или в отчёт для соревнований. Бесплатно, исходный код открыт.
+        Записывайте связи за несколько нажатий. Имя и город корреспондента программа возьмёт с QRZ.ru или QRZ.com, расстояние посчитает сама, журнал выгрузит в ADIF или в отчёт для соревнований. Бесплатно, исходный код открыт.
       </p>
       <div class="dl">
         <a class="primary" id="dl-android" href="https://github.com/vladkondratyev/qso-log/releases/latest"><b>Android</b>8.0 и новее · APK</a>
@@ -84,7 +84,8 @@ footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px so
     <h2>Что умеет</h2>
     <div class="grid">
       <div class="card"><h3>Ввод в эфире</h3><p>Позывной, частота, RST — и всё. Подсказки из журнала, предупреждение о повторе, частота в килогерцах, кнопка «Следующая» для пайлапа.</p></div>
-      <div class="card"><h3>QRZ.ru и HamQTH</h3><p>Имя, город и локатор приходят с QRZ.ru через XML API или по учётной записи сайта. Если там пусто, страну и область подскажет HamQTH.</p></div>
+      <div class="card"><h3>QRZ.ru, QRZ.com и HamQTH</h3><p>Имя, город и локатор приходят с QRZ.ru через XML API или по учётной записи сайта. Зарубежные позывные — с QRZ.com. Если везде пусто, страну и область подскажет HamQTH.</p></div>
+      <div class="card"><h3>Режим соревнований</h3><p>CONTEST MODE: позывной, RST и контрольные номера — и следующая связь. Номер растёт сам, свайпом можно вернуться и исправить. Отчёт ЕРМАК или Cabrillo — в два нажатия. Пока только на Android.</p></div>
       <div class="card"><h3>Голосовые заметки</h3><p>Удержите «Добавить QSO» и говорите. Запись останется в карточке связи, её можно отправить в мессенджер.</p></div>
       <div class="card"><h3>Расстояние и карты</h3><p>Азимут, расстояние и трасса на карте. Отдельная карта показывает всех, с кем вы работали.</p></div>
       <div class="card"><h3>Журнал</h3><p>Поиск по позывному, имени и городу. Сортировка по дате, расстоянию, позывному или диапазону.</p></div>
@@ -98,6 +99,8 @@ footer{padding:28px 0 48px;color:var(--muted);font-size:.95rem;border-top:1px so
     <div class="shots">
       <img src="screenshots/01-log.png" alt="Журнал" loading="lazy">
       <img src="screenshots/23-dupe.png" alt="Новый QSO" loading="lazy">
+      <img src="screenshots/46-contest-card.png" alt="Режим соревнований" loading="lazy">
+      <img src="screenshots/47-contest-log.png" alt="Связи соревнования в журнале" loading="lazy">
       <img src="screenshots/03-card-map.png" alt="Карта трассы" loading="lazy">
       <img src="screenshots/24-voice-menu.png" alt="Голосовая заметка" loading="lazy">
       <img src="screenshots/26-sources.png" alt="QRZ.ru" loading="lazy">

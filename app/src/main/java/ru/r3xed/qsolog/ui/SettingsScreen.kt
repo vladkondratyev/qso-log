@@ -63,6 +63,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,6 +85,7 @@ import androidx.compose.ui.unit.sp
 import ru.r3xed.qsolog.AppViewModel
 import ru.r3xed.qsolog.BuildConfig
 import ru.r3xed.qsolog.data.AdifLabels
+import ru.r3xed.qsolog.data.ContestMode
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.MODES
@@ -146,11 +148,17 @@ fun SettingsScreen(
                         vm.qrzSiteOk == false -> tr("ошибка")
                         else -> tr("указан")
                     },
+                    "QRZ.com: " + when {
+                        s.qrzComLogin.isBlank() -> tr("нет")
+                        vm.qrzComOk == true -> tr("вход выполнен")
+                        vm.qrzComOk == false -> tr("ошибка")
+                        else -> tr("указан")
+                    },
                     "HamQTH: " + if (vm.hamqthEnabled) tr("вкл") else tr("выкл"),
                 ).joinToString(" · "),
-                open = s.qrzLogin.isBlank() && s.qrzSiteEmail.isBlank(),
+                open = s.qrzLogin.isBlank() && s.qrzSiteEmail.isBlank() && s.qrzComLogin.isBlank(),
             ) {
-                Note(tr("Данные абонента ищутся по порядку: 1) XML API QRZ.ru — основной и правильный способ; 2) сайт QRZ.ru по вашим e-mail и паролю — запасной, если XML API не указан или не ответил; 3) HamQTH — только страна и область, если QRZ.ru ничего не дал."))
+                Note(tr("Данные корреспондента ищутся по порядку: 1) XML API QRZ.ru — основной и правильный способ; 2) сайт QRZ.ru по вашим e-mail и паролю — запасной, если XML API не указан или не ответил; 3) сайт QRZ.com — если QRZ.ru не знает позывного (зарубежные станции) или не ответил; 4) HamQTH — только страна и область, если остальные ничего не дали."))
                 Section(tr("1. QRZ.ru — XML API (основной)"))
                 SettingField(tr("Логин"), s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)
                 var show by remember { mutableStateOf(false) }
@@ -219,7 +227,41 @@ fun SettingsScreen(
                 }
                 ActionButton(tr("Проверить вход"), null, vm::testQrzSite)
                 Note(tr("Ограничения: страница сайта — не интерфейс для программ, после изменений на сайте поиск может перестать работать; каждый запрос добавляет абоненту «Просмотр»; правила сайта могут запрещать автоматические запросы. Если указана и учётная запись XML API, данные берутся через неё, а сайт — только когда XML API не ответил."))
-                Section(tr("3. HamQTH — страна и область"))
+                Section(tr("3. Сайт QRZ.com"))
+                Note(tr("Для зарубежных позывных, которых нет на QRZ.ru. Программа входит на qrz.com с вашей учётной записью (подойдёт бесплатная) и читает страницу позывного (www.qrz.com/db/ПОЗЫВНОЙ): имя, город, страну, локатор, координаты и зоны."))
+                SettingField(tr("Логин QRZ.com (позывной или e-mail)"), s.qrzComLogin, { vm.updateSettings(s.copy(qrzComLogin = it.trim())) }, mono = true)
+                var showCom by remember { mutableStateOf(false) }
+                OutlinedTextField(
+                    value = s.qrzComPassword,
+                    onValueChange = { vm.updateSettings(s.copy(qrzComPassword = it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(tr("Пароль QRZ.com")) },
+                    singleLine = true,
+                    textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    visualTransformation = if (showCom) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        IconButton(onClick = { showCom = !showCom }) {
+                            Icon(if (showCom) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (showCom) tr("Скрыть пароль") else tr("Показать пароль"))
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                )
+                vm.qrzComStatus?.let { status ->
+                    val color = when (vm.qrzComOk) {
+                        true -> x.ok
+                        false -> MaterialTheme.colorScheme.error
+                        null -> x.muted
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(12.dp).background(color, CircleShape))
+                        Spacer(Modifier.width(10.dp))
+                        Text(status, color = color, style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+                ActionButton(tr("Проверить вход"), null, vm::testQrzCom)
+                Note(tr("Ограничения те же, что у сайта QRZ.ru: страница — не интерфейс для программ и может измениться; учётные записи с двухфакторным входом не поддерживаются."))
+                Section(tr("4. HamQTH — страна и область"))
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                         .toggleable(value = vm.hamqthEnabled, role = Role.Switch, onValueChange = vm::setHamqth)
@@ -235,7 +277,10 @@ fun SettingsScreen(
             }
 
 
-            SettingsBlock(tr("Ввод связи"), if (vm.timeOnSave) tr("время — при сохранении") else tr("время — при открытии карточки")) {
+            SettingsBlock(
+                tr("Ввод связи"),
+                (if (vm.contestMode) "CONTEST MODE · " else "") + if (vm.timeOnSave) tr("время — при сохранении") else tr("время — при открытии карточки"),
+            ) {
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                         .toggleable(value = vm.timeOnSave, role = Role.Switch, onValueChange = vm::changeTimeOnSave)
@@ -246,6 +291,7 @@ fun SettingsScreen(
                     Switch(checked = vm.timeOnSave, onCheckedChange = null)
                 }
                 Note(tr("Выключено: время связи — момент, когда открыта карточка «Новый QSO». Включено: время ставится при нажатии «Сохранить» (если вы не меняли его вручную) — удобно для долгих связей."))
+                ContestModeSettings(vm)
             }
 
             SettingsBlock(tr("Диапазоны и виды связи"), tr("диапазонов: %s · видов: %s", vm.enabledBands.size, vm.enabledModes.size)) {
@@ -343,8 +389,6 @@ fun SettingsScreen(
                     )
                 }
             }
-            // The reference is not a setting: a filled card of its own, set apart from the blocks above.
-            ReferenceCard(vm::openReference)
             // About: version, tap to open the project page.
             val uri = LocalUriHandler.current
             Column(
@@ -586,24 +630,39 @@ internal fun SettingField(
     )
 }
 
-/** The way into the reference: a filled card with an icon, unlike the outlined settings blocks. */
+/** CONTEST MODE: the switch (off at every start of the app) and, when on, the number the next contact sends. */
 @Composable
-private fun ReferenceCard(onOpen: () -> Unit) {
-    val ink = MaterialTheme.colorScheme.onPrimaryContainer
+private fun ContestModeSettings(vm: AppViewModel) {
+    val x = LocalExtra.current
     Row(
-        Modifier.fillMaxWidth().padding(top = 20.dp).clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .clickable(onClickLabel = tr("Открыть справку"), onClick = onOpen)
-            .padding(horizontal = 18.dp, vertical = 18.dp),
+        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
+            .background(if (vm.contestMode) MaterialTheme.colorScheme.primaryContainer else x.field)
+            .toggleable(value = vm.contestMode, role = Role.Switch, onValueChange = vm::changeContestMode)
+            .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.AutoMirrored.Filled.MenuBook, null, Modifier.size(34.dp), tint = ink)
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(tr("Справка и калькуляторы"), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = ink)
-            Text(tr("Частоты, Морзе, Q-коды, кабели, антенны, префиксы"), style = MaterialTheme.typography.bodyMedium, color = ink.copy(alpha = 0.8f))
-        }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(28.dp), tint = ink)
+        Text("CONTEST MODE", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Switch(checked = vm.contestMode, onCheckedChange = null)
     }
+    if (vm.contestMode) {
+        // Typed as text so the field may be empty for a moment; a valid number is taken at once.
+        var text by remember { mutableStateOf(vm.contestSerial.toString()) }
+        LaunchedEffect(vm.contestSerial) { if (text.toIntOrNull() != vm.contestSerial) text = vm.contestSerial.toString() }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { v ->
+                text = v.filter { it.isDigit() }.take(5)
+                text.toIntOrNull()?.let(vm::changeContestSerial)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(tr("Следующий передаваемый номер")) },
+            singleLine = true,
+            isError = (text.toIntOrNull() ?: 0) < 1,
+            supportingText = { Text(tr("Уйдёт как %s, дальше +1 с каждой связью", ContestMode.serial(text.toIntOrNull()?.coerceAtLeast(1) ?: vm.contestSerial))) },
+            textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            shape = RoundedCornerShape(12.dp),
+        )
+    }
+    Note(tr("Режим соревнований: «Добавить QSO» открывает упрощённую карточку — позывной, RST и контрольные номера; время ставится при записи. Свайп справа налево — записать и открыть следующую, слева направо — вернуться к предыдущим связям контеста и поправить их. Такие связи отмечены в журнале флажком. Режим выключается при каждом запуске программы."))
 }
-

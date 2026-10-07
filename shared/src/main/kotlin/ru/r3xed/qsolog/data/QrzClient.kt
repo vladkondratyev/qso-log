@@ -26,6 +26,9 @@ data class QrzInfo(
     /** Region and RDA district: only the site page ([QrzSite]) gives them. */
     val region: String = "",
     val rda: String = "",
+    /** CQ and ITU zones: only the QRZ.com page ([QrzCom]) gives them. */
+    val cqZone: String = "",
+    val ituZone: String = "",
 ) {
     val fullName get() = listOf(name, surname).filter { it.isNotBlank() }.joinToString(" ")
     val position: LatLon?

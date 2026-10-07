@@ -7,6 +7,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
@@ -44,9 +49,11 @@ import ru.r3xed.qsolog.data.ExportFormat
 fun ContestExportDialog(
     defaults: Cabrillo.Header,
     selected: Int?,
-    count: (onlyNew: Boolean) -> Int,
+    /** Some of the contacts were entered in contest mode: offer to take only them (on by default). */
+    hasContest: Boolean,
+    count: (onlyNew: Boolean, contestOnly: Boolean) -> Int,
     onDismiss: () -> Unit,
-    onConfirm: (Cabrillo.Header, onlyNew: Boolean, mark: Boolean) -> Unit,
+    onConfirm: (Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean) -> Unit,
 ) {
     var format by remember { mutableStateOf(defaults.format) }
     var contest by remember { mutableStateOf(defaults.contest) }
@@ -54,6 +61,8 @@ fun ContestExportDialog(
     var location by remember { mutableStateOf(defaults.location) }
     var onlyNew by remember { mutableStateOf(true) }
     var mark by remember { mutableStateOf(true) }
+    var contestOnly by remember { mutableStateOf(hasContest) }
+    val n = { onlyNew: Boolean -> count(onlyNew, contestOnly) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(tr("Отчёт для соревнований")) },
@@ -94,14 +103,22 @@ fun ContestExportDialog(
                     tr("Контрольные номера берутся из полей карточки «Контрольный номер передан/принят»; если переданного нет, ставится порядковый номер 001, 002… Связи идут по времени, как требует формат."),
                     style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted,
                 )
-                ExportChoices(ExportFormat.CONTEST, selected, count, onlyNew, { onlyNew = it }, mark, { mark = it })
+                // Ordinary contacts have no numbers: the report would give them made-up "sent" ones.
+                if (hasContest) {
+                    Row(Modifier.fillMaxWidth().toggleable(contestOnly, role = Role.Checkbox) { contestOnly = it }, verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(contestOnly, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(tr("Только связи контест-режима (с флажком)"), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                ExportChoices(ExportFormat.CONTEST, selected, n, onlyNew, { onlyNew = it }, mark, { mark = it })
             }
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(defaults.copy(format = format, contest = contest.trim(), categoryOperator = operator, location = location.trim()), onlyNew, mark) },
-                enabled = count(onlyNew) > 0,
-            ) { Text(tr("Сохранить файл (%s)", count(onlyNew))) }
+                onClick = { onConfirm(defaults.copy(format = format, contest = contest.trim(), categoryOperator = operator, location = location.trim()), onlyNew, mark, contestOnly) },
+                enabled = n(onlyNew) > 0,
+            ) { Text(tr("Сохранить файл (%s)", n(onlyNew))) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Отмена")) } },
     )

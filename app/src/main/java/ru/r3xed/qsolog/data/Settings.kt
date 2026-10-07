@@ -28,6 +28,8 @@ class Settings(context: Context) {
         qrzPassword = secret.getString("qrz_password", "") ?: "",
         qrzSiteEmail = prefs.getString("qrz_site_email", "") ?: "",
         qrzSitePassword = secret.getString("qrz_site_password", "") ?: "",
+        qrzComLogin = prefs.getString("qrzcom_login", "") ?: "",
+        qrzComPassword = secret.getString("qrzcom_password", "") ?: "",
         power = prefs.getString("my_power", "") ?: "",
         station = AdifLabels.MINE.keys.associateWith { prefs.getString("station_$it", "") ?: "" }.filterValues { it.isNotEmpty() },
     )
@@ -39,12 +41,14 @@ class Settings(context: Context) {
             .putString("my_qth", s.myQth.trim())
             .putString("qrz_login", s.qrzLogin.trim())
             .putString("qrz_site_email", s.qrzSiteEmail.trim())
+            .putString("qrzcom_login", s.qrzComLogin.trim())
             .putString("my_power", s.power.trim())
             .apply {
                 for (key in AdifLabels.MINE.keys) putString("station_$key", s.station[key].orEmpty().trim())
             }
             .apply()
-        secret.edit().putString("qrz_password", s.qrzPassword).putString("qrz_site_password", s.qrzSitePassword).apply()
+        secret.edit().putString("qrz_password", s.qrzPassword).putString("qrz_site_password", s.qrzSitePassword)
+            .putString("qrzcom_password", s.qrzComPassword).apply()
     }
 
     /** Accounts of the online logbooks the app no longer uploads to: removed from the phone on start. */
@@ -110,6 +114,10 @@ class Settings(context: Context) {
     var launchCount: Int
         get() = prefs.getInt("launch_count", 0)
         set(v) = prefs.edit().putInt("launch_count", v).apply()
+    /** Contest mode: the number the next contest contact sends (its STX_STRING). */
+    var contestSerial: Int
+        get() = prefs.getInt("contest_serial", 1)
+        set(v) = prefs.edit().putInt("contest_serial", v).apply()
     var lastPower: String
         get() = prefs.getString("last_power", "") ?: ""
         set(v) = prefs.edit().putString("last_power", v).apply()

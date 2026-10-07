@@ -30,6 +30,8 @@ import ru.r3xed.qsolog.data.approxPosition
 import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
+import ru.r3xed.qsolog.data.QrzCom
+import ru.r3xed.qsolog.data.ContestMode
 import ru.r3xed.qsolog.data.QrzException
 import ru.r3xed.qsolog.data.QrzInfo
 import ru.r3xed.qsolog.data.Qso
@@ -60,6 +62,9 @@ enum class ThemeMode(private val ru: String) {
 
     val label: String get() = tr(ru)
 }
+
+/** The contest card's message when the received number is missing; the card then puts the cursor in that field. */
+val CONTEST_RCVD_ERROR get() = tr("Введите принятый код")
 
 /** Callsign length at which the QRZ.ru / HamQTH lookup starts. */
 const val MIN_LOOKUP_LENGTH = 4
@@ -106,6 +111,8 @@ sealed interface Screen {
     data object Map : Screen
     data object Welcome : Screen
     data object Reference : Screen
+    /** The simplified contact card of the contest mode. */
+    data object Contest : Screen
 }
 
 /** User-Agent for the online logbooks: they ask programs to name themselves. */
@@ -127,40 +134,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var settings by mutableStateOf(prefs.load()); private set
     private val qrz = QrzClient { settings.qrzLogin to settings.qrzPassword }
     private val qrzSite = QrzSite { settings.qrzSiteEmail to settings.qrzSitePassword }
+    private val qrzCom = QrzCom { settings.qrzComLogin to settings.qrzComPassword }
 
-    /** Some QRZ.ru account is set: the XML API (preferred) or the site's own e-mail login. */
-    val hasQrzAccount get() = settings.qrzLogin.isNotBlank() || settings.qrzSiteEmail.isNotBlank()
+    /** Some callsign account is set: the QRZ.ru XML API (preferred), the QRZ.ru site's e-mail login or QRZ.com. */
+    val hasQrzAccount get() = settings.qrzLogin.isNotBlank() || settings.qrzSiteEmail.isNotBlank() || settings.qrzComLogin.isNotBlank()
 
     /**
-     * QRZ.ru data for a callsign: through the XML API when its account is set (it wins when both are set),
-     * otherwise — or when the API fails — from the site's callsign page with the e-mail login. Null: not in QRZ.ru.
+     * Station data for a callsign: through the QRZ.ru XML API when its account is set (it wins when several are set),
+     * otherwise — or when the API fails — from the QRZ.ru site's callsign page with the e-mail login, and then from
+     * the QRZ.com page (also when QRZ.ru does not know the callsign: foreign stations). Null: known to none of them.
      */
     private suspend fun qrzLookup(call: String, stillWanted: () -> Boolean = { true }): QrzInfo? {
         var problem: Exception? = null
-        if (settings.qrzLogin.isNotBlank()) {
-            try {
-                return qrz.lookup(call, stillWanted)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                problem = e
-            }
+        // Some source answered that it does not know the callsign.
+        var notFound = false
+        suspend fun ask(source: suspend () -> QrzInfo?): QrzInfo? = try {
+            source().also { if (it == null) notFound = true }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (problem == null) problem = e
+            null
         }
-        if (settings.qrzSiteEmail.isNotBlank()) {
-            try {
-                return qrzSite.lookup(call)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (problem == null) problem = e
-            }
-        }
+        if (settings.qrzLogin.isNotBlank()) ask { qrz.lookup(call, stillWanted) }?.let { return it }
+        // The QRZ.ru site is the same database as its XML API: asked only when the API is not set or failed.
+        if (settings.qrzSiteEmail.isNotBlank() && !notFound) ask { qrzSite.lookup(call) }?.let { return it }
+        if (settings.qrzComLogin.isNotBlank()) ask { qrzCom.lookup(call) }?.let { return it }
+        if (notFound) return null
         throw problem ?: QrzException(403, tr("Укажите учётную запись QRZ.ru в настройках"))
     }
 
-    /** Region and RDA that only the site page gives, into ADIF STATE / CNTY unless the card has them. */
+    /** Region and RDA (QRZ.ru site), region and zones (QRZ.com) into ADIF STATE / CNTY / CQZ / ITUZ unless the card has them. */
     private fun withQrzExtras(adif: Map<String, String>, info: QrzInfo): Map<String, String> =
-        adif + listOf("STATE" to info.region, "CNTY" to info.rda).filter { (k, v) -> v.isNotBlank() && adif[k].isNullOrBlank() }
+        adif + listOf("STATE" to info.region, "CNTY" to info.rda, "CQZ" to info.cqZone, "ITUZ" to info.ituZone)
+            .filter { (k, v) -> v.isNotBlank() && adif[k].isNullOrBlank() }
 
     var screen by mutableStateOf<Screen>(Screen.Log)
     var query by mutableStateOf(""); private set
@@ -273,12 +280,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         createdBy = "QSO-LOG " + BuildConfig.VERSION_NAME,
     )
 
+    /** Contacts entered in contest mode among [only] (or the whole log): the report dialog then offers to take only them. */
+    fun hasContestQsos(only: Set<Long>?): Boolean = allQsos.any { (only == null || it.id in only) && ContestMode.isContest(it.adif) }
+
     /** Remembers the dialog's choice and returns the file name to offer. */
-    fun prepareContest(h: Cabrillo.Header, onlyNew: Boolean, mark: Boolean): String {
+    fun prepareContest(h: Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean): String {
         prefs.contestFormat = h.format.name
         prefs.contestCode = h.contest
         prefs.contestOperator = h.categoryOperator
-        pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark)
+        pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark, contestOnly)
         contestTarget = null
         val code = h.contest.uppercase().ifBlank { "LOG" }.replace('/', '-')
         return "${h.callsign.ifBlank { "log" }.replace('/', '-')}_$code.${h.format.extension}"
@@ -296,7 +306,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var exportTarget by mutableStateOf<ExportTarget?>(null); private set
 
     /** Choices of an export dialog, waiting for the file picker. */
-    class PendingExport(val format: ExportFormat, val only: Set<Long>?, val onlyNew: Boolean, val mark: Boolean)
+    class PendingExport(val format: ExportFormat, val only: Set<Long>?, val onlyNew: Boolean, val mark: Boolean, val contestOnly: Boolean = false)
 
     private var pendingExport: PendingExport? = null
 
@@ -317,9 +327,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         exportTarget = null
     }
 
-    /** The contacts an export takes: the picked ones or the whole log, without those already exported to [format] when [onlyNew]. */
-    fun exportCandidates(format: ExportFormat, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
-        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !format.isExported(it.adif)) }
+    /**
+     * The contacts an export takes: the picked ones or the whole log, without those already exported to [format] when
+     * [onlyNew], and only those entered in contest mode when [contestOnly].
+     */
+    fun exportCandidates(format: ExportFormat, only: Set<Long>?, onlyNew: Boolean, contestOnly: Boolean = false): List<Qso> =
+        allQsos.filter { takes(it, only, onlyNew, format, contestOnly) }
+
+    private fun takes(q: Qso, only: Set<Long>?, onlyNew: Boolean, format: ExportFormat, contestOnly: Boolean) =
+        (only == null || q.id in only) && (!onlyNew || !format.isExported(q.adif)) && (!contestOnly || ContestMode.isContest(q.adif))
 
     /** Remembers the dialog's choice and returns the file name to offer. */
     fun prepareExport(onlyNew: Boolean, mark: Boolean): String {
@@ -350,7 +366,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val msg = try {
                 val count = withContext(Dispatchers.IO) {
-                    val list = db.all().filter { (p.only == null || it.id in p.only) && (!p.onlyNew || !p.format.isExported(it.adif)) }
+                    val list = db.all().filter { takes(it, p.only, p.onlyNew, p.format, p.contestOnly) }
                     getApplication<Application>().contentResolver.openOutputStream(uri)!!.use { write(list, it) }
                     if (p.mark) list.forEach { db.save(p.format.mark(it)) }
                     list.size
@@ -441,17 +457,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Where "Назад" in the settings returns: the log, or the card that sent the user there. */
     private var settingsReturn: Screen = Screen.Log
 
-    /** The reference screen (bands, Morse, spelling alphabets). */
+    /** The reference screen (bands, Morse, spelling alphabets, calculators): opened from the log's ⋮ menu. */
     fun openReference() {
         screen = Screen.Reference
     }
 
-    /** The reference opens from the bottom of the settings and goes back there, to the same scroll place. */
     fun closeReference() {
-        screen = Screen.Settings
+        screen = Screen.Log
     }
 
-    /** Kept here so the settings stay scrolled to the reference button while the reference is open. */
     val settingsScroll = ScrollState(0)
 
     /** Leaves the first-start setup (done or "Настроить позже"); it is not shown again. */
@@ -461,7 +475,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openSettings(from: Screen = Screen.Log) {
-        // A fresh visit starts at the top; only the way back from the reference keeps the place.
+        // A fresh visit starts at the top.
         viewModelScope.launch { settingsScroll.scrollTo(0) }
         settingsReturn = from
         screen = Screen.Settings
@@ -677,6 +691,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun closeEditor() {
         lookupJob?.cancel() // a lookup for another card must not land in this one
         discardCardRecording()
+        contestDraft = null
         val f = form
         if (f.isNew) {
             if (f.audio.isNotBlank()) voice.delete(f.audio)
@@ -690,6 +705,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * the card opens for that station: its data from the last contact, then refreshed from QRZ.ru.
      */
     fun addQso(audio: String = "") {
+        if (contestMode) return newContestQso(audio)
         val last = searchedStation()
         if (last == null) newQso(audio) else newQsoFromLog(last, audio)
     }
@@ -791,7 +807,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         lookup = Lookup.Idle
         loadHistory(qso.call)
         editReturn = from
-        screen = Screen.Edit
+        // In contest mode a contest contact opens in the contest card, where swipes go through the others.
+        screen = if (contestMode && ContestMode.isContest(qso.adif)) Screen.Contest else Screen.Edit
     }
 
     fun update(f: Form) {
@@ -1108,11 +1125,139 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
 
+    // ---------- contest mode ----------
+
+    /**
+     * Contest mode: "Добавить QSO" opens the simplified card (callsign, reports, numbers) and swipes go through the
+     * contest contacts. Off at every start of the app, switched on in the settings.
+     */
+    var contestMode by mutableStateOf(false); private set
+
+    /** The number the next contest contact sends; goes up by one with each saved contact. */
+    var contestSerial by mutableStateOf(prefs.contestSerial); private set
+
+    fun changeContestMode(on: Boolean) {
+        contestMode = on
+    }
+
+    fun changeContestSerial(n: Int) {
+        if (n < 1) return
+        contestSerial = n
+        prefs.contestSerial = n
+    }
+
+    /** A new contest card that was typed in and left by swiping back; it comes back at the end of the swipes. */
+    private var contestDraft: Form? = null
+
+    /** Contest contacts in the order they were made: the swipes go through them. */
+    private fun contestQsos(): List<Qso> =
+        allQsos.filter { ContestMode.isContest(it.adif) }.sortedWith(compareBy({ it.timeUtc }, { it.createdAt }, { it.id }))
+
+    /** Position of the open contest card: "№ in the contest / of how many"; null for a new one. */
+    fun contestPosition(): kotlin.Pair<Int, Int>? {
+        val list = contestQsos()
+        val i = list.indexOfFirst { it.id == form.id }
+        return if (form.isNew || i < 0) null else (i + 1) to list.size
+    }
+
+    /** Whether there is an older contest contact to swipe back to. */
+    fun contestHasPrev(): Boolean {
+        val list = contestQsos()
+        return if (form.isNew) list.isNotEmpty() else list.indexOfFirst { it.id == form.id } > 0
+    }
+
+    private fun newContestQso(audio: String = "") {
+        newQso(audio)
+        val f = form
+        form = f.copy(
+            rstSent = defaultRst(f.mode), rstRcvd = defaultRst(f.mode),
+            adif = f.adif + (ContestMode.FIELD to "Y") + (ContestMode.SENT to ContestMode.serial(contestSerial)),
+        )
+        formOriginal = form
+        screen = Screen.Contest
+    }
+
+    /**
+     * "Записать и следующая" (and a swipe forward on a new card): saves the contact with the time of saving, moves the
+     * number on and opens the next card on the same band and mode. Returns the error like [save].
+     */
+    fun contestSaveAndNext(): String? {
+        val f = form
+        if (!f.isNew) return contestNext()
+        contestError(f)?.let { return it }
+        val now = LocalDateTime.now(ZoneOffset.UTC)
+        form = f.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now))
+        val err = save()
+        if (err != null) {
+            screen = Screen.Contest
+            return err
+        }
+        changeContestSerial(ContestMode.nextSerial(f.adif[ContestMode.SENT].orEmpty(), contestSerial))
+        contestDraft = null
+        newContestQso()
+        return null
+    }
+
+    /** Swipe back: the previous contest contact. Changes to a saved one are saved; a typed new card waits as a draft. */
+    fun contestPrev(): String? {
+        val list = contestQsos()
+        val f = form
+        val target = if (f.isNew) list.lastOrNull() else list.getOrNull(list.indexOfFirst { it.id == f.id } - 1)
+        if (target == null) return null
+        if (f.isNew) {
+            contestDraft = f.takeIf { it.call.isNotBlank() || !it.adif[ContestMode.RCVD].isNullOrBlank() }
+        } else if (hasUnsavedChanges) {
+            contestError(f)?.let { return it }
+            save()?.let { screen = Screen.Contest; return it }
+        }
+        edit(target)
+        screen = Screen.Contest
+        return null
+    }
+
+    /** Swipe forward from a saved contact: the next one, and after the last — the draft or a new card. */
+    private fun contestNext(): String? {
+        val list = contestQsos()
+        val f = form
+        if (hasUnsavedChanges) {
+            contestError(f)?.let { return it }
+            save()?.let { screen = Screen.Contest; return it }
+        }
+        val next = list.getOrNull(list.indexOfFirst { it.id == f.id } + 1)
+        when {
+            next != null -> edit(next)
+            contestDraft != null -> {
+                newContestQso()
+                val draft = contestDraft!!
+                contestDraft = null
+                form = draft.copy(adif = draft.adif + (ContestMode.SENT to (draft.adif[ContestMode.SENT] ?: ContestMode.serial(contestSerial))))
+                loadHistory(draft.call)
+                // The lookup may have been cut short by the swipe back.
+                if (draft.call.length >= MIN_LOOKUP_LENGTH && !draft.infoFromQrz && draft.name.isBlank()) retryLookup()
+            }
+            else -> newContestQso()
+        }
+        screen = Screen.Contest
+        return null
+    }
+
+    /**
+     * A contest contact needs the number the other station gave: without it the report line ends after the RST and
+     * the judges' software does not count the contact. (The callsign is checked by [save].)
+     */
+    private fun contestError(f: Form): String? =
+        if (f.call.length >= 3 && f.adif[ContestMode.RCVD].isNullOrBlank()) CONTEST_RCVD_ERROR else null
+
+    fun setContestField(key: String, value: String) {
+        form = form.copy(adif = form.adif + (key to value))
+    }
+
     // ---------- settings ----------
 
     fun updateSettings(s: StationSettings) {
         val credentialsChanged = s.qrzLogin != settings.qrzLogin || s.qrzPassword != settings.qrzPassword
         val siteChanged = s.qrzSiteEmail != settings.qrzSiteEmail || s.qrzSitePassword != settings.qrzSitePassword
+        val comChanged = s.qrzComLogin != settings.qrzComLogin || s.qrzComPassword != settings.qrzComPassword
         settings = s
         prefs.save(s)
         if (credentialsChanged) {
@@ -1124,6 +1269,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             qrzSite.reset()
             qrzSiteOk = null
             qrzSiteStatus = null
+        }
+        if (comChanged) {
+            qrzCom.reset()
+            qrzComOk = null
+            qrzComStatus = null
+        }
+    }
+
+    /** Result of "Проверить вход" for the QRZ.com account. */
+    var qrzComStatus by mutableStateOf<String?>(null); private set
+    var qrzComOk by mutableStateOf<Boolean?>(null); private set
+
+    fun testQrzCom() {
+        viewModelScope.launch {
+            qrzComOk = null
+            qrzComStatus = tr("Проверяю…")
+            qrzCom.reset()
+            try {
+                qrzCom.login()
+                qrzComOk = true
+                qrzComStatus = tr("Вход выполнен")
+            } catch (e: QrzException) {
+                qrzComOk = false
+                qrzComStatus = e.message
+            } catch (e: Exception) {
+                qrzComOk = false
+                qrzComStatus = networkError(e).replace("api.qrz.ru", "www.qrz.com").replace("QRZ.ru", "QRZ.com")
+            }
         }
     }
 

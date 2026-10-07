@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import org.osmdroid.config.Configuration
 import ru.r3xed.qsolog.ui.EditScreen
+import ru.r3xed.qsolog.ui.ContestScreen
 import ru.r3xed.qsolog.ui.LogScreen
 import ru.r3xed.qsolog.ui.MapScreen
 import ru.r3xed.qsolog.ui.ContestExportDialog
@@ -131,6 +133,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
                             ) }
+                            Screen.Contest -> key(vm.editSession) { ContestScreen(vm) }
                             Screen.Settings -> SettingsScreen(
                                 vm,
                                 onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
@@ -142,9 +145,10 @@ class MainActivity : ComponentActivity() {
                             ContestExportDialog(
                                 defaults = vm.contestDefaults(),
                                 selected = target.only?.size,
-                                count = { onlyNew -> vm.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew).size },
+                                hasContest = vm.hasContestQsos(target.only),
+                                count = { onlyNew, contestOnly -> vm.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew, contestOnly).size },
                                 onDismiss = vm::closeContestExport,
-                                onConfirm = { h, onlyNew, mark -> exportContest.launch(vm.prepareContest(h, onlyNew, mark)) },
+                                onConfirm = { h, onlyNew, mark, contestOnly -> exportContest.launch(vm.prepareContest(h, onlyNew, mark, contestOnly)) },
                             )
                         }
                         vm.exportTarget?.let { target ->
@@ -161,7 +165,9 @@ class MainActivity : ComponentActivity() {
                                 },
                             )
                         }
-                        SnackbarHost(
+                        // In the contest card the keyboard stays open and the fields fill the screen: messages go to the top.
+                        if (vm.screen == Screen.Contest) SnackbarHost(snackbar, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 4.dp))
+                        else SnackbarHost(
                             snackbar,
                             Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = if (vm.screen == Screen.Edit) 80.dp else 16.dp),
                         )

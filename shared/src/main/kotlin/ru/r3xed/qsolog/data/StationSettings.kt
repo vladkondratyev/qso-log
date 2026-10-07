@@ -9,6 +9,9 @@ data class StationSettings(
     /** Login of the QRZ.ru site itself (e-mail): a fallback source when there is no XML API access, see [QrzSite]. */
     val qrzSiteEmail: String = "",
     val qrzSitePassword: String = "",
+    /** QRZ.com account (callsign or e-mail): the callsign page after logging in, see [QrzCom]. */
+    val qrzComLogin: String = "",
+    val qrzComPassword: String = "",
     /** Default transmit power for new contacts, W. */
     val power: String = "",
     /** Station ADIF fields copied into every new contact: keys of [AdifLabels.MINE] (OPERATOR, MY_RIG, …). */

@@ -1,14 +1,8 @@
 package ru.r3xed.qsolog.data
 
 import ru.r3xed.qsolog.tr
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
 
 /**
  * The callsign page of the QRZ.ru site (https://www.qrz.ru/db/CALL), read as HTML with the site's own account
@@ -20,9 +14,8 @@ import java.net.URLEncoder
  */
 class QrzSite(private val credentials: () -> Pair<String, String>) {
     private val gate = Mutex()
-    private val cookies = linkedMapOf<String, String>()
+    private val web = WebSession("QRZ.ru")
     private var loggedIn = false
-    private var lastRequest = 0L
 
     /** Logs in; throws [QrzException] with a readable message on a wrong e-mail or password. */
     suspend fun login() = gate.withLock { loginLocked() }
@@ -42,14 +35,14 @@ class QrzSite(private val credentials: () -> Pair<String, String>) {
     }
 
     fun reset() {
-        cookies.clear()
+        web.clear()
         loggedIn = false
     }
 
     private suspend fun loginLocked() {
         val (email, password) = credentials()
         if (email.isBlank() || password.isBlank()) throw QrzException(403, tr("Укажите e-mail и пароль сайта QRZ.ru"))
-        cookies.clear()
+        web.clear()
         get("$BASE/passport/login") // session cookie first, as a browser would
         val form = "Form%5Bemail%5D=${enc(email.trim())}&Form%5Bpassword%5D=${enc(password)}&Form%5BrememberMe%5D=1"
         val page = post("$BASE/passport/login", form)
@@ -57,62 +50,14 @@ class QrzSite(private val credentials: () -> Pair<String, String>) {
         loggedIn = true
     }
 
-    private suspend fun get(url: String) = request(url, null)
-    private suspend fun post(url: String, body: String) = request(url, body)
-
-    /** Follows redirects by hand so that cookies set on the way (the login sets them on a 302) are kept. */
-    private suspend fun request(start: String, body: String?): String = withContext(Dispatchers.IO) {
-        // Polite pace: the site is not an API.
-        val wait = lastRequest + MIN_INTERVAL_MS - System.currentTimeMillis()
-        if (wait > 0) delay(wait)
-        var url = start
-        var postBody = body
-        repeat(6) {
-            lastRequest = System.currentTimeMillis()
-            val conn = URL(url).openConnection() as HttpURLConnection
-            try {
-                conn.instanceFollowRedirects = false
-                conn.connectTimeout = 10_000
-                conn.readTimeout = 15_000
-                conn.setRequestProperty("User-Agent", BROWSER)
-                conn.setRequestProperty("Accept-Language", "ru")
-                if (cookies.isNotEmpty()) conn.setRequestProperty("Cookie", cookies.entries.joinToString("; ") { "${it.key}=${it.value}" })
-                if (postBody != null) {
-                    conn.requestMethod = "POST"
-                    conn.doOutput = true
-                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-                    conn.setRequestProperty("Referer", url)
-                    conn.outputStream.use { it.write(postBody!!.toByteArray()) }
-                }
-                val code = conn.responseCode
-                conn.headerFields.entries.filter { it.key.equals("Set-Cookie", ignoreCase = true) }.flatMap { it.value }.forEach { c ->
-                    val pair = c.substringBefore(';')
-                    val name = pair.substringBefore('=').trim()
-                    val value = pair.substringAfter('=', "").trim()
-                    if (name.isNotEmpty()) if (value.isEmpty() || value == "deleted") cookies.remove(name) else cookies[name] = value
-                }
-                if (code in 300..399) {
-                    val loc = conn.getHeaderField("Location") ?: throw QrzException(code, tr("Сайт QRZ.ru ответил %s", code))
-                    url = URL(URL(url), loc).toString()
-                    postBody = null
-                    return@repeat
-                }
-                if (code != 200) throw QrzException(code, tr("Сайт QRZ.ru ответил %s", code))
-                return@withContext (conn.inputStream).use { it.readBytes().toString(Charsets.UTF_8) }
-            } finally {
-                conn.disconnect()
-            }
-        }
-        throw QrzException(0, tr("Сайт QRZ.ru: слишком много перенаправлений"))
-    }
+    private suspend fun get(url: String) = web.get(url)
+    private suspend fun post(url: String, body: String) = web.post(url, body)
 
     companion object {
         const val BASE = "https://www.qrz.ru"
-        private const val MIN_INTERVAL_MS = 1500L
-        private const val BROWSER = "Mozilla/5.0 (QSO-LOG; +https://github.com/vladkondratyev/qso-log)"
         private val LOCATOR = Regex("\\b([A-R]{2}\\d{2}(?:[A-X]{2})?)\\b", RegexOption.IGNORE_CASE)
 
-        private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+        private fun enc(s: String) = WebSession.enc(s)
 
         /** The page offers "авторизоваться" instead of the details. */
         fun needsLogin(html: String) = html.contains("id=\"detailInfo\"") && html.substringAfter("id=\"detailInfo\"").take(600).contains("/passport/login")
@@ -171,12 +116,6 @@ class QrzSite(private val credentials: () -> Pair<String, String>) {
             )
         }
 
-        /** Tags out, entities decoded, runs of spaces collapsed (line breaks kept). */
-        private fun text(html: String): String = html
-            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-            .replace(Regex("<[^>]+>"), " ")
-            .replace("&nbsp;", " ").replace("&quot;", "\"").replace("&#039;", "'").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
-            .lines().joinToString("\n") { it.replace(Regex("[ \\t]+"), " ").trim() }
-            .trim()
+        private fun text(html: String) = WebSession.text(html)
     }
 }

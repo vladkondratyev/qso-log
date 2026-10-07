@@ -369,5 +369,5 @@ object AdifLabels {
      */
     val DERIVED = setOf("BAND_RX", "FREQ_RX", "PFX")
 
-    val KNOWN: Set<String> = THEM.keys + CONTACT.keys + MINE.keys + SPACE_WEATHER.keys + TIME_OFF + DERIVED
+    val KNOWN: Set<String> = THEM.keys + CONTACT.keys + MINE.keys + SPACE_WEATHER.keys + TIME_OFF + DERIVED + ContestMode.FIELD
 }

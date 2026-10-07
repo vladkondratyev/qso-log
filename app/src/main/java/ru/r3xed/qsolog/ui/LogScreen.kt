@@ -51,6 +51,10 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import ru.r3xed.qsolog.data.ContestMode
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -125,16 +129,40 @@ fun LogScreen(
                     }
                     val me = vm.settings.myCall
                     ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
-                        OneLineText((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", vm.total), maxSize = 16.sp, minSize = 11.sp, color = x.muted)
+                        if (vm.contestMode) {
+                            // Contest mode is on until the app is closed: say so where the eye goes first.
+                            OneLineText(
+                                "CONTEST · " + tr("следующий № %s", ContestMode.serial(vm.contestSerial)),
+                                maxSize = 16.sp, minSize = 11.sp, color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            OneLineText((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", vm.total), maxSize = 16.sp, minSize = 11.sp, color = x.muted)
+                        }
                     }
                 }
-                // Two round buttons: map and settings; 50 dp each so the logo keeps its room on a narrow phone.
-                FilledTonalIconButton(onClick = vm::openMap, modifier = Modifier.size(50.dp)) {
-                    Icon(Icons.Filled.Map, contentDescription = tr("Карта QSO"), modifier = Modifier.size(27.dp))
-                }
-                Spacer(Modifier.width(8.dp))
-                FilledTonalIconButton(onClick = { vm.openSettings() }, modifier = Modifier.size(50.dp)) {
-                    Icon(Icons.Filled.Settings, contentDescription = tr("Настройки"), modifier = Modifier.size(27.dp))
+                // One round button: the menu with the settings, the map and the reference.
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    FilledTonalIconButton(onClick = { menu = true }, modifier = Modifier.size(50.dp)) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = tr("Меню"), modifier = Modifier.size(27.dp))
+                    }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(tr("Настройки"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.Filled.Settings, null) },
+                            onClick = { menu = false; vm.openSettings() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(tr("Карта QSO"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.Filled.Map, null) },
+                            onClick = { menu = false; vm.openMap() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(tr("Справка и калькуляторы"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
+                            onClick = { menu = false; vm.openReference() },
+                        )
+                    }
                 }
             }
 
@@ -404,6 +432,10 @@ private fun QsoRow(
                 Spacer(Modifier.width(10.dp))
             }
             Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (ContestMode.isContest(qso.adif)) {
+                Icon(Icons.Filled.Flag, tr("Связь в контест-режиме"), Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(8.dp))
+            }
             if (qso.audio.isNotBlank()) {
                 Icon(Icons.Filled.Mic, tr("Есть голосовая заметка"), Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
@@ -432,6 +464,8 @@ private fun QsoRow(
             qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null },
             qso.mode.ifBlank { null },
             if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent} / ${qso.rstRcvd}" else null,
+            // Contest numbers: sent / received.
+            if (ContestMode.isContest(qso.adif)) "№ ${qso.adif[ContestMode.SENT].orEmpty()} / ${qso.adif[ContestMode.RCVD].orEmpty().ifBlank { "—" }}" else null,
             qso.distanceKm?.let { (if (qso.approxPosition) "≈ " else "") + formatKm(it) },
         ).joinToString("  ·  ")
         if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
