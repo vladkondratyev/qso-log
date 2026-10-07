@@ -630,39 +630,81 @@ internal fun SettingField(
     )
 }
 
-/** CONTEST MODE: the switch (off at every start of the app) and, when on, the number the next contact sends. */
+/**
+ * CONTEST MODE: the switch (off at every start of the app) and, when on, what each contact sends (a serial number
+ * or the same code) and which keyboard the card uses.
+ */
 @Composable
 private fun ContestModeSettings(vm: AppViewModel) {
     val x = LocalExtra.current
-    Row(
-        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
-            .background(if (vm.contestMode) MaterialTheme.colorScheme.primaryContainer else x.field)
-            .toggleable(value = vm.contestMode, role = Role.Switch, onValueChange = vm::changeContestMode)
-            .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("CONTEST MODE", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        Switch(checked = vm.contestMode, onCheckedChange = null)
+    @Composable
+    fun SwitchRow(text: String, on: Boolean, onChange: (Boolean) -> Unit, top: Int = 0) {
+        Row(
+            Modifier.fillMaxWidth().padding(top = top.dp).clip(RoundedCornerShape(12.dp))
+                .background(if (on) MaterialTheme.colorScheme.primaryContainer else x.field)
+                .toggleable(value = on, role = Role.Switch, onValueChange = onChange)
+                .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Switch(checked = on, onCheckedChange = null)
+        }
     }
+    SwitchRow("CONTEST MODE", vm.contestMode, vm::changeContestMode, top = 8)
     if (vm.contestMode) {
-        // Typed as text so the field may be empty for a moment; a valid number is taken at once.
-        var text by remember { mutableStateOf(vm.contestSerial.toString()) }
-        LaunchedEffect(vm.contestSerial) { if (text.toIntOrNull() != vm.contestSerial) text = vm.contestSerial.toString() }
-        OutlinedTextField(
-            value = text,
-            onValueChange = { v ->
-                text = v.filter { it.isDigit() }.take(5)
-                text.toIntOrNull()?.let(vm::changeContestSerial)
-            },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(tr("Следующий передаваемый номер")) },
-            singleLine = true,
-            isError = (text.toIntOrNull() ?: 0) < 1,
-            supportingText = { Text(tr("Уйдёт как %s, дальше +1 с каждой связью", ContestMode.serial(text.toIntOrNull()?.coerceAtLeast(1) ?: vm.contestSerial))) },
-            textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            shape = RoundedCornerShape(12.dp),
-        )
+        Text(tr("Передаю"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 4.dp))
+        // Two options in one row like the theme: a serial number or the same code every time.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(false to tr("Порядковый номер"), true to tr("Постоянный код")).forEach { (fixed, label) ->
+                val on = vm.contestSentFixed == fixed
+                Box(
+                    Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
+                        .background(if (on) MaterialTheme.colorScheme.primary else x.field)
+                        .selectable(selected = on, role = Role.RadioButton) { vm.changeContestSentFixed(fixed) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                        color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+        if (vm.contestSentFixed) {
+            OutlinedTextField(
+                value = vm.contestSentText,
+                onValueChange = { v -> vm.changeContestSentText(v.uppercase().filter { !it.isWhitespace() }.take(12)) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(tr("Передаваемый код")) },
+                singleLine = true,
+                isError = vm.contestSentText.isBlank(),
+                supportingText = { Text(tr("Одинаковый в каждой связи: район, область, зона — MO69, EU, 16")) },
+                textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrect = false, keyboardType = KeyboardType.Ascii),
+                shape = RoundedCornerShape(12.dp),
+            )
+        } else {
+            // Typed as text so the field may be empty for a moment; a valid number is taken at once.
+            var text by remember { mutableStateOf(vm.contestSerial.toString()) }
+            LaunchedEffect(vm.contestSerial) { if (text.toIntOrNull() != vm.contestSerial) text = vm.contestSerial.toString() }
+            OutlinedTextField(
+                value = text,
+                onValueChange = { v ->
+                    text = v.filter { it.isDigit() }.take(5)
+                    text.toIntOrNull()?.let(vm::changeContestSerial)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(tr("Следующий передаваемый номер")) },
+                singleLine = true,
+                isError = (text.toIntOrNull() ?: 0) < 1,
+                supportingText = { Text(tr("Уйдёт как %s, дальше +1 с каждой связью", ContestMode.serial(text.toIntOrNull()?.coerceAtLeast(1) ?: vm.contestSerial))) },
+                textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = RoundedCornerShape(12.dp),
+            )
+        }
+        SwitchRow(tr("Своя клавиатура в карточке"), vm.contestKeypad, vm::changeContestKeypad)
+        Note(tr("Крупные клавиши с цифрами и латиницей прямо в карточке, системная клавиатура не открывается. Выключите, чтобы вводить системной."))
     }
-    Note(tr("Режим соревнований: «Добавить QSO» открывает упрощённую карточку — позывной, RST и контрольные номера; время ставится при записи. Свайп справа налево — записать и открыть следующую, слева направо — вернуться к предыдущим связям контеста и поправить их. Такие связи отмечены в журнале флажком. Режим выключается при каждом запуске программы."))
+    Note(tr("Режим соревнований: «Добавить QSO» открывает упрощённую карточку — позывной, контрольные номера и RST; время ставится при записи. Принятый номер может быть любым: 015, MO69, EU, 16. Свайп справа налево — записать и открыть следующую, слева направо — вернуться к предыдущим связям контеста и поправить их. Такие связи отмечены в журнале флажком. Режим выключается при каждом запуске программы."))
 }

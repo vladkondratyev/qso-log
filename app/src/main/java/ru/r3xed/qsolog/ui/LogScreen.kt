@@ -133,7 +133,7 @@ fun LogScreen(
                         if (vm.contestMode) {
                             // Contest mode is on until the app is closed: say so where the eye goes first.
                             OneLineText(
-                                "CONTEST · " + tr("следующий № %s", ContestMode.serial(vm.contestSerial)),
+                                "CONTEST · " + if (vm.contestSentFixed) tr("передаю %s", vm.contestSentText.ifBlank { "—" }) else tr("следующий № %s", ContestMode.serial(vm.contestSerial)),
                                 maxSize = 16.sp, minSize = 11.sp, color = MaterialTheme.colorScheme.primary,
                             )
                         } else {

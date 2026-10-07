@@ -118,6 +118,24 @@ class Settings(context: Context) {
     var contestSerial: Int
         get() = prefs.getInt("contest_serial", 1)
         set(v) = prefs.edit().putInt("contest_serial", v).apply()
+
+    /** Contest mode: send the same code with every contact (a region, a zone: "MO69", "16") instead of a serial. */
+    var contestSentFixed: Boolean
+        get() = prefs.getBoolean("contest_sent_fixed", false)
+        set(v) = prefs.edit().putBoolean("contest_sent_fixed", v).apply()
+    var contestSentText: String
+        get() = prefs.getString("contest_sent_text", "") ?: ""
+        set(v) = prefs.edit().putString("contest_sent_text", v).apply()
+
+    /** Contest card: the app's own keyboard instead of the system one. */
+    var contestKeypad: Boolean
+        get() = prefs.getBoolean("contest_keypad", true)
+        set(v) = prefs.edit().putBoolean("contest_keypad", v).apply()
+
+    /** Contest card: the RST fields are shown (else folded into one line). */
+    var contestRstShown: Boolean
+        get() = prefs.getBoolean("contest_rst_shown", true)
+        set(v) = prefs.edit().putBoolean("contest_rst_shown", v).apply()
     var lastPower: String
         get() = prefs.getString("last_power", "") ?: ""
         set(v) = prefs.edit().putString("last_power", v).apply()

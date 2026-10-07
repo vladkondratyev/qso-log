@@ -1160,6 +1160,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun changeContestMode(on: Boolean) {
         contestMode = on
+        contestWork = null
     }
 
     fun changeContestSerial(n: Int) {
@@ -1167,6 +1168,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         contestSerial = n
         prefs.contestSerial = n
     }
+
+    /** Send the same [contestSentText] with every contact instead of a serial number. */
+    var contestSentFixed by mutableStateOf(prefs.contestSentFixed); private set
+    var contestSentText by mutableStateOf(prefs.contestSentText); private set
+
+    fun changeContestSentFixed(on: Boolean) {
+        contestSentFixed = on
+        prefs.contestSentFixed = on
+    }
+
+    fun changeContestSentText(text: String) {
+        contestSentText = text
+        prefs.contestSentText = text
+    }
+
+    /** What the next contest contact sends: the fixed code or the serial. */
+    fun contestSentNext(): String = if (contestSentFixed) contestSentText else ContestMode.serial(contestSerial)
+
+    var contestKeypad by mutableStateOf(prefs.contestKeypad); private set
+    var contestRstShown by mutableStateOf(prefs.contestRstShown); private set
+
+    fun changeContestKeypad(on: Boolean) {
+        contestKeypad = on
+        prefs.contestKeypad = on
+    }
+
+    fun changeContestRstShown(on: Boolean) {
+        contestRstShown = on
+        prefs.contestRstShown = on
+    }
+
+    /**
+     * Band, mode and frequency the contest is being worked on: taken from the last new card, so the next one stays
+     * there. (The log is saved in the background, so its newest contact may not be the one just saved yet.)
+     */
+    private var contestWork: Form? = null
 
     /** A new contest card that was typed in and left by swiping back; it comes back at the end of the swipes. */
     private var contestDraft: Form? = null
@@ -1190,10 +1227,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun newContestQso(audio: String = "") {
         newQso(audio)
-        val f = form
+        val w = contestWork
+        val f = if (w == null) form else form.copy(band = w.band, mode = w.mode, freq = normalizeFreq(w.freq))
         form = f.copy(
             rstSent = defaultRst(f.mode), rstRcvd = defaultRst(f.mode),
-            adif = f.adif + (ContestMode.FIELD to "Y") + (ContestMode.SENT to ContestMode.serial(contestSerial)),
+            adif = f.adif + (ContestMode.FIELD to "Y") + (ContestMode.SENT to contestSentNext()),
         )
         formOriginal = form
         screen = Screen.Contest
@@ -1214,7 +1252,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             screen = Screen.Contest
             return err
         }
-        changeContestSerial(ContestMode.nextSerial(f.adif[ContestMode.SENT].orEmpty(), contestSerial))
+        contestWork = f
+        if (!contestSentFixed) changeContestSerial(ContestMode.nextSerial(f.adif[ContestMode.SENT].orEmpty(), contestSerial))
         contestDraft = null
         newContestQso()
         return null
@@ -1227,6 +1266,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val target = if (f.isNew) list.lastOrNull() else list.getOrNull(list.indexOfFirst { it.id == f.id } - 1)
         if (target == null) return null
         if (f.isNew) {
+            contestWork = f
             contestDraft = f.takeIf { it.call.isNotBlank() || !it.adif[ContestMode.RCVD].isNullOrBlank() }
         } else if (hasUnsavedChanges) {
             contestError(f)?.let { return it }
@@ -1252,7 +1292,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 newContestQso()
                 val draft = contestDraft!!
                 contestDraft = null
-                form = draft.copy(adif = draft.adif + (ContestMode.SENT to (draft.adif[ContestMode.SENT] ?: ContestMode.serial(contestSerial))))
+                form = draft.copy(adif = draft.adif + (ContestMode.SENT to (draft.adif[ContestMode.SENT] ?: contestSentNext())))
                 loadHistory(draft.call)
                 // The lookup may have been cut short by the swipe back.
                 if (draft.call.length >= MIN_LOOKUP_LENGTH && !draft.infoFromQrz && draft.name.isBlank()) retryLookup()

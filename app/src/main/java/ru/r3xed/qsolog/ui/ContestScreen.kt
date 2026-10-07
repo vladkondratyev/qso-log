@@ -1,6 +1,19 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -90,21 +103,52 @@ import ru.r3xed.qsolog.tr
 import ru.r3xed.qsolog.utc
 import kotlin.math.abs
 
+/** The fields of the contest card the app's keypad can type into. */
+private enum class Target { CALL, SENT, RCVD, RST_SENT, RST_RCVD }
+
 /**
- * The contest-mode card: callsign, two reports and two numbers, nothing else. "Далее" on the keyboard goes from the
- * callsign to the received number, "Готово" there saves and opens the next card. A swipe from right to left saves
- * and goes on, from left to right goes back through the contest contacts to correct them.
+ * The contest-mode card: callsign, the two numbers and the reports, nothing else. A swipe from right to left saves
+ * and goes on, from left to right goes back through the contest contacts to correct them. Typing is done on the
+ * app's own keypad (big keys, digits and Latin letters, the system keyboard stays closed) or, if switched off in the
+ * settings, on the system keyboard: "Далее" goes from the callsign to the received number, "Готово" there saves.
  */
 @Composable
 fun ContestScreen(vm: AppViewModel) {
     val f = vm.form
     val x = LocalExtra.current
+    val keypad = vm.contestKeypad
     var error by remember { mutableStateOf<String?>(null) }
     var confirmClose by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val callFocus = remember { FocusRequester() }
     val rcvdFocus = remember { FocusRequester() }
     val rcvd = f.adif[ContestMode.RCVD].orEmpty()
+    val sent = f.adif[ContestMode.SENT].orEmpty()
+
+    // The keypad's field. A tap on a filled number or report selects it: the next key replaces it, as on a keyboard.
+    var active by remember { mutableStateOf(if (f.isNew) Target.CALL else Target.RCVD) }
+    var replace by remember { mutableStateOf(!f.isNew) }
+    fun valueOf(t: Target) = when (t) {
+        Target.CALL -> vm.form.call
+        Target.SENT -> vm.form.adif[ContestMode.SENT].orEmpty()
+        Target.RCVD -> vm.form.adif[ContestMode.RCVD].orEmpty()
+        Target.RST_SENT -> vm.form.rstSent
+        Target.RST_RCVD -> vm.form.rstRcvd
+    }
+    fun setValue(t: Target, v: String) {
+        error = null
+        when (t) {
+            Target.CALL -> vm.setCall(v)
+            Target.SENT -> vm.setContestField(ContestMode.SENT, v)
+            Target.RCVD -> vm.setContestField(ContestMode.RCVD, v)
+            Target.RST_SENT -> vm.update(vm.form.copy(rstSent = v))
+            Target.RST_RCVD -> vm.update(vm.form.copy(rstRcvd = v))
+        }
+    }
+    fun activate(t: Target) {
+        active = t
+        replace = t != Target.CALL && valueOf(t).isNotBlank()
+    }
 
     // A new card with something typed, or changes to a saved one: closing asks first.
     val typed = if (f.isNew) f.call.isNotBlank() || rcvd.isNotBlank() else vm.hasUnsavedChanges
@@ -114,7 +158,12 @@ fun ContestScreen(vm: AppViewModel) {
     // A missing received number puts the cursor there, any other problem (the callsign) in the callsign.
     val showError = { e: String? ->
         error = e
-        if (e == CONTEST_RCVD_ERROR) rcvdFocus.requestFocus() else if (e != null) callFocus.requestFocus()
+        when {
+            e == null -> {}
+            keypad -> { active = if (e == CONTEST_RCVD_ERROR) Target.RCVD else Target.CALL; replace = false }
+            e == CONTEST_RCVD_ERROR -> rcvdFocus.requestFocus()
+            else -> callFocus.requestFocus()
+        }
     }
     val next = { showError(vm.contestSaveAndNext()) }
     val prev = { showError(vm.contestPrev()) }
@@ -142,8 +191,9 @@ fun ContestScreen(vm: AppViewModel) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().imePadding().then(swipe)) {
-        // --- header: close, what is being worked, the number sent ---
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().imePadding()) {
+      Column(Modifier.weight(1f).then(swipe)) {
+        // --- header: close, what is being worked, what is sent ---
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = close, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Filled.Close, tr("Закрыть"), Modifier.size(30.dp))
@@ -155,7 +205,7 @@ fun ContestScreen(vm: AppViewModel) {
             BandModePicker(vm)
             Spacer(Modifier.weight(1f))
             Text(
-                "№ " + f.adif[ContestMode.SENT].orEmpty().ifBlank { "—" },
+                (if (sent.all { it.isDigit() }) "№ " else "") + sent.ifBlank { "—" },
                 fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, maxLines = 1, softWrap = false,
             )
         }
@@ -184,66 +234,139 @@ fun ContestScreen(vm: AppViewModel) {
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedTextField(
-                value = f.call,
-                onValueChange = { error = null; vm.setCall(it) },
-                modifier = Modifier.fillMaxWidth().focusRequester(callFocus),
-                label = { Text(tr("Позывной"), fontSize = 16.sp) },
-                isError = error != null && error != CONTEST_RCVD_ERROR,
-                textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 36.sp, letterSpacing = 1.sp),
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Characters,
-                    autoCorrect = false,
-                    keyboardType = KeyboardType.Ascii,
-                    imeAction = ImeAction.Next,
-                ),
-                keyboardActions = KeyboardActions(onNext = { rcvdFocus.requestFocus() }),
-                colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
-            )
-            if (f.isNew) LaunchedEffect(Unit) { callFocus.requestFocus() }
+            val callError = error != null && error != CONTEST_RCVD_ERROR
+            if (keypad) {
+                KeyField(tr("Позывной"), f.call, active == Target.CALL, false, callError, Modifier.fillMaxWidth(), big = true) { activate(Target.CALL) }
+            } else {
+                OutlinedTextField(
+                    value = f.call,
+                    onValueChange = { error = null; vm.setCall(it) },
+                    modifier = Modifier.fillMaxWidth().focusRequester(callFocus),
+                    label = { Text(tr("Позывной"), fontSize = 16.sp) },
+                    isError = callError,
+                    textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 36.sp, letterSpacing = 1.sp),
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Characters,
+                        autoCorrect = false,
+                        keyboardType = KeyboardType.Ascii,
+                        imeAction = ImeAction.Next,
+                    ),
+                    keyboardActions = KeyboardActions(onNext = { rcvdFocus.requestFocus() }),
+                    colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
+                )
+                if (f.isNew) LaunchedEffect(Unit) { callFocus.requestFocus() }
+            }
             StationLine(vm)
 
-            val dbReports = defaultRst(f.mode).startsWith("-")
-            val rstKeyboard = if (dbReports) KeyboardType.Text else KeyboardType.Number
+            // The numbers first: they change with every contact. Any letters and digits: 015, MO69, EU, 16.
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                BigField(tr("RST передан"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.weight(1f), rstKeyboard)
-                BigField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.weight(1f), rstKeyboard)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                BigField(tr("Код передан"), f.adif[ContestMode.SENT].orEmpty(), { vm.setContestField(ContestMode.SENT, it) }, Modifier.weight(1f), KeyboardType.Number)
-                BigField(
-                    tr("Код принят"), rcvd, { error = null; vm.setContestField(ContestMode.RCVD, it) },
-                    Modifier.weight(1f).focusRequester(rcvdFocus), KeyboardType.Number, onDone = next,
-                    isError = error == CONTEST_RCVD_ERROR,
-                )
+                if (keypad) {
+                    KeyField(tr("Код передан"), sent, active == Target.SENT, replace, false, Modifier.weight(1f)) { activate(Target.SENT) }
+                    KeyField(tr("Код принят"), rcvd, active == Target.RCVD, replace, error == CONTEST_RCVD_ERROR, Modifier.weight(1f)) { activate(Target.RCVD) }
+                } else {
+                    BigField(tr("Код передан"), sent, { vm.setContestField(ContestMode.SENT, it) }, Modifier.weight(1f), KeyboardType.Ascii)
+                    BigField(
+                        tr("Код принят"), rcvd, { error = null; vm.setContestField(ContestMode.RCVD, it) },
+                        Modifier.weight(1f).focusRequester(rcvdFocus), KeyboardType.Ascii, onDone = next,
+                        isError = error == CONTEST_RCVD_ERROR,
+                    )
+                }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium) }
-        }
 
-        // --- bottom: one big button, and when the contact is (or will be) logged ---
-        HorizontalDivider(color = x.line)
-        Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (!f.isNew) {
-                    OutlinedIconButton(
-                        onClick = { confirmDelete = true },
-                        modifier = Modifier.size(60.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
-                        colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) { Icon(Icons.Filled.DeleteOutline, tr("Удалить связь"), Modifier.size(28.dp)) }
+            // The reports are 59 / 599 nearly always: they can be folded into one line.
+            if (vm.contestRstShown) {
+                val dbReports = defaultRst(f.mode).startsWith("-")
+                val rstKeyboard = if (dbReports) KeyboardType.Text else KeyboardType.Number
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (keypad) {
+                        KeyField(tr("RST передан"), f.rstSent, active == Target.RST_SENT, replace, false, Modifier.weight(1f)) { activate(Target.RST_SENT) }
+                        KeyField(tr("RST принят"), f.rstRcvd, active == Target.RST_RCVD, replace, false, Modifier.weight(1f)) { activate(Target.RST_RCVD) }
+                    } else {
+                        BigField(tr("RST передан"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.weight(1f), rstKeyboard)
+                        BigField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.weight(1f), rstKeyboard)
+                    }
+                    IconButton(onClick = {
+                        vm.changeContestRstShown(false)
+                        if (active == Target.RST_SENT || active == Target.RST_RCVD) activate(Target.CALL)
+                    }) { Icon(Icons.Filled.ExpandLess, tr("Свернуть RST")) }
                 }
-                Button(onClick = next, modifier = Modifier.weight(1f).height(60.dp), shape = RoundedCornerShape(16.dp)) {
-                    Text(if (f.isNew) tr("Записать и следующая") else tr("Сохранить и далее"), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(6.dp))
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(28.dp))
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClickLabel = tr("Показать RST")) { vm.changeContestRstShown(true) }
+                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("RST  ", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                    Text("${f.rstSent.ifBlank { "—" }} / ${f.rstRcvd.ifBlank { "—" }}", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text(tr("изменить"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Filled.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+      }
+
+        // --- bottom: the keypad or one big button, and when the contact is (or will be) logged ---
+        HorizontalDivider(color = x.line)
+        Column(Modifier.navigationBarsPadding().padding(horizontal = if (keypad) 6.dp else 16.dp, vertical = if (keypad) 6.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val deleteButton = @Composable { size: Int ->
+                OutlinedIconButton(
+                    onClick = { confirmDelete = true },
+                    modifier = Modifier.size(size.dp),
+                    shape = RoundedCornerShape(if (keypad) 10.dp else 16.dp),
+                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
+                    colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Icon(Icons.Filled.DeleteOutline, tr("Удалить связь"), Modifier.size(28.dp)) }
+            }
+            val saveLabel = if (f.isNew) tr("Записать и следующая") else tr("Сохранить и далее")
+            if (keypad) {
+                Keypad(
+                    onKey = { c ->
+                        val v = if (replace) c else valueOf(active) + c
+                        replace = false
+                        setValue(active, v.take(if (active == Target.CALL) 15 else 12))
+                    },
+                    onBackspace = { setValue(active, if (replace) "" else valueOf(active).dropLast(1)); replace = false },
+                    onClear = { setValue(active, ""); replace = false },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (!f.isNew) deleteButton(54)
+                    // From the callsign to the received number and back: the two fields typed in every contact.
+                    val toRcvd = active == Target.CALL
+                    OutlinedButton(
+                        onClick = { activate(if (toRcvd) Target.RCVD else Target.CALL) },
+                        modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(10.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
+                    ) {
+                        Text(if (toRcvd) tr("→ Код") else tr("→ Позывной"), fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                    Button(
+                        onClick = next, modifier = Modifier.weight(if (f.isNew) 1.6f else 1.3f).height(54.dp), shape = RoundedCornerShape(10.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                    ) {
+                        Text(if (f.isNew) tr("Записать") else tr("Далее"), fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(26.dp))
+                    }
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (!f.isNew) deleteButton(60)
+                    Button(onClick = next, modifier = Modifier.weight(1f).height(60.dp), shape = RoundedCornerShape(16.dp)) {
+                        Text(saveLabel, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(28.dp))
+                    }
                 }
             }
             val freq = f.freq.ifBlank { null }?.let { tr("%s МГц", it) }
             val time = if (f.isNew) tr("время UTC — при записи") else "${f.time} UTC · ${f.date}"
-            Text(listOfNotNull(time, freq).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = x.muted)
+            Text(
+                listOfNotNull(time, freq).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = x.muted,
+                modifier = Modifier.padding(horizontal = if (keypad) 10.dp else 0.dp),
+            )
         }
     }
 
@@ -272,6 +395,93 @@ fun ContestScreen(vm: AppViewModel) {
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Отмена")) } },
         )
+    }
+}
+
+/**
+ * A field of the keypad mode: looks like a text field but never opens the system keyboard. The active one has a
+ * thick border and a blinking cursor; a [selected] value (the next key replaces it) is shaded.
+ */
+@Composable
+private fun KeyField(
+    label: String,
+    value: String,
+    active: Boolean,
+    selected: Boolean,
+    isError: Boolean,
+    modifier: Modifier,
+    big: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val x = LocalExtra.current
+    val c = MaterialTheme.colorScheme
+    val border = when {
+        isError -> c.error
+        active -> c.primary
+        else -> x.line
+    }
+    Column(
+        modifier.clip(RoundedCornerShape(if (big) 16.dp else 12.dp))
+            .border(if (active || isError) 2.dp else 1.dp, border, RoundedCornerShape(if (big) 16.dp else 12.dp))
+            .clickable(onClickLabel = label, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = if (big) 6.dp else 4.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = if (isError) c.error else if (active) c.primary else x.muted, maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(if (big) 50.dp else 38.dp)) {
+            Text(
+                value,
+                fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = if (big) 36.sp else 26.sp, letterSpacing = if (big) 1.sp else 0.sp,
+                maxLines = 1, softWrap = false,
+                modifier = if (active && selected && value.isNotEmpty()) Modifier.clip(RoundedCornerShape(4.dp)).background(c.primaryContainer) else Modifier,
+            )
+            if (active && !(selected && value.isNotEmpty())) {
+                // On for half a second, off for half a second.
+                val phase by rememberInfiniteTransition(label = "cursor").animateFloat(
+                    0f, 1f, infiniteRepeatable(tween(1060, easing = LinearEasing)), label = "cursor",
+                )
+                Box(Modifier.padding(start = 2.dp).width(3.dp).height(if (big) 38.dp else 28.dp).graphicsLayer { alpha = if (phase < 0.5f) 1f else 0f }.background(c.primary))
+            }
+        }
+    }
+}
+
+/**
+ * The app's keyboard for the contest card, in the spirit of contest loggers: digits on top, Latin letters, "/" for
+ * portable calls, "-" for dB reports. A long press on ⌫ clears the field.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Keypad(onKey: (String) -> Unit, onBackspace: () -> Unit, onClear: () -> Unit) {
+    val x = LocalExtra.current
+    val view = LocalView.current
+    val tap = { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
+    val rows = listOf("1234567890", "QWERTYUIOP", "ASDFGHJKL/", "ZXCVBNM-")
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        rows.forEachIndexed { i, keys ->
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                keys.forEach { k ->
+                    Box(
+                        Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(8.dp))
+                            .background(if (i == 0) MaterialTheme.colorScheme.secondaryContainer else x.field)
+                            .clickable { tap(); onKey(k.toString()) },
+                        contentAlignment = Alignment.Center,
+                    ) { Text(k.toString(), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp) }
+                }
+                if (i == rows.lastIndex) {
+                    Box(
+                        Modifier.weight(2f).height(50.dp).clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .combinedClickable(
+                                onClickLabel = tr("Стереть"),
+                                onLongClickLabel = tr("Очистить поле"),
+                                onLongClick = { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); onClear() },
+                                onClick = { tap(); onBackspace() },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.AutoMirrored.Filled.Backspace, tr("Стереть"), Modifier.size(26.dp)) }
+                }
+            }
+        }
     }
 }
 
