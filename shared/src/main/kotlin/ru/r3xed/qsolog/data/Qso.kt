@@ -42,8 +42,21 @@ data class Qso(
 /** Distance of this record is from the region centre (HamQTH), not from the station's QTH. */
 val Qso.approxPosition get() = adif[HamQth.POSITION_FIELD] == HamQth.POSITION_REGION
 
-/** How many times we worked a station and when the most recent contact was. */
-data class CallHistory(val count: Int, val last: Qso?)
+/**
+ * How many times we worked a station, the most recent contact, and the most recent one on each band
+ * ([byBand], low to high frequency).
+ */
+data class CallHistory(val count: Int, val last: Qso?, val byBand: List<Qso> = emptyList()) {
+    companion object {
+        /** From the station's contacts, newest first. */
+        fun of(newestFirst: List<Qso>) = CallHistory(
+            newestFirst.size,
+            newestFirst.firstOrNull(),
+            newestFirst.filter { it.band.isNotBlank() }.distinctBy { it.band.lowercase() }
+                .sortedBy { q -> BANDS.indexOf(q.band.lowercase()).let { if (it < 0) Int.MAX_VALUE else it } },
+        )
+    }
+}
 
 /** Every band the app knows, low to high frequency. Which ones show as buttons is chosen in the settings. */
 val BANDS = listOf(

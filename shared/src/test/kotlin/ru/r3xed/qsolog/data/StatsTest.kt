@@ -79,3 +79,16 @@ class StatsTest {
         assertContentEquals(intArrayOf(2, 0, 0, 2, 0, 1, 0), Stats.distanceBins(log))
     }
 }
+
+class CallHistoryTest {
+    @Test
+    fun lastContactOnEachBandInFrequencyOrder() {
+        fun q(band: String, day: Int, mode: String = "SSB") = Qso(call = "R9DEMO", timeUtc = 1_790_000_000_000L + day * 86_400_000L, band = band, mode = mode)
+        // Newest first, as the database gives them.
+        val h = CallHistory.of(listOf(q("20m", 9), q("40m", 7, "CW"), q("20m", 5), q("80m", 3), q("", 2)))
+        assertEquals(5, h.count)
+        assertEquals(9, ((h.last!!.timeUtc - 1_790_000_000_000L) / 86_400_000L).toInt())
+        assertEquals(listOf("80m" to 3, "40m" to 7, "20m" to 9), h.byBand.map { it.band to ((it.timeUtc - 1_790_000_000_000L) / 86_400_000L).toInt() })
+        assertEquals("CW", h.byBand[1].mode)
+    }
+}

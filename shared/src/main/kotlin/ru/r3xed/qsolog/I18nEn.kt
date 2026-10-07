@@ -709,6 +709,8 @@ internal val EN: Map<String, String> = hashMapOf(
     "→ Позывной" to "→ Call",
     "Записать" to "Log",
     "Стереть" to "Delete",
+    // Android 0.32.0: last contact on each band.
+    "Диапазоны:" to "Bands:",
     // Android 0.31.0: sync through a Google Sheet.
     "Скрипт таблицы закрыт: в развёртывании выберите «У кого есть доступ: все»" to "The sheet's script is closed: in the deployment choose “Who has access: Anyone”",
     "Таблица ответила непонятно" to "The sheet gave an unexpected answer",

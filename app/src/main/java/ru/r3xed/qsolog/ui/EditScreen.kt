@@ -531,6 +531,10 @@ private fun HistoryCard(vm: AppViewModel) {
             )
             val det = listOf(last.band, last.mode).filter { it.isNotBlank() }.joinToString(" ")
             if (det.isNotBlank()) Text(det, fontSize = 17.sp, color = x.hlInk)
+            // The last contact on each band: is this one a new band for the station, and when was it worked there.
+            if (h.byBand.size > 1 || (h.byBand.size == 1 && !h.byBand[0].band.equals(vm.form.band, ignoreCase = true))) {
+                BandChips(h.byBand, ink = x.hlInk, chip = x.hlBorder.copy(alpha = 0.22f), current = vm.form.band, modifier = Modifier.padding(top = 6.dp))
+            }
         }
     }
 }

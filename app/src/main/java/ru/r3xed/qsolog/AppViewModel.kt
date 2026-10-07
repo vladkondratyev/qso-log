@@ -735,6 +735,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (last == null) newQso(audio) else newQsoFromLog(last, audio)
     }
 
+    /** The search has narrowed the log to one station: its contacts, for the "worked on these bands" line. */
+    fun searchedHistory(): CallHistory? {
+        val call = searchedStation()?.call ?: return null
+        return CallHistory.of(allQsos.filter { it.call == call }.sortedByDescending { it.timeUtc })
+    }
+
     private fun searchedStation(): Qso? {
         if (query.isBlank()) return null
         val q = query.trim().uppercase()

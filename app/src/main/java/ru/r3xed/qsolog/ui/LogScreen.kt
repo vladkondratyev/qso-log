@@ -203,6 +203,18 @@ fun LogScreen(
                 ),
             )
 
+            // One station found: the bands it was worked on, with the last date on each.
+            val station = remember(vm.query, vm.qsos, vm.allQsos) { vm.searchedHistory() }
+            if (station != null && station.byBand.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 6.dp), verticalAlignment = Alignment.Top) {
+                    Text(
+                        tr("Диапазоны:"), style = MaterialTheme.typography.bodyMedium, color = x.muted,
+                        modifier = Modifier.padding(top = 3.dp, end = 8.dp),
+                    )
+                    BandChips(station.byBand, ink = MaterialTheme.colorScheme.onSurface, chip = x.field)
+                }
+            }
+
             if (vm.qsos.isEmpty()) {
                 Box(Modifier.weight(1f)) { EmptyLog(vm) }
             } else {

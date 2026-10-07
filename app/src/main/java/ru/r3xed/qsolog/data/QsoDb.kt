@@ -83,11 +83,7 @@ class QsoDb(context: Context) : SQLiteOpenHelper(context, "qsolog.db", null, 5),
             "SELECT * FROM qso WHERE call = ? AND id != ? ORDER BY time_utc DESC",
             arrayOf(call.uppercase(), excludeId.toString())
         )
-        return c.use {
-            val count = it.count
-            val last = if (it.moveToFirst()) it.toQso() else null
-            CallHistory(count, last)
-        }
+        return c.use { CallHistory.of(buildList { while (it.moveToNext()) add(it.toQso()) }) }
     }
 
     fun get(id: Long): Qso? =

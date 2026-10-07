@@ -111,15 +111,7 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
         conn.prepareStatement("SELECT * FROM qso WHERE call = ? AND id != ? ORDER BY time_utc DESC").use { st ->
             st.setString(1, call.uppercase())
             st.setLong(2, excludeId)
-            st.executeQuery().use { rs ->
-                var count = 0
-                var last: Qso? = null
-                while (rs.next()) {
-                    if (count == 0) last = rs.toQso()
-                    count++
-                }
-                CallHistory(count, last)
-            }
+            st.executeQuery().use { rs -> CallHistory.of(buildList { while (rs.next()) add(rs.toQso()) }) }
         }
 
     @Synchronized
