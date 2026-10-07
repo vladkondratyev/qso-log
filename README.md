@@ -137,6 +137,7 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 
 <p>
 <img src="docs/screenshots/46-contest-card.png" width="200" alt="Карточка в режиме соревнований">
+<img src="docs/screenshots/53-contest-keypad.png" width="200" alt="Своя клавиатура карточки соревнований, тёмная тема">
 <img src="docs/screenshots/47-contest-log.png" width="200" alt="Связи соревнования в журнале">
 <img src="docs/screenshots/48-contest-settings.png" width="200" alt="Включение CONTEST MODE">
 </p>
