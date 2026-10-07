@@ -10,6 +10,7 @@ import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.DEFAULT_MODES
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.data.StationSettings
+import ru.r3xed.qsolog.data.SyncStore
 import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
@@ -41,7 +42,7 @@ object AppDirs {
 }
 
 /** The log in a local SQLite file, same schema as the Android app. */
-class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
+class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) : SyncStore {
     private val conn: Connection = DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
 
     init {
@@ -84,6 +85,8 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
                 conn.autoCommit = true
             }
             it.executeUpdate("CREATE UNIQUE INDEX IF NOT EXISTS qso_uid ON qso(uid)")
+            // Contacts deleted on this computer, so the table sync can delete them on the other devices.
+            it.executeUpdate("CREATE TABLE IF NOT EXISTS qso_deleted (uid TEXT PRIMARY KEY, at INTEGER)")
             it.executeUpdate("CREATE INDEX IF NOT EXISTS qso_call ON qso(call)")
             it.executeUpdate("CREATE INDEX IF NOT EXISTS qso_time ON qso(time_utc)")
         }
@@ -122,7 +125,7 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
 
     @Synchronized
     fun save(qso: Qso): Long {
-        if (qso.id == 0L) return insert(qso)
+        if (qso.id == 0L) return insertRow(qso)
         // A card saved from the editor may come without its UUID: the one in the database stays.
         conn.prepareStatement("UPDATE qso SET ${COLUMNS.joinToString { "$it = ?" }}, uid = COALESCE(NULLIF(?, ''), uid) WHERE id = ?").use { st ->
             st.bind(qso)
@@ -133,9 +136,56 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
         return qso.id
     }
 
+    /** Deletes the record and remembers its UUID: the next table sync deletes it on the other devices too. */
     @Synchronized
     fun delete(id: Long) {
+        val uid = get(id)?.uid.orEmpty()
+        if (uid.isNotBlank()) conn.prepareStatement("INSERT OR REPLACE INTO qso_deleted (uid, at) VALUES (?, ?)").use {
+            it.setString(1, uid)
+            it.setLong(2, System.currentTimeMillis())
+            it.executeUpdate()
+        }
         conn.prepareStatement("DELETE FROM qso WHERE id = ?").use { it.setLong(1, id); it.executeUpdate() }
+    }
+
+    // ---------- table sync ----------
+
+    @Synchronized
+    override fun changedSince(t: Long): List<Qso> = conn.prepareStatement("SELECT * FROM qso WHERE updated_at > ?").use { st ->
+        st.setLong(1, t)
+        st.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.toQso()) } }
+    }
+
+    @Synchronized
+    override fun deletedSince(t: Long): List<Pair<String, Long>> = conn.prepareStatement("SELECT uid, at FROM qso_deleted WHERE at > ?").use { st ->
+        st.setLong(1, t)
+        st.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getString(1) to rs.getLong(2)) } }
+    }
+
+    @Synchronized
+    override fun byUid(uid: String): Qso? = conn.prepareStatement("SELECT * FROM qso WHERE uid = ?").use { st ->
+        st.setString(1, uid)
+        st.executeQuery().use { if (it.next()) it.toQso() else null }
+    }
+
+    @Synchronized
+    override fun insert(q: Qso) {
+        save(q.copy(id = 0))
+    }
+
+    @Synchronized
+    override fun update(q: Qso) {
+        save(q)
+    }
+
+    @Synchronized
+    override fun deleteByUid(uid: String) {
+        conn.prepareStatement("DELETE FROM qso WHERE uid = ?").use { it.setString(1, uid); it.executeUpdate() }
+    }
+
+    @Synchronized
+    override fun changeUid(old: String, new: String) {
+        conn.prepareStatement("UPDATE qso SET uid = ? WHERE uid = ?").use { it.setString(1, new); it.setString(2, old); it.executeUpdate() }
     }
 
     /** Deletes every record; returns how many there were. */
@@ -172,7 +222,7 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
         conn.autoCommit = false
         try {
             var added = 0
-            for (q in list) if (!exists(q)) { insert(q.copy(id = 0)); added++ }
+            for (q in list) if (!exists(q)) { insertRow(q.copy(id = 0)); added++ }
             conn.commit()
             return added
         } catch (e: Exception) {
@@ -183,7 +233,9 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
         }
     }
 
-    private fun insert(qso: Qso): Long {
+    private fun insertRow(qso: Qso): Long {
+        // Back again (undo, or from the table): no longer deleted.
+        if (qso.uid.isNotBlank()) conn.prepareStatement("DELETE FROM qso_deleted WHERE uid = ?").use { it.setString(1, qso.uid); it.executeUpdate() }
         val sql = "INSERT INTO qso (${COLUMNS.joinToString()}, uid) VALUES (${COLUMNS.joinToString { "?" }}, ?)"
         conn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS).use { st ->
             st.bind(qso)
@@ -294,6 +346,7 @@ class Settings {
 
     private var cachedPassword: String? = null
     private var cachedSitePassword: String? = null
+    private var cachedComPassword: String? = null
 
     /** Everything except the password, which may wait on a keychain prompt; read it with [password]. */
     fun load() = StationSettings(
@@ -304,12 +357,15 @@ class Settings {
         qrzPassword = cachedPassword.orEmpty(),
         qrzSiteEmail = get("qrz_site_email"),
         qrzSitePassword = cachedSitePassword.orEmpty(),
+        qrzComLogin = get("qrzcom_login"),
+        qrzComPassword = cachedComPassword.orEmpty(),
         power = get("my_power"),
         station = AdifLabels.MINE.keys.associateWith { get("station_$it") }.filterValues { it.isNotEmpty() },
     )
 
     fun password(): String = cachedPassword ?: loadPassword().also { cachedPassword = it }
     fun sitePassword(): String = cachedSitePassword ?: loadPassword(SITE_ACCOUNT, "qrz_site_password").also { cachedSitePassword = it }
+    fun comPassword(): String = cachedComPassword ?: loadPassword(COM_ACCOUNT, "qrzcom_password").also { cachedComPassword = it }
 
     fun save(s: StationSettings) {
         props.setProperty("my_call", s.myCall.trim().uppercase())
@@ -318,10 +374,15 @@ class Settings {
         props.setProperty("my_power", s.power.trim())
         for (key in AdifLabels.MINE.keys) props.setProperty("station_$key", s.station[key].orEmpty().trim())
         props.setProperty("qrz_site_email", s.qrzSiteEmail.trim())
+        props.setProperty("qrzcom_login", s.qrzComLogin.trim())
         put("qrz_login", s.qrzLogin.trim())
         if (cachedSitePassword != null && s.qrzSitePassword != cachedSitePassword) {
             cachedSitePassword = s.qrzSitePassword
             savePassword(s.qrzSitePassword, SITE_ACCOUNT, "qrz_site_password")
+        }
+        if (cachedComPassword != null && s.qrzComPassword != cachedComPassword) {
+            cachedComPassword = s.qrzComPassword
+            savePassword(s.qrzComPassword, COM_ACCOUNT, "qrzcom_password")
         }
         // Until the stored password has been read, an empty field means "not loaded yet", not "cleared".
         if (cachedPassword != null && s.qrzPassword != cachedPassword) {
@@ -387,6 +448,38 @@ class Settings {
         get() = get("contest_operator", "SINGLE-OP")
         set(v) = put("contest_operator", v)
 
+    /** Contest mode: the number the next contest contact sends (its STX_STRING). */
+    var contestSerial: Int
+        get() = get("contest_serial", "1").toIntOrNull()?.coerceAtLeast(1) ?: 1
+        set(v) = put("contest_serial", v.toString())
+
+    /** Contest mode: send the same code with every contact (a region, a zone: "MO69", "16") instead of a serial. */
+    var contestSentFixed: Boolean
+        get() = get("contest_sent_fixed", "false") == "true"
+        set(v) = put("contest_sent_fixed", v.toString())
+    var contestSentText: String
+        get() = get("contest_sent_text")
+        set(v) = put("contest_sent_text", v)
+
+    /** Contest card: the RST fields are shown (else folded into one line). */
+    var contestRstShown: Boolean
+        get() = get("contest_rst_shown", "true") == "true"
+        set(v) = put("contest_rst_shown", v.toString())
+
+    /** Table sync: the address of the Apps Script web app (…/exec) and what the computer remembers between syncs. */
+    var sheetUrl: String
+        get() = get("sheet_url")
+        set(v) = put("sheet_url", v)
+    var sheetSince: String
+        get() = get("sheet_since")
+        set(v) = put("sheet_since", v)
+    var sheetLastPush: Long
+        get() = get("sheet_last_push", "0").toLongOrNull() ?: 0
+        set(v) = put("sheet_last_push", v.toString())
+    var sheetStatus: String
+        get() = get("sheet_status")
+        set(v) = put("sheet_status", v)
+
     /** Colour theme: "system" (follow the OS), "light" or "dark". */
     var theme: String
         get() = get("theme", "system")
@@ -399,5 +492,7 @@ class Settings {
         const val ACCOUNT = "qrz.ru"
         /** The site's own login (e-mail), separate from the XML API one. */
         const val SITE_ACCOUNT = "www.qrz.ru"
+        /** QRZ.com login (callsign or e-mail). */
+        const val COM_ACCOUNT = "www.qrz.com"
     }
 }

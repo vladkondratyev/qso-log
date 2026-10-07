@@ -804,4 +804,7 @@ internal val EN: Map<String, String> = hashMapOf(
     "Африка" to "Africa",
     "Океания" to "Oceania",
     "Антарктида" to "Antarctica",
+    // Desktop contest card (1.12.0).
+    "Enter — из позывного в принятый код, там — записать. PgUp / PgDn — предыдущая и следующая связь контеста. Esc — закрыть." to "Enter goes from the callsign to the received exchange and logs the QSO there. PgUp / PgDn — previous and next contest QSO. Esc — close.",
+    "Режим соревнований: «Добавить QSO» открывает упрощённую карточку — позывной, контрольные номера и RST; время ставится при записи. Принятый номер может быть любым: 015, MO69, EU, 16. Enter переходит из позывного в принятый код и там записывает связь; PgUp и PgDn листают связи контеста, чтобы их поправить. Такие связи отмечены в журнале флажком. Режим выключается при каждом запуске программы." to "Contest mode: “Add QSO” opens a simplified card — callsign, exchange and RST; the time is set when the QSO is logged. The received exchange can be anything: 015, MO69, EU, 16. Enter goes from the callsign to the received exchange and logs the QSO there; PgUp and PgDn go through the contest QSOs to correct them. Such QSOs are flagged in the log. The mode turns off every time the program starts.",
 )

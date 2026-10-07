@@ -29,6 +29,12 @@ import ru.r3xed.qsolog.data.approxPosition
 import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
+import ru.r3xed.qsolog.data.QrzCom
+import ru.r3xed.qsolog.data.ContestMode
+import ru.r3xed.qsolog.data.SheetSync
+import ru.r3xed.qsolog.data.StatBucket
+import ru.r3xed.qsolog.data.StatFilter
+import ru.r3xed.qsolog.data.SyncState
 import ru.r3xed.qsolog.data.QrzException
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.data.StationSettings
@@ -47,7 +53,16 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneOffset
 
-enum class Pane { Empty, Edit, Settings, Map, Welcome, Reference }
+enum class Pane {
+    Empty, Edit, Settings, Map, Welcome, Reference,
+    /** The simplified contact card of the contest mode. */
+    Contest,
+    /** Charts of the log: bands, modes, days, stations… */
+    Dashboard,
+}
+
+/** The contest card's message when the received number is missing; the card then puts the cursor in that field. */
+val CONTEST_RCVD_ERROR get() = tr("Введите принятый код")
 
 /** Callsign length at which the QRZ.ru / HamQTH lookup starts. */
 const val MIN_LOOKUP_LENGTH = 4
@@ -115,40 +130,40 @@ class AppState {
     var settings by mutableStateOf(prefs.load()); private set
     private val qrz = QrzClient { settings.qrzLogin to settings.qrzPassword }
     private val qrzSite = QrzSite { settings.qrzSiteEmail to settings.qrzSitePassword }
+    private val qrzCom = QrzCom { settings.qrzComLogin to settings.qrzComPassword }
 
-    /** Some QRZ.ru account is set: the XML API (preferred) or the site's own e-mail login. */
-    val hasQrzAccount get() = settings.qrzLogin.isNotBlank() || settings.qrzSiteEmail.isNotBlank()
+    /** Some callsign account is set: the QRZ.ru XML API (preferred), the QRZ.ru site's e-mail login or QRZ.com. */
+    val hasQrzAccount get() = settings.qrzLogin.isNotBlank() || settings.qrzSiteEmail.isNotBlank() || settings.qrzComLogin.isNotBlank()
 
     /**
-     * QRZ.ru data for a callsign: through the XML API when its account is set (it wins when both are set),
-     * otherwise — or when the API fails — from the site's callsign page with the e-mail login. Null: not in QRZ.ru.
+     * Station data for a callsign: through the QRZ.ru XML API when its account is set (it wins when several are set),
+     * otherwise — or when the API fails — from the QRZ.ru site's callsign page with the e-mail login, and then from
+     * the QRZ.com page (also when QRZ.ru does not know the callsign: foreign stations). Null: known to none of them.
      */
     private suspend fun qrzLookup(call: String, stillWanted: () -> Boolean = { true }): QrzInfo? {
         var problem: Exception? = null
-        if (settings.qrzLogin.isNotBlank()) {
-            try {
-                return qrz.lookup(call, stillWanted)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                problem = e
-            }
+        // Some source answered that it does not know the callsign.
+        var notFound = false
+        suspend fun ask(source: suspend () -> QrzInfo?): QrzInfo? = try {
+            source().also { if (it == null) notFound = true }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (problem == null) problem = e
+            null
         }
-        if (settings.qrzSiteEmail.isNotBlank()) {
-            try {
-                return qrzSite.lookup(call)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (problem == null) problem = e
-            }
-        }
+        if (settings.qrzLogin.isNotBlank()) ask { qrz.lookup(call, stillWanted) }?.let { return it }
+        // The QRZ.ru site is the same database as its XML API: asked only when the API is not set or failed.
+        if (settings.qrzSiteEmail.isNotBlank() && !notFound) ask { qrzSite.lookup(call) }?.let { return it }
+        if (settings.qrzComLogin.isNotBlank()) ask { qrzCom.lookup(call) }?.let { return it }
+        if (notFound) return null
         throw problem ?: QrzException(403, tr("Укажите учётную запись QRZ.ru в настройках"))
     }
 
-    /** Region and RDA that only the site page gives, into ADIF STATE / CNTY unless the card has them. */
+    /** Region and RDA (QRZ.ru site), region and zones (QRZ.com) into ADIF STATE / CNTY / CQZ / ITUZ unless the card has them. */
     private fun withQrzExtras(adif: Map<String, String>, info: QrzInfo): Map<String, String> =
-        adif + listOf("STATE" to info.region, "CNTY" to info.rda).filter { (k, v) -> v.isNotBlank() && adif[k].isNullOrBlank() }
+        adif + listOf("STATE" to info.region, "CNTY" to info.rda, "CQZ" to info.cqZone, "ITUZ" to info.ituZone)
+            .filter { (k, v) -> v.isNotBlank() && adif[k].isNullOrBlank() }
 
     var pane by mutableStateOf(Pane.Empty)
     var query by mutableStateOf(""); private set
@@ -275,25 +290,21 @@ class AppState {
     }
 
     fun openSettings(from: Pane = Pane.Empty) {
-        // A fresh visit starts at the top; only the way back from the reference keeps the place.
-        if (pane != Pane.Reference) scope.launch { settingsScroll.scrollTo(0) }
+        // A fresh visit starts at the top.
+        scope.launch { settingsScroll.scrollTo(0) }
         settingsReturn = from
         pane = Pane.Settings
     }
 
-    /** Kept here so the settings stay scrolled to the reference card while the reference is open. */
     val settingsScroll = ScrollState(0)
 
-    /** Where the reference's close button goes: back to the settings it was opened from, or the empty pane (menu). */
-    private var referenceReturn: Pane = Pane.Empty
-
+    /** The reference (bands, Morse, spelling alphabets, calculators): opened from the log's ⋮ menu or the "Файл" menu. */
     fun openReference() {
-        referenceReturn = pane.takeIf { it == Pane.Settings } ?: Pane.Empty
         pane = Pane.Reference
     }
 
     fun closeReference() {
-        if (referenceReturn == Pane.Settings) openSettings(settingsReturn) else pane = Pane.Empty
+        pane = Pane.Empty
     }
 
     fun closeSettings() {
@@ -307,7 +318,7 @@ class AppState {
     private var formOriginal: Form? = null
 
     val hasUnsavedChanges: Boolean
-        get() = pane == Pane.Edit && formOriginal.let { it != null && form != it }
+        get() = (pane == Pane.Edit || pane == Pane.Contest) && formOriginal.let { it != null && form != it }
 
     /** "Закрыть без сохранения?" is on screen (from ✕ or Esc). */
     var confirmClose by mutableStateOf(false)
@@ -315,6 +326,11 @@ class AppState {
     /** Closing a card with typed data asks first; an untouched one closes at once. */
     fun requestClose() {
         if (hasUnsavedChanges) confirmClose = true else closeEditor()
+    }
+
+    /** The contest card asks before closing only when something was typed there. */
+    fun requestCloseContest() {
+        if (contestTyped) confirmClose = true else closeEditor()
     }
 
     /** Records whose QRZ.ru data is being fetched again right now (spinner instead of the button). */
@@ -349,6 +365,8 @@ class AppState {
             // Read once even without an e-mail: the settings only save a password that has been loaded.
             val sitePw = withContext(Dispatchers.IO) { prefs.sitePassword() }
             if (settings.qrzSitePassword.isEmpty()) settings = settings.copy(qrzSitePassword = sitePw)
+            val comPw = withContext(Dispatchers.IO) { prefs.comPassword() }
+            if (settings.qrzComPassword.isEmpty()) settings = settings.copy(qrzComPassword = comPw)
             withContext(Dispatchers.IO) { prefs.forgetOnlineLogAccounts() }
         }
     }
@@ -434,7 +452,7 @@ class AppState {
         allQsos = allQsos.filter { it.id != qso.id }
         scope.launch {
             withContext(Dispatchers.IO) { db.delete(qso.id) }
-            if (pane == Pane.Edit && form.id == qso.id) pane = editReturn
+            if ((pane == Pane.Edit || pane == Pane.Contest) && form.id == qso.id) pane = editReturn
             reload()
             val t = utc(qso.timeUtc)
             // Date and time say which contact went: the log may hold several with the same callsign.
@@ -460,7 +478,8 @@ class AppState {
 
     private fun restore(qso: Qso) {
         scope.launch {
-            withContext(Dispatchers.IO) { db.save(qso.copy(id = 0)) }
+            // A fresh change time: a deletion already sent to the table must not win over the undo.
+            withContext(Dispatchers.IO) { db.save(qso.copy(id = 0, updatedAt = System.currentTimeMillis())) }
             reload()
         }
     }
@@ -548,11 +567,15 @@ class AppState {
     )
 
     /** Remembers the dialog's choice and returns the file name to offer. */
-    fun prepareContest(h: Cabrillo.Header, onlyNew: Boolean, mark: Boolean): String {
+    /** Contacts entered in contest mode among [only] (or the whole log): the report dialog then offers to take only them. */
+    fun hasContestQsos(only: Set<Long>?): Boolean = allQsos.any { (only == null || it.id in only) && ContestMode.isContest(it.adif) }
+
+    /** Remembers the dialog's choice and returns the file name to offer. */
+    fun prepareContest(h: Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean): String {
         prefs.contestFormat = h.format.name
         prefs.contestCode = h.contest
         prefs.contestOperator = h.categoryOperator
-        pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark)
+        pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark, contestOnly)
         contestTarget = null
         val code = h.contest.uppercase().ifBlank { "LOG" }.replace('/', '-')
         return "${h.callsign.ifBlank { "log" }.replace('/', '-')}_$code.${h.format.extension}"
@@ -575,7 +598,7 @@ class AppState {
     var exportTarget by mutableStateOf<ExportTarget?>(null); private set
 
     /** Choices of an export dialog, waiting for the file picker. */
-    class PendingExport(val format: ExportFormat, val only: Set<Long>?, val onlyNew: Boolean, val mark: Boolean)
+    class PendingExport(val format: ExportFormat, val only: Set<Long>?, val onlyNew: Boolean, val mark: Boolean, val contestOnly: Boolean = false)
 
     private var pendingExport: PendingExport? = null
 
@@ -596,9 +619,15 @@ class AppState {
         exportTarget = null
     }
 
-    /** The contacts an export takes: the picked ones or the whole log, without those already exported to [format] when [onlyNew]. */
-    fun exportCandidates(format: ExportFormat, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
-        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !format.isExported(it.adif)) }
+    /**
+     * The contacts an export takes: the picked ones or the whole log, without those already exported to [format] when
+     * [onlyNew], and only those entered in contest mode when [contestOnly].
+     */
+    fun exportCandidates(format: ExportFormat, only: Set<Long>?, onlyNew: Boolean, contestOnly: Boolean = false): List<Qso> =
+        allQsos.filter { takes(it, only, onlyNew, format, contestOnly) }
+
+    private fun takes(q: Qso, only: Set<Long>?, onlyNew: Boolean, format: ExportFormat, contestOnly: Boolean) =
+        (only == null || q.id in only) && (!onlyNew || !format.isExported(q.adif)) && (!contestOnly || ContestMode.isContest(q.adif))
 
     /** Remembers the dialog's choice and returns the format and the file name to offer in the save dialog. */
     fun prepareExport(onlyNew: Boolean, mark: Boolean): Pair<ExportFormat, String>? {
@@ -630,7 +659,7 @@ class AppState {
         scope.launch {
             val msg = try {
                 val count = withContext(Dispatchers.IO) {
-                    val list = db.all().filter { (p.only == null || it.id in p.only) && (!p.onlyNew || !p.format.isExported(it.adif)) }
+                    val list = db.all().filter { takes(it, p.only, p.onlyNew, p.format, p.contestOnly) }
                     file.outputStream().use { write(list, it) }
                     if (p.mark) list.forEach { db.save(p.format.mark(it)) }
                     list.size
@@ -680,10 +709,28 @@ class AppState {
         pane = Pane.Map
     }
 
+    /** Dashboard parameters, kept while the app runs. */
+    var dashFilter by mutableStateOf(StatFilter()); private set
+    var dashBucket by mutableStateOf(StatBucket.AUTO); private set
+
+    fun changeDashFilter(f: StatFilter) {
+        dashFilter = f
+    }
+
+    fun changeDashBucket(b: StatBucket) {
+        dashBucket = b
+    }
+
+    fun openDashboard() {
+        clearSelection()
+        pane = Pane.Dashboard
+    }
+
     /** Closes the card without saving; a voice note recorded for an unsaved contact is deleted. */
     fun closeEditor() {
         lookupJob?.cancel() // a lookup for another card must not land in this one
         discardCardRecording()
+        contestDraft = null
         val f = form
         if (f.isNew) {
             if (f.audio.isNotBlank()) voice.delete(f.audio)
@@ -697,8 +744,15 @@ class AppState {
      * the card opens for that station: its data from the last contact, then refreshed from QRZ.ru.
      */
     fun addQso(audio: String = "") {
+        if (contestMode) return newContestQso(audio)
         val last = searchedStation()
         if (last == null) newQso(audio) else newQsoFromLog(last, audio)
+    }
+
+    /** The search has narrowed the log to one station: its contacts, for the "worked on these bands" line. */
+    fun searchedHistory(): CallHistory? {
+        val call = searchedStation()?.call ?: return null
+        return CallHistory.of(allQsos.filter { it.call == call }.sortedByDescending { it.timeUtc })
     }
 
     private fun searchedStation(): Qso? {
@@ -800,7 +854,8 @@ class AppState {
         editSession++
         loadHistory(qso.call)
         editReturn = if (from == Pane.Map) Pane.Map else Pane.Empty
-        pane = Pane.Edit
+        // In contest mode a contest contact opens in the contest card, where "назад / вперёд" go through the others.
+        pane = if (contestMode && ContestMode.isContest(qso.adif)) Pane.Contest else Pane.Edit
     }
 
     fun setBand(band: String) {
@@ -1016,8 +1071,8 @@ class AppState {
         }
     }
 
-    /** Returns an error message, or null when saved. */
-    private fun save(): String? {
+    /** Returns an error message, or null when saved. [quiet]: no "Связь записана" message (the contest card says it in its own line). */
+    private fun save(quiet: Boolean = false): String? {
         stopCardRecording()
         val f0 = form
         val orig = formOriginal
@@ -1071,7 +1126,7 @@ class AppState {
             reload()
             val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
             if (f.isNew) newSavedTick++
-            say((if (f.isNew) tr("Связь с %s записана", f.call) else tr("Изменения сохранены")) + note)
+            if (!quiet) say((if (f.isNew) tr("Связь с %s записана", f.call) else tr("Изменения сохранены")) + note)
         }
         pane = editReturn
         return null
@@ -1113,17 +1168,254 @@ class AppState {
         if (id == 0L) return
         scope.launch {
             val qso = withContext(Dispatchers.IO) { db.get(id) } ?: return@launch
-            pane = editReturn
+            // In the contest card the work goes on: the waiting draft or a new card instead of the log.
+            if (pane == Pane.Contest) contestDraftOrNew() else pane = editReturn
             delete(qso)
         }
     }
 
+
+    // ---------- table sync ----------
+
+    /** The Apps Script address of the user's Google Sheet; sync runs only when the user asks for it. */
+    var sheetUrl by mutableStateOf(prefs.sheetUrl); private set
+    var sheetSyncing by mutableStateOf(false); private set
+    /** The last sync's outcome, kept across restarts; [sheetOk] false for an error. */
+    var sheetStatus by mutableStateOf(prefs.sheetStatus); private set
+    var sheetOk by mutableStateOf<Boolean?>(null); private set
+
+    fun changeSheetUrl(url: String) {
+        val u = url.trim()
+        if (u == sheetUrl) return
+        sheetUrl = u
+        prefs.sheetUrl = u
+        // Another table: everything is sent and taken again (the script merges what it already has).
+        prefs.sheetSince = ""
+        prefs.sheetLastPush = 0
+        sheetStatus = ""
+        prefs.sheetStatus = ""
+        sheetOk = null
+    }
+
+    fun syncSheet() {
+        val url = sheetUrl
+        if (sheetSyncing) return
+        if (!SheetSync.isScriptUrl(url)) {
+            sheetOk = false
+            sheetStatus = tr("Вставьте адрес веб-приложения скрипта: https://script.google.com/macros/s/…/exec")
+            return
+        }
+        sheetSyncing = true
+        scope.launch {
+            val r = runCatching {
+                withContext(Dispatchers.IO) { SheetSync.sync(url, db, SyncState(prefs.sheetSince, prefs.sheetLastPush)) }
+            }
+            sheetSyncing = false
+            val time = TIME_FMT.format(LocalDateTime.now(ZoneOffset.UTC)) + " UTC"
+            r.onSuccess { res ->
+                prefs.sheetSince = res.state.since
+                prefs.sheetLastPush = res.state.lastPush
+                sheetOk = true
+                sheetStatus = tr("Синхронизировано в %s: отправлено %s, получено %s", time, res.sent, res.received)
+                reload()
+                say(tr("Журнал синхронизирован: отправлено %s, получено %s", res.sent, res.received))
+            }.onFailure { e ->
+                sheetOk = false
+                sheetStatus = tr("Не удалось синхронизировать в %s: %s", time, e.message ?: e.javaClass.simpleName)
+                say(sheetStatus)
+            }
+            prefs.sheetStatus = sheetStatus
+        }
+    }
+
+    // ---------- contest mode ----------
+
+    /**
+     * Contest mode: "Добавить QSO" opens the simplified card (callsign, reports, numbers) and "назад / вперёд" go
+     * through the contest contacts. Off at every start of the app, switched on in the settings.
+     */
+    var contestMode by mutableStateOf(false); private set
+
+    /** The number the next contest contact sends; goes up by one with each saved contact. */
+    var contestSerial by mutableStateOf(prefs.contestSerial); private set
+
+    fun changeContestMode(on: Boolean) {
+        contestMode = on
+        contestWork = null
+        contestLastSaved = null
+    }
+
+    fun changeContestSerial(n: Int) {
+        if (n < 1) return
+        contestSerial = n
+        prefs.contestSerial = n
+    }
+
+    /** Send the same [contestSentText] with every contact instead of a serial number. */
+    var contestSentFixed by mutableStateOf(prefs.contestSentFixed); private set
+    var contestSentText by mutableStateOf(prefs.contestSentText); private set
+
+    fun changeContestSentFixed(on: Boolean) {
+        contestSentFixed = on
+        prefs.contestSentFixed = on
+    }
+
+    fun changeContestSentText(text: String) {
+        contestSentText = text
+        prefs.contestSentText = text
+    }
+
+    /** What the next contest contact sends: the fixed code or the serial. */
+    fun contestSentNext(): String = if (contestSentFixed) contestSentText else ContestMode.serial(contestSerial)
+
+    var contestRstShown by mutableStateOf(prefs.contestRstShown); private set
+
+    fun changeContestRstShown(on: Boolean) {
+        contestRstShown = on
+        prefs.contestRstShown = on
+    }
+
+    /**
+     * Band, mode and frequency the contest is being worked on: taken from the last new card, so the next one stays
+     * there. (The log is saved in the background, so its newest contact may not be the one just saved yet.)
+     */
+    private var contestWork: Form? = null
+
+    /** The callsign of the contact the contest card has just logged: shown in place of a message. */
+    var contestLastSaved by mutableStateOf<String?>(null); private set
+
+    /** The latest contest contacts, newest first: the list under the contest card. */
+    fun contestRecent(n: Int): List<Qso> = contestQsos().takeLast(n).reversed()
+
+    /** Contest contacts so far and in the hour before [now]: the rate in the card's header. */
+    fun contestCounts(now: Long): Pair<Int, Int> {
+        val list = contestQsos()
+        return list.size to list.count { it.timeUtc in (now - 3_600_000L)..now }
+    }
+
+    /** A new contest card that was typed in and left by going back; it comes back at the end. */
+    private var contestDraft: Form? = null
+
+    /** Contest contacts in the order they were made: "назад / вперёд" go through them. */
+    private fun contestQsos(): List<Qso> =
+        allQsos.filter { ContestMode.isContest(it.adif) }.sortedWith(compareBy({ it.timeUtc }, { it.createdAt }, { it.id }))
+
+    /** Position of the open contest card: "№ in the contest / of how many"; null for a new one. */
+    fun contestPosition(): Pair<Int, Int>? {
+        val list = contestQsos()
+        val i = list.indexOfFirst { it.id == form.id }
+        return if (form.isNew || i < 0) null else (i + 1) to list.size
+    }
+
+    /** Whether there is an older contest contact to go back to. */
+    fun contestHasPrev(): Boolean {
+        val list = contestQsos()
+        return if (form.isNew) list.isNotEmpty() else list.indexOfFirst { it.id == form.id } > 0
+    }
+
+    private fun newContestQso(audio: String = "") {
+        newQso(audio)
+        val w = contestWork
+        val f = if (w == null) form else form.copy(band = w.band, mode = w.mode, freq = normalizeFreq(w.freq))
+        form = f.copy(
+            rstSent = defaultRst(f.mode), rstRcvd = defaultRst(f.mode),
+            adif = f.adif + (ContestMode.FIELD to "Y") + (ContestMode.SENT to contestSentNext()),
+        )
+        formOriginal = form
+        pane = Pane.Contest
+    }
+
+    /**
+     * "Записать" (Enter in the received number): saves the contact with the time of saving, moves the number on and
+     * opens the next card on the same band and mode. On a saved contact — the next one. Returns the error like [trySave].
+     */
+    fun contestSaveAndNext(): String? {
+        val f = form
+        if (!f.isNew) return contestNext()
+        contestError(f)?.let { return it }
+        val now = LocalDateTime.now(ZoneOffset.UTC)
+        form = f.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now))
+        val err = save(quiet = true)
+        if (err != null) {
+            pane = Pane.Contest
+            return err
+        }
+        contestLastSaved = f.call
+        contestWork = f
+        if (!contestSentFixed) changeContestSerial(ContestMode.nextSerial(f.adif[ContestMode.SENT].orEmpty(), contestSerial))
+        contestDraft = null
+        newContestQso()
+        return null
+    }
+
+    /** "назад": the previous contest contact. Changes to a saved one are saved; a typed new card waits as a draft. */
+    fun contestPrev(): String? {
+        val list = contestQsos()
+        val f = form
+        val target = if (f.isNew) list.lastOrNull() else list.getOrNull(list.indexOfFirst { it.id == f.id } - 1)
+        return if (target == null) null else contestOpen(target)
+    }
+
+    /** Opens [target] in the contest card, as "назад" does: the open card is saved or kept as a draft first. */
+    fun contestOpen(target: Qso): String? {
+        val f = form
+        if (!f.isNew && f.id == target.id) return null
+        contestLastSaved = null
+        if (f.isNew) {
+            contestWork = f
+            contestDraft = f.takeIf { it.call.isNotBlank() || !it.adif[ContestMode.RCVD].isNullOrBlank() }
+        } else if (hasUnsavedChanges) {
+            contestError(f)?.let { return it }
+            save()?.let { pane = Pane.Contest; return it }
+        }
+        edit(target)
+        pane = Pane.Contest
+        return null
+    }
+
+    /** "вперёд" from a saved contact: the next one, and after the last — the draft or a new card. */
+    private fun contestNext(): String? {
+        val list = contestQsos()
+        val f = form
+        if (hasUnsavedChanges) {
+            contestError(f)?.let { return it }
+            save()?.let { pane = Pane.Contest; return it }
+        }
+        val next = list.getOrNull(list.indexOfFirst { it.id == f.id } + 1)
+        if (next != null) edit(next) else contestDraftOrNew()
+        pane = Pane.Contest
+        return null
+    }
+
+    /** After the last contest contact: the card typed in and left by going back, or a new one. */
+    private fun contestDraftOrNew() {
+        val draft = contestDraft
+        newContestQso()
+        if (draft == null) return
+        contestDraft = null
+        form = draft.copy(adif = draft.adif + (ContestMode.SENT to (draft.adif[ContestMode.SENT] ?: contestSentNext())))
+        loadHistory(draft.call)
+        // The lookup may have been cut short by going back.
+        if (draft.call.length >= MIN_LOOKUP_LENGTH && !draft.infoFromQrz && draft.name.isBlank()) retryLookup()
+    }
+
+    /**
+     * A contest contact needs the number the other station gave: without it the report line ends after the RST and
+     * the judges' software does not count the contact. (The callsign is checked by [save].)
+     */
+    private fun contestError(f: Form): String? =
+        if (f.call.length >= 3 && f.adif[ContestMode.RCVD].isNullOrBlank()) CONTEST_RCVD_ERROR else null
+
+    /** Closing the contest card: a new card with something typed, or changes to a saved one, ask first. */
+    val contestTyped: Boolean
+        get() = if (form.isNew) form.call.isNotBlank() || !form.adif[ContestMode.RCVD].isNullOrBlank() else hasUnsavedChanges
 
     // ---------- settings ----------
 
     fun updateSettings(s: StationSettings) {
         val credentialsChanged = s.qrzLogin != settings.qrzLogin || s.qrzPassword != settings.qrzPassword
         val siteChanged = s.qrzSiteEmail != settings.qrzSiteEmail || s.qrzSitePassword != settings.qrzSitePassword
+        val comChanged = s.qrzComLogin != settings.qrzComLogin || s.qrzComPassword != settings.qrzComPassword
         settings = s
         // Written a moment after typing stops, so the keychain is not touched on every keystroke.
         saveSettingsJob?.cancel()
@@ -1140,6 +1432,34 @@ class AppState {
             qrzSite.reset()
             qrzSiteOk = null
             qrzSiteStatus = null
+        }
+        if (comChanged) {
+            qrzCom.reset()
+            qrzComOk = null
+            qrzComStatus = null
+        }
+    }
+
+    /** Result of "Проверить вход" for the QRZ.com account. */
+    var qrzComStatus by mutableStateOf<String?>(null); private set
+    var qrzComOk by mutableStateOf<Boolean?>(null); private set
+
+    fun testQrzCom() {
+        scope.launch {
+            qrzComOk = null
+            qrzComStatus = tr("Проверяю…")
+            qrzCom.reset()
+            try {
+                qrzCom.login()
+                qrzComOk = true
+                qrzComStatus = tr("Вход выполнен")
+            } catch (e: QrzException) {
+                qrzComOk = false
+                qrzComStatus = e.message
+            } catch (e: Exception) {
+                qrzComOk = false
+                qrzComStatus = networkError(e).replace("api.qrz.ru", "www.qrz.com").replace("QRZ.ru", "QRZ.com")
+            }
         }
     }
 

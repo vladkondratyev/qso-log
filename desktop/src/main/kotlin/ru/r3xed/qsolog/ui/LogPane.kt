@@ -52,6 +52,13 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import ru.r3xed.qsolog.data.ContestMode
+import ru.r3xed.qsolog.data.SheetSync
 import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Button
@@ -116,17 +123,54 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                     )
                 }
                 val me = state.settings.myCall
-                Text((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", state.total), style = MaterialTheme.typography.bodyMedium, color = x.muted)
-            }
-            Tip(tr("Карта QSO")) {
-                FilledTonalIconButton(onClick = state::openMap, modifier = Modifier.size(52.dp)) {
-                    Icon(Icons.Filled.Map, contentDescription = tr("Карта QSO"), modifier = Modifier.size(28.dp))
+                if (state.contestMode) {
+                    // Contest mode is on until the app is closed: say so where the eye goes first.
+                    Text(
+                        "CONTEST · " + if (state.contestSentFixed) tr("передаю %s", state.contestSentText.ifBlank { "—" }) else tr("следующий № %s", ContestMode.serial(state.contestSerial)),
+                        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, maxLines = 1,
+                    )
+                } else {
+                    Text((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", state.total), style = MaterialTheme.typography.bodyMedium, color = x.muted)
                 }
             }
-            Spacer(Modifier.width(8.dp))
-            Tip(tr("Настройки")) {
-                FilledTonalIconButton(onClick = { state.openSettings() }, modifier = Modifier.size(52.dp)) {
-                    Icon(Icons.Filled.Settings, contentDescription = tr("Настройки"), modifier = Modifier.size(28.dp))
+            // One round button: the menu with the settings, the dashboard, the map and the reference.
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                Tip(tr("Меню")) {
+                    FilledTonalIconButton(onClick = { menu = true }, modifier = Modifier.size(52.dp)) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = tr("Меню"), modifier = Modifier.size(28.dp))
+                    }
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(tr("Настройки"), fontSize = 17.sp) },
+                        leadingIcon = { Icon(Icons.Filled.Settings, null) },
+                        onClick = { menu = false; state.openSettings() },
+                    )
+                    // Shown once the table is set up in the settings; the sync runs only from here or there.
+                    if (SheetSync.isScriptUrl(state.sheetUrl)) {
+                        DropdownMenuItem(
+                            text = { Text(if (state.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), fontSize = 17.sp) },
+                            leadingIcon = { Icon(Icons.Filled.Sync, null) },
+                            enabled = !state.sheetSyncing,
+                            onClick = { menu = false; state.syncSheet() },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text(tr("Дашборд"), fontSize = 17.sp) },
+                        leadingIcon = { Icon(Icons.Filled.BarChart, null) },
+                        onClick = { menu = false; state.openDashboard() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(tr("Карта QSO"), fontSize = 17.sp) },
+                        leadingIcon = { Icon(Icons.Filled.Map, null) },
+                        onClick = { menu = false; state.openMap() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(tr("Справка и калькуляторы"), fontSize = 17.sp) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
+                        onClick = { menu = false; state.openReference() },
+                    )
                 }
             }
         }
@@ -149,6 +193,17 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
             ),
         )
 
+        // One station found: the bands it was worked on, with the last date on each.
+        val station = remember(state.query, state.qsos, state.allQsos) { state.searchedHistory() }
+        if (station != null && station.byBand.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 6.dp), verticalAlignment = Alignment.Top) {
+                Text(
+                    tr("Диапазоны:"), style = MaterialTheme.typography.bodyMedium, color = x.muted,
+                    modifier = Modifier.padding(top = 3.dp, end = 8.dp),
+                )
+                BandChips(station.byBand, ink = MaterialTheme.colorScheme.onSurface, chip = x.field)
+            }
+        }
 
         if (state.qsos.isEmpty()) {
             Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -343,7 +398,7 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
     val shape = RoundedCornerShape(14.dp)
     val selecting = state.selecting
     val picked = qso.id in state.selected
-    val open = !selecting && state.pane == Pane.Edit && state.form.id == qso.id
+    val open = !selecting && (state.pane == Pane.Edit || state.pane == Pane.Contest) && state.form.id == qso.id
     val highlighted = picked || open
     val window = LocalWindowInfo.current
     Row(
@@ -375,6 +430,10 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (ContestMode.isContest(qso.adif)) {
+                    Icon(Icons.Filled.Flag, tr("Связь в контест-режиме"), Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                }
                 if (qso.audio.isNotBlank()) {
                     Icon(Icons.Filled.Mic, tr("Есть голосовая заметка"), Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
@@ -405,12 +464,20 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
                 qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null },
                 qso.mode.ifBlank { null },
                 if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent} / ${qso.rstRcvd}" else null,
-                qso.distanceKm?.let { (if (qso.approxPosition) "≈ " else "") + formatKm(it) },
+                // Contest numbers: sent / received.
+                if (ContestMode.isContest(qso.adif)) "№ ${qso.adif[ContestMode.SENT].orEmpty()} / ${qso.adif[ContestMode.RCVD].orEmpty().ifBlank { "—" }}" else null,
             ).joinToString("  ·  ")
-            if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Who and how far on one line: the distance at the end, so the row does not grow by a line for it.
             val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ").ifBlank { qso.country }
-            if (who.isNotEmpty()) Text(who, style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            else if (qso.pendingLookup) Text(tr("Данные QRZ.ru не получены"), style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1)
+                .ifBlank { if (qso.pendingLookup) tr("Данные QRZ.ru не получены") else "" }
+            val km = qso.distanceKm?.let { (if (qso.approxPosition) "≈ " else "") + formatKm(it) }
+            if (who.isNotEmpty() || km != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(who, style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    if (km != null) Text(km, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(start = 10.dp, end = 8.dp))
+                }
+            }
         }
         // Deleting is only possible from the card ("Удалить" there), never from the list.
         Spacer(Modifier.width(10.dp))

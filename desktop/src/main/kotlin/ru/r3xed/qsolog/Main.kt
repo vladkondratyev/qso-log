@@ -41,6 +41,8 @@ import ru.r3xed.qsolog.ui.ContestExportDialog
 import ru.r3xed.qsolog.ui.ExportDialog
 import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.ui.EditPane
+import ru.r3xed.qsolog.ui.ContestPane
+import ru.r3xed.qsolog.ui.DashboardPane
 import ru.r3xed.qsolog.ui.LocalExtra
 import ru.r3xed.qsolog.ui.LogPane
 import ru.r3xed.qsolog.ui.MapPane
@@ -77,6 +79,7 @@ fun main() {
                 if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) when {
                     state.selecting -> { state.clearSelection(); true }
                     state.pane == Pane.Edit -> { if (state.confirmClose) state.confirmClose = false else state.requestClose(); true }
+                    state.pane == Pane.Contest -> { if (state.confirmClose) state.confirmClose = false else state.requestCloseContest(); true }
                     state.pane == Pane.Settings -> { state.closeSettings(); true }
                     state.pane != Pane.Empty -> { state.pane = Pane.Empty; true }
                     else -> false
@@ -106,8 +109,8 @@ fun main() {
             }
             val exportSelected = { state.openExport(ExportFormat.ADIF, selectedOnly = true) }
             // Contest reports: the dialog picks the header, then the save dialog; .txt (ЕРМАК) or .cbr (Cabrillo).
-            val exportContest = { h: ru.r3xed.qsolog.data.Cabrillo.Header, onlyNew: Boolean, mark: Boolean ->
-                val file = chooseFile(window, tr("Экспорт в %s", h.format.title), save = true, suggested = state.prepareContest(h, onlyNew, mark), ext = h.format.extension)
+            val exportContest = { h: ru.r3xed.qsolog.data.Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean ->
+                val file = chooseFile(window, tr("Экспорт в %s", h.format.title), save = true, suggested = state.prepareContest(h, onlyNew, mark, contestOnly), ext = h.format.extension)
                 if (file != null) state.exportContest(file) else state.cancelContest()
             }
             val importContest = {
@@ -133,9 +136,14 @@ fun main() {
                     Item(tr("Экспорт в ЕРМАК / Cabrillo…"), onClick = { state.openContestExport(selectedOnly = false) })
                     Item(tr("Импорт из ЕРМАК / Cabrillo…"), onClick = importContest)
                     Separator()
+                    Item(tr("Дашборд"), shortcut = shortcut(Key.D), onClick = state::openDashboard)
                     Item(tr("Карта QSO"), shortcut = shortcut(Key.M), onClick = state::openMap)
                     Item(tr("Справка и калькуляторы"), onClick = state::openReference)
                     Item(tr("Настройки"), shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
+                    // Shown once the table is set up in the settings; the sync runs only when asked.
+                    if (ru.r3xed.qsolog.data.SheetSync.isScriptUrl(state.sheetUrl)) {
+                        Item(tr("Синхронизировать"), enabled = !state.sheetSyncing, onClick = state::syncSheet)
+                    }
                     if (!IS_MAC) {
                         Separator()
                         Item(tr("Выход"), onClick = { state.flushSettings(); exitApplication() })
@@ -160,7 +168,7 @@ class Exports(
     val exportAdif: () -> Unit,
     val importAdif: () -> Unit,
     val exportSelected: () -> Unit,
-    val exportContest: (ru.r3xed.qsolog.data.Cabrillo.Header, Boolean, Boolean) -> Unit,
+    val exportContest: (ru.r3xed.qsolog.data.Cabrillo.Header, Boolean, Boolean, Boolean) -> Unit,
     val importContest: () -> Unit,
     /** Saves the ADIF / CSV export chosen in its dialog: only new or all, with or without the export mark. */
     val saveExport: (onlyNew: Boolean, mark: Boolean) -> Unit,
@@ -190,6 +198,8 @@ fun App(state: AppState, files: Exports) {
                         Pane.Empty -> EmptyPane(state)
                         // A fresh card (also "＋ Следующая") starts with fresh fields, focus and scroll.
                         Pane.Edit -> key(state.editSession) { EditPane(state) }
+                        Pane.Contest -> key(state.editSession) { ContestPane(state) }
+                        Pane.Dashboard -> DashboardPane(state)
                         Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif, files.importContest)
                         Pane.Map -> MapPane(state)
                         Pane.Welcome -> WelcomePane(state)
@@ -201,7 +211,8 @@ fun App(state: AppState, files: Exports) {
                 ContestExportDialog(
                     defaults = state.contestDefaults(),
                     selected = target.only?.size,
-                    count = { onlyNew -> state.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew).size },
+                    hasContest = state.hasContestQsos(target.only),
+                    count = { onlyNew, contestOnly -> state.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew, contestOnly).size },
                     onDismiss = state::closeContestExport,
                     onConfirm = files.exportContest,
                 )

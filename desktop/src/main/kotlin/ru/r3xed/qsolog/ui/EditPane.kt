@@ -124,6 +124,7 @@ import ru.r3xed.qsolog.DATE_FMT
 import ru.r3xed.qsolog.Lookup
 import ru.r3xed.qsolog.TIME_FMT
 import ru.r3xed.qsolog.data.AdifLabels
+import ru.r3xed.qsolog.data.ContestMode
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.MODES
@@ -211,7 +212,7 @@ fun EditPane(vm: AppState) {
                     value = f.call,
                     onValueChange = vm::setCall,
                     modifier = Modifier.weight(1f).focusRequester(callFocus),
-                    label = { Text(tr("Позывной абонента"), fontSize = 16.sp) },
+                    label = { Text(tr("Позывной корреспондента"), fontSize = 16.sp) },
                     isError = error == CALL_ERROR,
                     supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
                     textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 1.sp),
@@ -305,6 +306,12 @@ fun EditPane(vm: AppState) {
                     QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
                 }
             }
+            // A contest contact: the exchanged numbers right under the reports, as in the contest card.
+            val contest = ContestMode.isContest(f.adif)
+            if (contest) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Field(tr("Код передан"), f.adif[ContestMode.SENT].orEmpty(), { vm.setAdif(ContestMode.SENT, it) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
+                Field(tr("Код принят"), f.adif[ContestMode.RCVD].orEmpty(), { vm.setAdif(ContestMode.RCVD, it) }, Modifier.weight(1f), KeyboardType.Number, mono = true, last = true)
+            }
 
             // --- distance & map ---
             DistanceCard(vm, onOpenMap = { showMap = true })
@@ -313,14 +320,14 @@ fun EditPane(vm: AppState) {
             Label(tr("Все поля ADIF"))
             val filled = { keys: Collection<String> -> keys.count { !f.adif[it].isNullOrBlank() } }
             // Name, QTH, country and locator are edited in the card at the top; only fields found nowhere else here.
-            FieldGroup(tr("Абонент"), filled(AdifLabels.THEM.keys)) { AdifFields(vm, AdifLabels.THEM) }
+            FieldGroup(tr("Корреспондент"), filled(AdifLabels.THEM.keys)) { AdifFields(vm, AdifLabels.THEM) }
             // End time and receive band/frequency are filled from the main fields, see AdifLabels.DERIVED.
             FieldGroup(
                 tr("Связь"),
                 filled(AdifLabels.CONTACT.keys) + listOf(f.power.isNotBlank(), f.qslSent, f.qslRcvd, f.comment.isNotBlank()).count { it },
             ) {
                 Field(tr("Мощность, Вт"), f.power, { vm.update(f.copy(power = it)) }, Modifier.fillMaxWidth(), KeyboardType.Number, mono = true)
-                AdifFields(vm, AdifLabels.CONTACT)
+                AdifFields(vm, if (contest) AdifLabels.CONTACT.filterKeys { it != ContestMode.SENT && it != ContestMode.RCVD } else AdifLabels.CONTACT)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(f.qslSent, { vm.update(f.copy(qslSent = it)) })
                     Text(tr("QSL отправлена"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.clickable { vm.update(f.copy(qslSent = !f.qslSent)) })
@@ -457,9 +464,9 @@ private fun StationCard(vm: AppState) {
     ) {
         val ink = MaterialTheme.colorScheme.onPrimaryContainer
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(tr("Абонент"), style = MaterialTheme.typography.labelLarge, color = ink.copy(alpha = 0.75f), modifier = Modifier.weight(1f))
+            Text(tr("Корреспондент"), style = MaterialTheme.typography.labelLarge, color = ink.copy(alpha = 0.75f), modifier = Modifier.weight(1f))
             IconButton(onClick = { editing = !editing }) {
-                Icon(if (editing) Icons.Filled.Check else Icons.Filled.Edit, if (editing) tr("Готово") else tr("Изменить данные абонента"), tint = ink)
+                Icon(if (editing) Icons.Filled.Check else Icons.Filled.Edit, if (editing) tr("Готово") else tr("Изменить данные корреспондента"), tint = ink)
             }
         }
         if (editing) {
@@ -553,6 +560,10 @@ private fun HistoryCard(vm: AppState) {
             )
             val det = listOf(last.band, last.mode).filter { it.isNotBlank() }.joinToString(" ")
             if (det.isNotBlank()) Text(det, fontSize = 17.sp, color = x.hlInk)
+            // The last contact on each band: is this one a new band for the station, and when was it worked there.
+            if (h.byBand.size > 1 || (h.byBand.size == 1 && !h.byBand[0].band.equals(vm.form.band, ignoreCase = true))) {
+                BandChips(h.byBand, ink = x.hlInk, chip = x.hlBorder.copy(alpha = 0.22f), current = vm.form.band, modifier = Modifier.padding(top = 6.dp))
+            }
         }
     }
 }
@@ -563,8 +574,8 @@ private fun DistanceCard(vm: AppState, onOpenMap: () -> Unit) {
     val me = vm.myPositionFor(vm.form)
     val them = vm.form.position
     when {
-        me == null -> Hint(tr("Укажите свой QTH-локатор в настройках, чтобы видеть расстояние до абонента."))
-        them == null -> if (vm.form.call.length >= 3) Hint(tr("Нет координат абонента. Впишите его QTH-локатор в карточке «Абонент» (✎)."))
+        me == null -> Hint(tr("Укажите свой QTH-локатор в настройках, чтобы видеть расстояние до корреспондента."))
+        them == null -> if (vm.form.call.length >= 3) Hint(tr("Нет координат корреспондента. Впишите его QTH-локатор в карточке «Корреспондент» (✎)."))
         else -> {
             val km = Geo.distanceKm(me, them)
             val az = Geo.bearing(me, them)
@@ -622,7 +633,7 @@ private fun MapOverlay(vm: AppState, onClose: () -> Unit) {
             val az = Geo.bearing(me, them)
             val back = Geo.bearing(them, me)
             Text((if (vm.form.approxPosition) "≈ " else "") + formatKm(Geo.distanceKm(me, them)), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 36.sp)
-            Pair(tr("Азимут на абонента"), "${az.toInt()}°")
+            Pair(tr("Азимут на корреспондента"), "${az.toInt()}°")
             Pair(tr("Обратный азимут"), "${back.toInt()}°")
             Pair(tr("Локаторы"), "${vm.form.myLocator.ifBlank { vm.settings.myLocator }} → ${vm.form.locator.ifBlank { Geo.latLonToLocator(them) }}")
         }

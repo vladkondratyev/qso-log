@@ -5,6 +5,16 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import ru.r3xed.qsolog.I18n
+import ru.r3xed.qsolog.data.SheetSync
+import ru.r3xed.qsolog.data.ContestMode
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.runtime.LaunchedEffect
 import ru.r3xed.qsolog.Lang
 import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -134,7 +144,7 @@ fun SettingsPane(
 
             // Where callsign data comes from, in the order it is asked: XML API → the site → HamQTH.
             SettingsBlock(
-                tr("Источники данных об абоненте"),
+                tr("Данные о корреспонденте"),
                 listOf(
                     "XML API: " + when {
                         s.qrzLogin.isBlank() -> tr("нет")
@@ -148,11 +158,17 @@ fun SettingsPane(
                         vm.qrzSiteOk == false -> tr("ошибка")
                         else -> tr("указан")
                     },
+                    "QRZ.com: " + when {
+                        s.qrzComLogin.isBlank() -> tr("нет")
+                        vm.qrzComOk == true -> tr("вход выполнен")
+                        vm.qrzComOk == false -> tr("ошибка")
+                        else -> tr("указан")
+                    },
                     "HamQTH: " + if (vm.hamqthEnabled) tr("вкл") else tr("выкл"),
                 ).joinToString(" · "),
-                open = s.qrzLogin.isBlank() && s.qrzSiteEmail.isBlank(),
+                open = s.qrzLogin.isBlank() && s.qrzSiteEmail.isBlank() && s.qrzComLogin.isBlank(),
             ) {
-                Note(tr("Данные абонента ищутся по порядку: 1) XML API QRZ.ru — основной и правильный способ; 2) сайт QRZ.ru по вашим e-mail и паролю — запасной, если XML API не указан или не ответил; 3) HamQTH — только страна и область, если QRZ.ru ничего не дал."))
+                Note(tr("Данные корреспондента ищутся по порядку: 1) XML API QRZ.ru — основной и правильный способ; 2) сайт QRZ.ru по вашим e-mail и паролю — запасной, если XML API не указан или не ответил; 3) сайт QRZ.com — если QRZ.ru не знает позывного (зарубежные станции) или не ответил; 4) HamQTH — только страна и область, если остальные ничего не дали."))
                 Section(tr("1. QRZ.ru — XML API (основной)"))
                 SettingField(tr("Логин"), s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)
                 var show by remember { mutableStateOf(false) }
@@ -228,7 +244,41 @@ fun SettingsPane(
                 }
                 ActionButton(tr("Проверить вход"), null, vm::testQrzSite)
                 Note(tr("Ограничения: страница сайта — не интерфейс для программ, после изменений на сайте поиск может перестать работать; каждый запрос добавляет абоненту «Просмотр»; правила сайта могут запрещать автоматические запросы. Если указана и учётная запись XML API, данные берутся через неё, а сайт — только когда XML API не ответил."))
-                Section(tr("3. HamQTH — страна и область"))
+                Section(tr("3. Сайт QRZ.com"))
+                Note(tr("Для зарубежных позывных, которых нет на QRZ.ru. Программа входит на qrz.com с вашей учётной записью (подойдёт бесплатная) и читает страницу позывного (www.qrz.com/db/ПОЗЫВНОЙ): имя, город, страну, локатор, координаты и зоны."))
+                SettingField(tr("Логин QRZ.com (позывной или e-mail)"), s.qrzComLogin, { vm.updateSettings(s.copy(qrzComLogin = it.trim())) }, mono = true)
+                var showCom by remember { mutableStateOf(false) }
+                OutlinedTextField(
+                    value = s.qrzComPassword,
+                    onValueChange = { vm.updateSettings(s.copy(qrzComPassword = it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(tr("Пароль QRZ.com")) },
+                    singleLine = true,
+                    textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    visualTransformation = if (showCom) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        IconButton(onClick = { showCom = !showCom }) {
+                            Icon(if (showCom) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (showCom) tr("Скрыть пароль") else tr("Показать пароль"))
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                )
+                vm.qrzComStatus?.let { status ->
+                    val color = when (vm.qrzComOk) {
+                        true -> x.ok
+                        false -> MaterialTheme.colorScheme.error
+                        null -> x.muted
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(12.dp).background(color, CircleShape))
+                        Spacer(Modifier.width(10.dp))
+                        Text(status, color = color, style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+                ActionButton(tr("Проверить вход"), null, vm::testQrzCom)
+                Note(tr("Ограничения те же, что у сайта QRZ.ru: страница — не интерфейс для программ и может измениться; учётные записи с двухфакторным входом не поддерживаются."))
+                Section(tr("4. HamQTH — страна и область"))
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                         .toggleable(value = vm.hamqthEnabled, role = Role.Switch, onValueChange = vm::setHamqth)
@@ -244,17 +294,21 @@ fun SettingsPane(
             }
 
 
-            SettingsBlock(tr("Ввод связи"), if (vm.timeOnSave) tr("время — при сохранении") else tr("время — при открытии карточки")) {
+            SettingsBlock(
+                tr("Ввод связи"),
+                (if (vm.contestMode) "CONTEST MODE · " else "") + if (vm.timeOnSave) tr("время — при сохранении") else tr("время — при открытии карточки"),
+            ) {
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                         .toggleable(value = vm.timeOnSave, role = Role.Switch, onValueChange = vm::changeTimeOnSave)
                         .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(tr("Время связи — при сохранении"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(tr("Время — при сохранении"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
                     Switch(checked = vm.timeOnSave, onCheckedChange = null)
                 }
                 Note(tr("Выключено: время связи — момент, когда открыта карточка «Новый QSO». Включено: время ставится при нажатии «Сохранить» (если вы не меняли его вручную) — удобно для долгих связей."))
+                ContestModeSettings(vm)
             }
 
             SettingsBlock(tr("Диапазоны и виды связи"), tr("диапазонов: %s · видов: %s", vm.enabledBands.size, vm.enabledModes.size)) {
@@ -319,6 +373,8 @@ fun SettingsPane(
                 ActionButton(tr("Импорт из ЕРМАК / Cabrillo"), Icons.Filled.FileDownload, onImportContest)
                 Note(tr("Отчёты для соревнований. ЕРМАК — российский формат (ermak.srr.ru), Cabrillo 3.0 — международный. Перед сохранением программа спросит код соревнования и категорию. Чтобы выгрузить только часть журнала, выберите записи (долгое нажатие или ⌘/Ctrl-щелчок) и нажмите «Экспорт»."))
 
+                SheetSyncSettings(vm)
+
                 var confirmDeleteAll by remember { mutableStateOf(false) }
                 Button(
                     onClick = { confirmDeleteAll = true },
@@ -352,8 +408,6 @@ fun SettingsPane(
                     )
                 }
             }
-            // The reference is not a setting: a filled card of its own, set apart from the blocks above.
-            ReferenceCard(vm::openReference)
             // About: version, tap to open the project page.
                     Column(
                 Modifier.fillMaxWidth().padding(top = 28.dp)
@@ -592,25 +646,154 @@ internal fun SettingField(
     )
 }
 
-/** The way into the reference: a filled card with an icon, unlike the outlined settings blocks. */
+/**
+ * Sync through the user's Google Sheet: the steps, the Apps Script code to copy into the sheet, the script's address
+ * and the button. Sync runs only when the user presses it (here, in the log's menu or in the "Файл" menu).
+ */
 @Composable
-private fun ReferenceCard(onOpen: () -> Unit) {
-    val ink = MaterialTheme.colorScheme.onPrimaryContainer
-    Row(
-        Modifier.fillMaxWidth().padding(top = 20.dp).clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .clickable(onClickLabel = tr("Открыть справку"), onClick = onOpen)
-            .pointerHoverIcon(PointerIcon.Hand)
-            .padding(horizontal = 18.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.AutoMirrored.Filled.MenuBook, null, Modifier.size(34.dp), tint = ink)
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(tr("Справка и калькуляторы"), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = ink)
-            Text(tr("Частоты, Морзе, Q-коды, кабели, антенны, префиксы"), style = MaterialTheme.typography.bodyMedium, color = ink.copy(alpha = 0.8f))
+private fun SheetSyncSettings(vm: AppState) {
+    val x = LocalExtra.current
+    val clipboard = LocalClipboardManager.current
+    Section(tr("Синхронизация через Google Таблицу"))
+    Note(tr("Один журнал на нескольких устройствах — телефонах, планшете, компьютере. Связи собираются в вашей Google Таблице; синхронизация — по кнопке «Синхронизировать»."))
+    val steps = listOf(
+        tr("Откройте на компьютере свою Google Таблицу — можно новую, пустую."),
+        tr("Меню «Расширения → Apps Script». Сотрите всё в окне редактора и вставьте код скрипта: кнопка «Скопировать код скрипта» ниже кладёт его в буфер обмена."),
+        tr("Нажмите «Сохранить», затем «Начать развёртывание → Новое развёртывание», тип — «Веб-приложение». Укажите «Запуск от имени: я» и «У кого есть доступ: все», нажмите «Начать развёртывание» и разрешите доступ своему аккаунту. Google предупредит, что приложение не проверено: это ваш скрипт — «Дополнительные настройки → Перейти»."),
+        tr("Скопируйте «URL веб-приложения» — он заканчивается на /exec — и вставьте в поле «Адрес скрипта» ниже."),
+        tr("Введите тот же адрес в QSO-LOG на других устройствах. Первая синхронизация объединит журналы, одинаковые связи склеятся. Дальше нажимайте «Синхронизировать» на любом устройстве."),
+    )
+    steps.forEachIndexed { i, s ->
+        Row {
+            Text("${i + 1}.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(24.dp))
+            Text(s, style = MaterialTheme.typography.bodyMedium)
         }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(28.dp), tint = ink)
     }
+
+    // The code itself: visible, selectable, and one button to copy it whole.
+    Box(
+        Modifier.fillMaxWidth().heightIn(max = 220.dp).clip(RoundedCornerShape(12.dp)).background(x.field)
+            .verticalScroll(rememberScrollState()).padding(10.dp),
+    ) {
+        SelectionContainer {
+            // Ligatures off: "===" must read as three characters, as it will be pasted.
+            Text(SheetSync.SCRIPT, fontFamily = Mono, fontSize = 12.sp, lineHeight = 16.sp, style = LocalTextStyle.current.copy(fontFeatureSettings = "liga 0, calt 0"))
+        }
+    }
+    ActionButton(tr("Скопировать код скрипта"), Icons.Filled.ContentCopy) {
+        clipboard.setText(AnnotatedString(SheetSync.SCRIPT))
+        vm.say(tr("Код скрипта скопирован: вставьте его в «Расширения → Apps Script»"))
+    }
+
+    var url by remember { mutableStateOf(vm.sheetUrl) }
+    val bad = url.isNotBlank() && !SheetSync.isScriptUrl(url)
+    OutlinedTextField(
+        value = url,
+        onValueChange = { url = it.trim(); vm.changeSheetUrl(url) },
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        label = { Text(tr("Адрес скрипта (…/exec)")) },
+        placeholder = { Text("https://script.google.com/macros/s/…/exec", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        singleLine = true,
+        isError = bad,
+        supportingText = if (bad) { { Text(tr("Нужен «URL веб-приложения» из развёртывания скрипта, а не ссылка на таблицу")) } } else null,
+        trailingIcon = {
+            IconButton(onClick = {
+                clipboard.getText()?.text?.trim()?.let { url = it; vm.changeSheetUrl(it) }
+            }) { Icon(Icons.Filled.ContentPaste, tr("Вставить из буфера")) }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrect = false),
+        shape = RoundedCornerShape(12.dp),
+    )
+    Button(
+        onClick = vm::syncSheet,
+        enabled = SheetSync.isScriptUrl(url) && !vm.sheetSyncing,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        if (vm.sheetSyncing) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+        else Icon(Icons.Filled.Sync, null)
+        Spacer(Modifier.width(8.dp))
+        Text(if (vm.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    }
+    if (vm.sheetStatus.isNotBlank()) {
+        Text(
+            vm.sheetStatus, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+            color = if (vm.sheetOk == false) MaterialTheme.colorScheme.error else if (vm.sheetOk == true) x.ok else x.muted,
+        )
+    }
+    Note(tr("Адрес скрипта — как пароль: кто его знает, может менять журнал. Саму таблицу открывать по ссылке не нужно."))
+    Note(tr("В таблице появится лист «QSO-LOG»: в первой строке — названия полей и их описание, дальше по строке на связь. Связи можно править прямо в таблице. Чтобы удалить связь на всех устройствах, поставьте Y в столбце deleted — строку не удаляйте. Голосовые заметки остаются на своём устройстве. «Удалить весь журнал» очищает только это устройство: при следующей синхронизации связи вернутся из таблицы."))
 }
 
+/**
+ * CONTEST MODE: the switch (off at every start of the app) and, when on, what each contact sends (a serial number
+ * or the same code).
+ */
+@Composable
+private fun ContestModeSettings(vm: AppState) {
+    val x = LocalExtra.current
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
+            .background(if (vm.contestMode) MaterialTheme.colorScheme.primaryContainer else x.field)
+            .toggleable(value = vm.contestMode, role = Role.Switch, onValueChange = vm::changeContestMode)
+            .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("CONTEST MODE", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(end = 12.dp))
+        Switch(checked = vm.contestMode, onCheckedChange = null)
+    }
+    if (vm.contestMode) {
+        Text(tr("Передаю"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 4.dp))
+        // Two options in one row like the theme: a serial number or the same code every time.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(false to tr("Порядковый номер"), true to tr("Постоянный код")).forEach { (fixed, label) ->
+                val on = vm.contestSentFixed == fixed
+                Box(
+                    Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
+                        .background(if (on) MaterialTheme.colorScheme.primary else x.field)
+                        .selectable(selected = on, role = Role.RadioButton) { vm.changeContestSentFixed(fixed) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                        color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+        if (vm.contestSentFixed) {
+            OutlinedTextField(
+                value = vm.contestSentText,
+                onValueChange = { v -> vm.changeContestSentText(v.uppercase().filter { !it.isWhitespace() }.take(12)) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(tr("Передаваемый код")) },
+                singleLine = true,
+                isError = vm.contestSentText.isBlank(),
+                supportingText = { Text(tr("Одинаковый в каждой связи: район, область, зона — MO69, EU, 16")) },
+                textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrect = false),
+                shape = RoundedCornerShape(12.dp),
+            )
+        } else {
+            // Typed as text so the field may be empty for a moment; a valid number is taken at once.
+            var text by remember { mutableStateOf(vm.contestSerial.toString()) }
+            LaunchedEffect(vm.contestSerial) { if (text.toIntOrNull() != vm.contestSerial) text = vm.contestSerial.toString() }
+            OutlinedTextField(
+                value = text,
+                onValueChange = { v ->
+                    text = v.filter { it.isDigit() }.take(5)
+                    text.toIntOrNull()?.let(vm::changeContestSerial)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(tr("Следующий передаваемый номер")) },
+                singleLine = true,
+                isError = (text.toIntOrNull() ?: 0) < 1,
+                supportingText = { Text(tr("Уйдёт как %s, дальше +1 с каждой связью", ContestMode.serial(text.toIntOrNull()?.coerceAtLeast(1) ?: vm.contestSerial))) },
+                textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = RoundedCornerShape(12.dp),
+            )
+        }
+    }
+    Note(tr("Режим соревнований: «Добавить QSO» открывает упрощённую карточку — позывной, контрольные номера и RST; время ставится при записи. Принятый номер может быть любым: 015, MO69, EU, 16. Enter переходит из позывного в принятый код и там записывает связь; PgUp и PgDn листают связи контеста, чтобы их поправить. Такие связи отмечены в журнале флажком. Режим выключается при каждом запуске программы."))
+}

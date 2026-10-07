@@ -116,4 +116,22 @@ class QsoDbTest {
         )))
         assertEquals(other, db.all().single { it.call == "UA1DEMO" }.uid)
     }
+
+    @Test
+    fun deletionIsRememberedForTheTableAndUndoClearsIt() {
+        val db = QsoDb(tempDb())
+        val id = db.save(Qso(call = "OK1DEMO", timeUtc = 1_790_341_860_000, band = "15m", mode = "CW", updatedAt = 1000))
+        val q = db.get(id)!!
+        assertEquals(listOf(q), db.changedSince(999))
+        db.delete(id)
+        assertEquals(listOf(q.uid), db.deletedSince(0).map { it.first })
+        // Undo puts it back with its UUID: no longer deleted.
+        db.save(q.copy(id = 0))
+        assertEquals(emptyList(), db.deletedSince(0))
+        assertEquals("OK1DEMO", db.byUid(q.uid)?.call)
+        // A deletion that came from the table leaves no mark of its own.
+        db.deleteByUid(q.uid)
+        assertEquals(null, db.byUid(q.uid))
+        assertEquals(emptyList(), db.deletedSince(0))
+    }
 }

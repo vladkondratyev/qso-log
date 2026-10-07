@@ -44,7 +44,7 @@ fun main(args: Array<String>) {
             val state = AppState()
             // Russian shots first (the README is in Russian), a few English ones at the end.
             state.changeLanguage(Lang.RU)
-            val files = Exports({}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _ -> })
+            val files = Exports({}, {}, {}, {}, {}, { _, _, _, _ -> }, {}, { _, _ -> })
             var dark by mutableStateOf(false)
             // Sized in pixels: a 1280×860 window at 2× (Retina) scale.
             val big = ImageComposeScene(2560, 1720, Density(2f)) { QsoTheme(dark) { key(state.language) { App(state, files) } } }
@@ -105,6 +105,26 @@ fun main(args: Array<String>) {
             shot("13-export-dialog")
             state.closeExport()
 
+            // The search narrowed to one station: the bands it was worked on.
+            state.search("R9DEMO")
+            shot("14-search-bands", 1000)
+            state.search("")
+
+            // Contest mode: the simplified card, a callsign typed, the received number waiting.
+            state.changeContestMode(true)
+            state.addQso()
+            state.setCall("SP3DEMO")
+            state.setAdif(ru.r3xed.qsolog.data.ContestMode.RCVD, "MO69")
+            shot("15-contest", 2000)
+            state.closeEditor()
+            state.changeContestMode(false)
+
+            state.openDashboard()
+            shot("16-dashboard", 2000)
+            scrollRight(60)
+            shot("17-dashboard-more", 1500)
+            state.pane = Pane.Empty
+
             state.pane = Pane.Settings
             shot("08-settings")
             // Scroll the settings column to the bottom: version and project link.
@@ -162,6 +182,12 @@ private fun seed(dir: File) {
         qso("LY2DEMO", at(6, "16:48"), "20m", "SSB", "14.195", ssb, "Tomas", "Vilnius", "Lithuania", LatLon(54.69, 25.28)),
         qso("R6DEMO", at(7, "12:30"), "80m", "SSB", "3.650", "59" to "57", "Олег", "Ростов-на-Дону", "Россия", LatLon(47.23, 39.72)),
         qso("R0DEMO", at(8, "06:02"), "20m", "CW", "14.025", "579" to "559", "Павел", "Владивосток", "Россия", LatLon(43.12, 131.89)),
+    ).plus(
+        // A short contest this morning: flagged, with the numbers sent and received.
+        listOf("UR5DEMO" to "MO69", "OK1DEMO" to "017", "UA9DEMO" to "SV12", "YL2DEMO" to "021").mapIndexed { i, (call, rcvd) ->
+            qso(call, at(0, "08:%02d".format(5 + i * 7)), "15m", "CW", "21.0${15 + i * 4}", "599" to "599", "", "", "", null)
+                .let { it.copy(adif = it.adif + mapOf("APP_QSOLOG_CONTEST" to "Y", "STX_STRING" to "%03d".format(i + 1), "SRX_STRING" to rcvd)) }
+        },
     ).map { q ->
         // Older contacts were already exported: ADIF a day later, CSV and a contest report for some of them.
         val day = LocalDateTime.ofEpochSecond(q.timeUtc / 1000, 0, ZoneOffset.UTC).plusDays(1).withHour(9).withMinute(30)
@@ -188,7 +214,7 @@ private fun seed(dir: File) {
     val props = java.util.Properties()
     mapOf(
         "my_call" to "UA3DEMO", "my_locator" to "KO85ts", "my_qth" to "Москва", "my_power" to "100",
-        "station_MY_RIG" to "IC-7300", "station_MY_ANTENNA" to "Delta", "last_band" to "20m", "last_mode" to "SSB",
+        "station_MY_RIG" to "IC-7300", "station_MY_ANTENNA" to "Delta", "last_band" to "20m", "last_mode" to "SSB", "contest_serial" to "5",
     ).forEach { (k, v) -> props.setProperty(k, v) }
     File(dir, "settings.properties").outputStream().use { props.store(it, null) }
 }
