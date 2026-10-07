@@ -80,7 +80,7 @@ fun WelcomeScreen(vm: AppViewModel) {
                 else -> {
                     Text(tr("QRZ.ru: имя и QTH абонента"), style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        tr("Лучше всего — доступ к XML API QRZ.ru: логин и пароль для программ выдаёт сайт qrz.ru (как получить — в настройках, блок «Источники данных об абоненте»). Можно пропустить: страна и область придут с HamQTH, а учётную запись — или запасной вход по e-mail сайта — можно указать позже в настройках."),
+                        tr("Лучше всего — доступ к XML API QRZ.ru: логин и пароль для программ выдаёт сайт qrz.ru (как получить — в настройках, блок «Данные о корреспонденте»). Можно пропустить: страна и область придут с HamQTH, а учётную запись — или запасной вход по e-mail сайта — можно указать позже в настройках."),
                         style = MaterialTheme.typography.bodyLarge, color = x.muted,
                     )
                     SettingField(tr("Логин XML API"), s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)

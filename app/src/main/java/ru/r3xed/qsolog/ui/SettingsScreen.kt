@@ -134,7 +134,7 @@ fun SettingsScreen(
 
             // Where callsign data comes from, in the order it is asked: XML API → the site → HamQTH.
             SettingsBlock(
-                tr("Источники данных об абоненте"),
+                tr("Данные о корреспонденте"),
                 listOf(
                     "XML API: " + when {
                         s.qrzLogin.isBlank() -> tr("нет")
@@ -287,7 +287,7 @@ fun SettingsScreen(
                         .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(tr("Время связи — при сохранении"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(tr("Время — при сохранении"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
                     Switch(checked = vm.timeOnSave, onCheckedChange = null)
                 }
                 Note(tr("Выключено: время связи — момент, когда открыта карточка «Новый QSO». Включено: время ставится при нажатии «Сохранить» (если вы не меняли его вручную) — удобно для долгих связей."))
@@ -646,7 +646,7 @@ private fun ContestModeSettings(vm: AppViewModel) {
                 .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(end = 12.dp))
             Switch(checked = on, onCheckedChange = null)
         }
     }

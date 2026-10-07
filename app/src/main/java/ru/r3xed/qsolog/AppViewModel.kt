@@ -1047,7 +1047,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Returns an error message, or null when saved. */
-    fun save(): String? {
+    /** Saves the card. [quiet]: no "Связь записана" message (the contest card says it in its own line). */
+    fun save(quiet: Boolean = false): String? {
         stopCardRecording()
         val f0 = form
         val orig = formOriginal
@@ -1099,7 +1100,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             reload()
             if (f.isNew) newSavedTick++
             val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
-            _messages.send(Message((if (f.isNew) tr("Связь с %s записана", f.call) else tr("Изменения сохранены")) + note))
+            if (!quiet) _messages.send(Message((if (f.isNew) tr("Связь с %s записана", f.call) else tr("Изменения сохранены")) + note))
         }
         screen = editReturn
         return null
@@ -1141,7 +1142,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (id == 0L) return
         viewModelScope.launch {
             val qso = withContext(Dispatchers.IO) { db.get(id) } ?: return@launch
-            screen = editReturn
+            // In the contest card the work goes on: the waiting draft or a new card instead of the log.
+            if (screen == Screen.Contest) contestDraftOrNew() else screen = editReturn
             delete(qso)
         }
     }
@@ -1161,6 +1163,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun changeContestMode(on: Boolean) {
         contestMode = on
         contestWork = null
+        contestLastSaved = null
     }
 
     fun changeContestSerial(n: Int) {
@@ -1205,6 +1208,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private var contestWork: Form? = null
 
+    /** The callsign of the contact the contest card has just logged: shown in place of a message. */
+    var contestLastSaved by mutableStateOf<String?>(null); private set
+
+    /** The latest contest contacts, newest first: the list under the contest card. */
+    fun contestRecent(n: Int): List<Qso> = contestQsos().takeLast(n).reversed()
+
+    /** Contest contacts so far and in the hour before [now]: the rate in the card's header. */
+    fun contestCounts(now: Long): kotlin.Pair<Int, Int> {
+        val list = contestQsos()
+        return list.size to list.count { it.timeUtc in (now - 3_600_000L)..now }
+    }
+
     /** A new contest card that was typed in and left by swiping back; it comes back at the end of the swipes. */
     private var contestDraft: Form? = null
 
@@ -1247,11 +1262,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         contestError(f)?.let { return it }
         val now = LocalDateTime.now(ZoneOffset.UTC)
         form = f.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now))
-        val err = save()
+        val err = save(quiet = true)
         if (err != null) {
             screen = Screen.Contest
             return err
         }
+        contestLastSaved = f.call
         contestWork = f
         if (!contestSentFixed) changeContestSerial(ContestMode.nextSerial(f.adif[ContestMode.SENT].orEmpty(), contestSerial))
         contestDraft = null
@@ -1264,7 +1280,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val list = contestQsos()
         val f = form
         val target = if (f.isNew) list.lastOrNull() else list.getOrNull(list.indexOfFirst { it.id == f.id } - 1)
-        if (target == null) return null
+        return if (target == null) null else contestOpen(target)
+    }
+
+    /** Opens [target] in the contest card, as a swipe back does: the open card is saved or kept as a draft first. */
+    fun contestOpen(target: Qso): String? {
+        val f = form
+        if (!f.isNew && f.id == target.id) return null
+        contestLastSaved = null
         if (f.isNew) {
             contestWork = f
             contestDraft = f.takeIf { it.call.isNotBlank() || !it.adif[ContestMode.RCVD].isNullOrBlank() }
@@ -1286,21 +1309,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             save()?.let { screen = Screen.Contest; return it }
         }
         val next = list.getOrNull(list.indexOfFirst { it.id == f.id } + 1)
-        when {
-            next != null -> edit(next)
-            contestDraft != null -> {
-                newContestQso()
-                val draft = contestDraft!!
-                contestDraft = null
-                form = draft.copy(adif = draft.adif + (ContestMode.SENT to (draft.adif[ContestMode.SENT] ?: contestSentNext())))
-                loadHistory(draft.call)
-                // The lookup may have been cut short by the swipe back.
-                if (draft.call.length >= MIN_LOOKUP_LENGTH && !draft.infoFromQrz && draft.name.isBlank()) retryLookup()
-            }
-            else -> newContestQso()
-        }
+        if (next != null) edit(next) else contestDraftOrNew()
         screen = Screen.Contest
         return null
+    }
+
+    /** After the last contest contact: the card typed in and left by a swipe back, or a new one. */
+    private fun contestDraftOrNew() {
+        val draft = contestDraft
+        newContestQso()
+        if (draft == null) return
+        contestDraft = null
+        form = draft.copy(adif = draft.adif + (ContestMode.SENT to (draft.adif[ContestMode.SENT] ?: contestSentNext())))
+        loadHistory(draft.call)
+        // The lookup may have been cut short by the swipe back.
+        if (draft.call.length >= MIN_LOOKUP_LENGTH && !draft.infoFromQrz && draft.name.isBlank()) retryLookup()
     }
 
     /**

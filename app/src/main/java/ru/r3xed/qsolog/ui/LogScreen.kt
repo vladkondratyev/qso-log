@@ -472,12 +472,21 @@ private fun QsoRow(
             if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent} / ${qso.rstRcvd}" else null,
             // Contest numbers: sent / received.
             if (ContestMode.isContest(qso.adif)) "№ ${qso.adif[ContestMode.SENT].orEmpty()} / ${qso.adif[ContestMode.RCVD].orEmpty().ifBlank { "—" }}" else null,
-            qso.distanceKm?.let { (if (qso.approxPosition) "≈ " else "") + formatKm(it) },
         ).joinToString("  ·  ")
-        if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+        // One line: long contest codes make the font a little smaller instead of wrapping.
+        if (meta.isNotEmpty()) {
+            ProvideTextStyle(MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)) { OneLineText(meta, maxSize = 18.sp, minSize = 13.sp) }
+        }
+        // Who and how far on one line: the distance at the end, so the row does not grow by a line for it.
         val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ").ifBlank { qso.country }
-        if (who.isNotEmpty()) Text(who, style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        else if (qso.pendingLookup) Text(tr("Данные QRZ.ru не получены"), style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1)
+            .ifBlank { if (qso.pendingLookup) tr("Данные QRZ.ru не получены") else "" }
+        val km = qso.distanceKm?.let { (if (qso.approxPosition) "≈ " else "") + formatKm(it) }
+        if (who.isNotEmpty() || km != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(who, style = MaterialTheme.typography.bodyLarge, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (km != null) Text(km, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(start = 10.dp))
+            }
+        }
     }
 }
 

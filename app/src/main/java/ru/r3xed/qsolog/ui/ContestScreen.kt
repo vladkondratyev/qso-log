@@ -1,14 +1,21 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -145,9 +152,10 @@ fun ContestScreen(vm: AppViewModel) {
             Target.RST_RCVD -> vm.update(vm.form.copy(rstRcvd = v))
         }
     }
+    // A second tap on the active field selects its value (then ⌫ clears it, a key replaces it), a third deselects.
     fun activate(t: Target) {
+        replace = if (t == active) !replace && valueOf(t).isNotBlank() else t != Target.CALL && valueOf(t).isNotBlank()
         active = t
-        replace = t != Target.CALL && valueOf(t).isNotBlank()
     }
 
     // A new card with something typed, or changes to a saved one: closing asks first.
@@ -165,7 +173,17 @@ fun ContestScreen(vm: AppViewModel) {
             else -> callFocus.requestFocus()
         }
     }
-    val next = { showError(vm.contestSaveAndNext()) }
+    // A repeat on this band and mode is logged only on a second press: the first one turns the button red.
+    val dupe = remember(f.call, f.band, f.mode, f.date, f.id, vm.allQsos) { if (f.isNew) vm.dupeOf(f) else null }
+    var dupeArmed by remember(f.call, f.band, f.mode) { mutableStateOf(false) }
+    val next = {
+        if (dupe != null && !dupeArmed && rcvd.isNotBlank()) {
+            dupeArmed = true
+            error = null
+        } else {
+            showError(vm.contestSaveAndNext())
+        }
+    }
     val prev = { showError(vm.contestPrev()) }
     val hasPrev = vm.contestHasPrev()
 
@@ -204,10 +222,7 @@ fun ContestScreen(vm: AppViewModel) {
             Spacer(Modifier.width(10.dp))
             BandModePicker(vm)
             Spacer(Modifier.weight(1f))
-            Text(
-                (if (sent.all { it.isDigit() }) "№ " else "") + sent.ifBlank { "—" },
-                fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, maxLines = 1, softWrap = false,
-            )
+            ContestRate(vm)
         }
         // Where this card is among the contest contacts; the arrows do what the swipes do.
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -216,9 +231,16 @@ fun ContestScreen(vm: AppViewModel) {
                 Text(tr("назад"))
             }
             val pos = vm.contestPosition()
+            // Just logged: said here instead of a message over the header.
+            val saved = vm.contestLastSaved?.takeIf { f.isNew && f.call.isBlank() }
             Text(
-                if (pos == null) tr("новая связь") else tr("связь %s из %s", pos.first, pos.second),
-                style = MaterialTheme.typography.bodyMedium, color = x.muted,
+                when {
+                    saved != null -> tr("✓ %s записана", saved)
+                    pos == null -> tr("новая связь")
+                    else -> tr("связь %s из %s", pos.first, pos.second)
+                },
+                style = MaterialTheme.typography.bodyMedium, color = if (saved != null) x.ok else x.muted,
+                fontWeight = if (saved != null) FontWeight.Bold else null, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             TextButton(onClick = next) {
@@ -258,6 +280,22 @@ fun ContestScreen(vm: AppViewModel) {
                 )
                 if (f.isNew) LaunchedEffect(Unit) { callFocus.requestFocus() }
             }
+            // Calls from the log that start with what is typed: one tap instead of the rest.
+            if (f.isNew) {
+                val suggestions = remember(f.call, vm.allQsos) { vm.callSuggestions(f.call) }
+                if (suggestions.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        suggestions.forEach { c ->
+                            Text(
+                                c, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1,
+                                modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(x.field)
+                                    .clickable(onClickLabel = tr("Подставить позывной")) { error = null; vm.setCall(c) }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+                }
+            }
             StationLine(vm)
 
             // The numbers first: they change with every contact. Any letters and digits: 015, MO69, EU, 16.
@@ -275,6 +313,12 @@ fun ContestScreen(vm: AppViewModel) {
                 }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium) }
+            if (dupeArmed && dupe != null) {
+                Text(
+                    tr("Уже была связь на %s %s в %s. Нажмите ещё раз, чтобы записать повтор.", dupe.band, dupe.mode, TIME_FMT.format(utc(dupe.timeUtc))),
+                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium,
+                )
+            }
 
             // The reports are 59 / 599 nearly always: they can be folded into one line.
             if (vm.contestRstShown) {
@@ -306,6 +350,7 @@ fun ContestScreen(vm: AppViewModel) {
                     Icon(Icons.Filled.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
                 }
             }
+            RecentContacts(vm) { showError(vm.contestOpen(it)) }
         }
       }
 
@@ -330,7 +375,6 @@ fun ContestScreen(vm: AppViewModel) {
                         setValue(active, v.take(if (active == Target.CALL) 15 else 12))
                     },
                     onBackspace = { setValue(active, if (replace) "" else valueOf(active).dropLast(1)); replace = false },
-                    onClear = { setValue(active, ""); replace = false },
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (!f.isNew) deleteButton(54)
@@ -346,27 +390,23 @@ fun ContestScreen(vm: AppViewModel) {
                     Button(
                         onClick = next, modifier = Modifier.weight(if (f.isNew) 1.6f else 1.3f).height(54.dp), shape = RoundedCornerShape(10.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                        colors = if (dupeArmed) dupeColors() else ButtonDefaults.buttonColors(),
                     ) {
-                        Text(if (f.isNew) tr("Записать") else tr("Далее"), fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(if (dupeArmed) tr("Записать повтор") else if (f.isNew) tr("Записать") else tr("Далее"), fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(26.dp))
                     }
                 }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (!f.isNew) deleteButton(60)
-                    Button(onClick = next, modifier = Modifier.weight(1f).height(60.dp), shape = RoundedCornerShape(16.dp)) {
-                        Text(saveLabel, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Button(onClick = next, modifier = Modifier.weight(1f).height(60.dp), shape = RoundedCornerShape(16.dp), colors = if (dupeArmed) dupeColors() else ButtonDefaults.buttonColors()) {
+                        Text(if (dupeArmed) tr("Записать повтор") else saveLabel, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(6.dp))
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(28.dp))
                     }
                 }
             }
-            val freq = f.freq.ifBlank { null }?.let { tr("%s МГц", it) }
-            val time = if (f.isNew) tr("время UTC — при записи") else "${f.time} UTC · ${f.date}"
-            Text(
-                listOfNotNull(time, freq).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = x.muted,
-                modifier = Modifier.padding(horizontal = if (keypad) 10.dp else 0.dp),
-            )
+            TimeLine(f.isNew, "${f.time} UTC · ${f.date}", f.freq.ifBlank { null }?.let { tr("%s МГц", it) }, Modifier.padding(horizontal = if (keypad) 10.dp else 0.dp))
         }
     }
 
@@ -447,14 +487,16 @@ private fun KeyField(
 
 /**
  * The app's keyboard for the contest card, in the spirit of contest loggers: digits on top, Latin letters, "/" for
- * portable calls, "-" for dB reports. A long press on ⌫ clears the field.
+ * portable calls, "-" for dB reports. Holding ⌫ keeps deleting, as on a phone keyboard.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Keypad(onKey: (String) -> Unit, onBackspace: () -> Unit, onClear: () -> Unit) {
+private fun Keypad(onKey: (String) -> Unit, onBackspace: () -> Unit) {
     val x = LocalExtra.current
+    val c = MaterialTheme.colorScheme
     val view = LocalView.current
     val tap = { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
+    val back by rememberUpdatedState(onBackspace)
+    var backDown by remember { mutableStateOf(false) }
     val rows = listOf("1234567890", "QWERTYUIOP", "ASDFGHJKL/", "ZXCVBNM-")
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         rows.forEachIndexed { i, keys ->
@@ -462,24 +504,114 @@ private fun Keypad(onKey: (String) -> Unit, onBackspace: () -> Unit, onClear: ()
                 keys.forEach { k ->
                     Box(
                         Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(8.dp))
-                            .background(if (i == 0) MaterialTheme.colorScheme.secondaryContainer else x.field)
+                            // Digits stand out: serials and reports are typed there.
+                            .background(if (i == 0) c.primaryContainer else x.field)
                             .clickable { tap(); onKey(k.toString()) },
                         contentAlignment = Alignment.Center,
-                    ) { Text(k.toString(), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp) }
+                    ) {
+                        Text(
+                            k.toString(), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp,
+                            color = if (i == 0) c.onPrimaryContainer else c.onSurface,
+                        )
+                    }
                 }
                 if (i == rows.lastIndex) {
                     Box(
                         Modifier.weight(2f).height(50.dp).clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.secondaryContainer)
-                            .combinedClickable(
-                                onClickLabel = tr("Стереть"),
-                                onLongClickLabel = tr("Очистить поле"),
-                                onLongClick = { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); onClear() },
-                                onClick = { tap(); onBackspace() },
-                            ),
+                            .background(if (backDown) c.primary.copy(alpha = 0.35f) else c.primaryContainer)
+                            .semantics { contentDescription = tr("Стереть"); role = Role.Button }
+                            .pointerInput(Unit) {
+                                detectTapGestures(onPress = {
+                                    backDown = true
+                                    tap()
+                                    back()
+                                    coroutineScope {
+                                        val repeat = launch {
+                                            delay(450)
+                                            while (true) {
+                                                back()
+                                                delay(70)
+                                            }
+                                        }
+                                        tryAwaitRelease()
+                                        repeat.cancel()
+                                    }
+                                    backDown = false
+                                })
+                            },
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.AutoMirrored.Filled.Backspace, tr("Стереть"), Modifier.size(26.dp)) }
+                    ) { Icon(Icons.AutoMirrored.Filled.Backspace, null, Modifier.size(26.dp), tint = c.onPrimaryContainer) }
                 }
+            }
+        }
+    }
+}
+
+/** The save button when the contact is a repeat and one more press logs it anyway. */
+@Composable
+private fun dupeColors() = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError)
+
+/** The current UTC time, ticking every second. */
+@Composable
+private fun utcNow(): Long {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000 - System.currentTimeMillis() % 1000)
+            now = System.currentTimeMillis()
+        }
+    }
+    return now
+}
+
+/** Header: contest contacts so far and in the last hour — the rate. */
+@Composable
+private fun ContestRate(vm: AppViewModel) {
+    val x = LocalExtra.current
+    val now = utcNow() / 60_000 * 60_000 // once a minute is enough
+    val (total, hour) = remember(now, vm.allQsos) { vm.contestCounts(now + 59_999) }
+    Column(horizontalAlignment = Alignment.End) {
+        Text("$total QSO", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp, maxLines = 1, softWrap = false)
+        Text(tr("%s за час", hour), style = MaterialTheme.typography.bodySmall, color = x.muted, maxLines = 1, softWrap = false)
+    }
+}
+
+/** Under the buttons: a ticking UTC clock on a new card (its time is taken on logging), the logged time otherwise. */
+@Composable
+private fun TimeLine(isNew: Boolean, logged: String, freq: String?, modifier: Modifier) {
+    val x = LocalExtra.current
+    val time = if (isNew) TIME_SEC_FMT.format(utc(utcNow())) + " UTC" else logged
+    Text(listOfNotNull(time, freq).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = x.muted, fontFamily = if (isNew) Mono else null, modifier = modifier)
+}
+
+private val TIME_SEC_FMT: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+
+/** The last contest contacts under the card: proof they were logged, and a tap opens one to correct it. */
+@Composable
+private fun RecentContacts(vm: AppViewModel, onOpen: (ru.r3xed.qsolog.data.Qso) -> Unit) {
+    val x = LocalExtra.current
+    val recent = remember(vm.allQsos) { vm.contestRecent(4) }
+    if (recent.isEmpty()) return
+    Column {
+        Text(tr("Последние связи"), style = MaterialTheme.typography.bodySmall, color = x.muted, modifier = Modifier.padding(bottom = 2.dp))
+        recent.forEach { q ->
+            val open = q.id == vm.form.id
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                    .background(if (open) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent)
+                    .clickable(onClickLabel = tr("Открыть связь")) { onOpen(q) }
+                    .padding(horizontal = 6.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(TIME_FMT.format(utc(q.timeUtc)), fontFamily = Mono, fontSize = 15.sp, color = x.muted)
+                Spacer(Modifier.width(10.dp))
+                Text(q.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(q.band, fontFamily = Mono, fontSize = 15.sp, color = x.muted)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "${q.adif[ContestMode.SENT].orEmpty()} / ${q.adif[ContestMode.RCVD].orEmpty()}",
+                    fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1,
+                )
             }
         }
     }
