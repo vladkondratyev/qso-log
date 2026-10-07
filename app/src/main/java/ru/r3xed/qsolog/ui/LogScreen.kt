@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import ru.r3xed.qsolog.data.ContestMode
@@ -140,7 +141,7 @@ fun LogScreen(
                         }
                     }
                 }
-                // One round button: the menu with the settings, the map and the reference.
+                // One round button: the menu with the settings, the dashboard, the map and the reference.
                 var menu by remember { mutableStateOf(false) }
                 Box {
                     FilledTonalIconButton(onClick = { menu = true }, modifier = Modifier.size(50.dp)) {
@@ -151,6 +152,11 @@ fun LogScreen(
                             text = { Text(tr("Настройки"), fontSize = 18.sp) },
                             leadingIcon = { Icon(Icons.Filled.Settings, null) },
                             onClick = { menu = false; vm.openSettings() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(tr("Дашборд"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.Filled.BarChart, null) },
+                            onClick = { menu = false; vm.openDashboard() },
                         )
                         DropdownMenuItem(
                             text = { Text(tr("Карта QSO"), fontSize = 18.sp) },

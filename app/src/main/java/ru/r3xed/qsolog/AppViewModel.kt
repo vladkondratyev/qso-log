@@ -113,6 +113,8 @@ sealed interface Screen {
     data object Reference : Screen
     /** The simplified contact card of the contest mode. */
     data object Contest : Screen
+    /** Charts of the log: bands, modes, days, stations… */
+    data object Dashboard : Screen
 }
 
 /** User-Agent for the online logbooks: they ask programs to name themselves. */
@@ -685,6 +687,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openMap() {
         screen = Screen.Map
+    }
+
+    /** Dashboard parameters, kept while the app runs. */
+    var dashFilter by mutableStateOf(ru.r3xed.qsolog.data.StatFilter()); private set
+    var dashBucket by mutableStateOf(ru.r3xed.qsolog.data.StatBucket.AUTO); private set
+
+    fun changeDashFilter(f: ru.r3xed.qsolog.data.StatFilter) {
+        dashFilter = f
+    }
+
+    fun changeDashBucket(b: ru.r3xed.qsolog.data.StatBucket) {
+        dashBucket = b
+    }
+
+    fun openDashboard() {
+        screen = Screen.Dashboard
+    }
+
+    fun closeDashboard() {
+        screen = Screen.Log
     }
 
     /** Closes the card without saving; a voice note recorded for an unsaved contact is deleted. */

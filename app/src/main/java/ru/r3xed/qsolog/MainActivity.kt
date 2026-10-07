@@ -35,6 +35,7 @@ import androidx.core.content.ContextCompat
 import org.osmdroid.config.Configuration
 import ru.r3xed.qsolog.ui.EditScreen
 import ru.r3xed.qsolog.ui.ContestScreen
+import ru.r3xed.qsolog.ui.DashboardScreen
 import ru.r3xed.qsolog.ui.LogScreen
 import ru.r3xed.qsolog.ui.MapScreen
 import ru.r3xed.qsolog.ui.ContestExportDialog
@@ -134,6 +135,7 @@ class MainActivity : ComponentActivity() {
                                 requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
                             ) }
                             Screen.Contest -> key(vm.editSession) { ContestScreen(vm) }
+                            Screen.Dashboard -> DashboardScreen(vm)
                             Screen.Settings -> SettingsScreen(
                                 vm,
                                 onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
