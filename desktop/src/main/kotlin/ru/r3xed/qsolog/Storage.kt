@@ -16,6 +16,7 @@ import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.Types
+import java.util.UUID
 import java.util.Properties
 
 /**
@@ -67,6 +68,22 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
             if ("adif_extra" !in have) it.executeUpdate("ALTER TABLE qso ADD COLUMN adif_extra TEXT")
             if ("audio" !in have) it.executeUpdate("ALTER TABLE qso ADD COLUMN audio TEXT")
             if ("pending_lookup" !in have) it.executeUpdate("ALTER TABLE qso ADD COLUMN pending_lookup INTEGER")
+            // The contact's identity across devices (1.12.0): a log from an older version gets UUIDs here, once.
+            if ("uid" !in have) it.executeUpdate("ALTER TABLE qso ADD COLUMN uid TEXT")
+            val missing = it.executeQuery("SELECT id FROM qso WHERE uid IS NULL OR uid = ''").use { rs -> buildList { while (rs.next()) add(rs.getLong(1)) } }
+            if (missing.isNotEmpty()) {
+                conn.autoCommit = false
+                conn.prepareStatement("UPDATE qso SET uid = ? WHERE id = ?").use { st ->
+                    for (id in missing) {
+                        st.setString(1, UUID.randomUUID().toString())
+                        st.setLong(2, id)
+                        st.executeUpdate()
+                    }
+                }
+                conn.commit()
+                conn.autoCommit = true
+            }
+            it.executeUpdate("CREATE UNIQUE INDEX IF NOT EXISTS qso_uid ON qso(uid)")
             it.executeUpdate("CREATE INDEX IF NOT EXISTS qso_call ON qso(call)")
             it.executeUpdate("CREATE INDEX IF NOT EXISTS qso_time ON qso(time_utc)")
         }
@@ -114,9 +131,11 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
     @Synchronized
     fun save(qso: Qso): Long {
         if (qso.id == 0L) return insert(qso)
-        conn.prepareStatement("UPDATE qso SET ${COLUMNS.joinToString { "$it = ?" }} WHERE id = ?").use { st ->
+        // A card saved from the editor may come without its UUID: the one in the database stays.
+        conn.prepareStatement("UPDATE qso SET ${COLUMNS.joinToString { "$it = ?" }}, uid = COALESCE(NULLIF(?, ''), uid) WHERE id = ?").use { st ->
             st.bind(qso)
-            st.setLong(COLUMNS.size + 1, qso.id)
+            st.setString(COLUMNS.size + 1, qso.uid)
+            st.setLong(COLUMNS.size + 2, qso.id)
             st.executeUpdate()
         }
         return qso.id
@@ -139,16 +158,22 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
         }
     }
 
-    /** Same call, same minute, same band and mode: treated as the same contact on import. */
+    /** The same UUID, or (for files without one) the same call, minute, band and mode: the same contact on import. */
     @Synchronized
-    fun exists(qso: Qso): Boolean =
-        conn.prepareStatement("SELECT 1 FROM qso WHERE call = ? AND time_utc / 60000 = ? AND band = ? AND mode = ? LIMIT 1").use { st ->
+    fun exists(qso: Qso): Boolean {
+        if (qso.uid.isNotBlank() && conn.prepareStatement("SELECT 1 FROM qso WHERE uid = ? LIMIT 1").use { st ->
+                st.setString(1, qso.uid)
+                st.executeQuery().use { it.next() }
+            }
+        ) return true
+        return conn.prepareStatement("SELECT 1 FROM qso WHERE call = ? AND time_utc / 60000 = ? AND band = ? AND mode = ? LIMIT 1").use { st ->
             st.setString(1, qso.call)
             st.setLong(2, qso.timeUtc / 60_000)
             st.setString(3, qso.band)
             st.setString(4, qso.mode)
             st.executeQuery().use { it.next() }
         }
+    }
 
     @Synchronized
     fun insertAll(list: List<Qso>): Int {
@@ -167,9 +192,10 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
     }
 
     private fun insert(qso: Qso): Long {
-        val sql = "INSERT INTO qso (${COLUMNS.joinToString()}) VALUES (${COLUMNS.joinToString { "?" }})"
+        val sql = "INSERT INTO qso (${COLUMNS.joinToString()}, uid) VALUES (${COLUMNS.joinToString { "?" }}, ?)"
         conn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS).use { st ->
             st.bind(qso)
+            st.setString(COLUMNS.size + 1, qso.uid.ifBlank { UUID.randomUUID().toString() })
             st.executeUpdate()
             return st.generatedKeys.use { if (it.next()) it.getLong(1) else 0 }
         }
@@ -213,6 +239,7 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) {
         adif = Adif.decodeFields(getString("adif_extra")),
         audio = str("audio"),
         pendingLookup = getInt("pending_lookup") == 1,
+        uid = str("uid"),
     )
 
     private companion object {

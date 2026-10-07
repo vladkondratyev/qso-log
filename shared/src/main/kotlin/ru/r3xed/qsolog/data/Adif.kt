@@ -30,12 +30,15 @@ object Adif {
     private val DATE = DateTimeFormatter.ofPattern("yyyyMMdd")
     private val TIME = DateTimeFormatter.ofPattern("HHmmss")
 
+    /** The contact's identity across devices ([Qso.uid]). */
+    const val UID = "APP_QSOLOG_UID"
+
     /** Fields stored in [Qso] itself; everything else goes to [Qso.adif]. */
     private val CORE = setOf(
         "CALL", "QSO_DATE", "TIME_ON", "FREQ", "BAND", "MODE", "RST_SENT", "RST_RCVD",
         "NAME", "QTH", "COUNTRY", "GRIDSQUARE", "LAT", "LON", "DISTANCE", "TX_PWR",
         "QSL_SENT", "QSL_RCVD", "COMMENT", "STATION_CALLSIGN", "MY_GRIDSQUARE",
-        "APP_QSOLOG_AUDIO",
+        "APP_QSOLOG_AUDIO", UID,
     )
 
     /** Our mode names that ADIF writes as MODE + SUBMODE. */
@@ -95,6 +98,7 @@ object Adif {
         if (Geo.isLocator(q.myLocator)) add("MY_GRIDSQUARE", q.myLocator)
         // The voice note stays on the phone; the name lets a re-import on the same phone link it back.
         add("APP_QSOLOG_AUDIO", q.audio)
+        add(UID, q.uid)
         val written = out.map { it.first }.toSet()
         for ((k, v) in q.adif) if (k !in written) add(k, v)
         return out
@@ -165,6 +169,7 @@ object Adif {
             myCall = (r["STATION_CALLSIGN"] ?: r["OPERATOR"])?.trim()?.uppercase().orEmpty(),
             myLocator = myLocator,
             audio = r["APP_QSOLOG_AUDIO"]?.trim().orEmpty(),
+            uid = r[UID]?.trim().orEmpty(),
             adif = extra,
         )
     }

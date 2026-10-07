@@ -3,6 +3,13 @@ package ru.r3xed.qsolog.ui
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import ru.r3xed.qsolog.I18n
+import ru.r3xed.qsolog.data.SheetSync
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.foundation.text.selection.SelectionContainer
 import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.Lang
 import ru.r3xed.qsolog.tr
@@ -61,6 +68,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -356,6 +364,8 @@ fun SettingsScreen(
                 ActionButton(tr("Импорт из ЕРМАК / Cabrillo"), Icons.Filled.FileDownload, onImportContest)
                 Note(tr("Отчёты для соревнований. ЕРМАК — российский формат (ermak.srr.ru), Cabrillo 3.0 — международный. Перед сохранением программа спросит код соревнования и категорию. Чтобы выгрузить только часть журнала, выберите записи долгим нажатием и нажмите «Экспорт»."))
 
+                SheetSyncSettings(vm)
+
                 var confirmDeleteAll by remember { mutableStateOf(false) }
                 Button(
                     onClick = { confirmDeleteAll = true },
@@ -574,6 +584,85 @@ private fun ToggleGrid(items: List<String>, enabled: Set<String>, onToggle: (Str
             }
         }
     }
+}
+
+/**
+ * Sync through the user's Google Sheet: the steps, the Apps Script code to copy into the sheet, the script's address
+ * and the button. Sync runs only when the user presses it (here or in the log's menu).
+ */
+@Composable
+private fun SheetSyncSettings(vm: AppViewModel) {
+    val x = LocalExtra.current
+    val clipboard = LocalClipboardManager.current
+    Section(tr("Синхронизация через Google Таблицу"))
+    Note(tr("Один журнал на нескольких устройствах — телефонах, планшете, компьютере. Связи собираются в вашей Google Таблице; синхронизация — по кнопке «Синхронизировать»."))
+    val steps = listOf(
+        tr("Откройте на компьютере свою Google Таблицу — можно новую, пустую."),
+        tr("Меню «Расширения → Apps Script». Сотрите всё в окне редактора и вставьте код скрипта: кнопка «Скопировать код скрипта» ниже кладёт его в буфер обмена."),
+        tr("Нажмите «Сохранить», затем «Начать развёртывание → Новое развёртывание», тип — «Веб-приложение». Укажите «Запуск от имени: я» и «У кого есть доступ: все», нажмите «Начать развёртывание» и разрешите доступ своему аккаунту. Google предупредит, что приложение не проверено: это ваш скрипт — «Дополнительные настройки → Перейти»."),
+        tr("Скопируйте «URL веб-приложения» — он заканчивается на /exec — и вставьте в поле «Адрес скрипта» ниже."),
+        tr("Введите тот же адрес в QSO-LOG на других устройствах. Первая синхронизация объединит журналы, одинаковые связи склеятся. Дальше нажимайте «Синхронизировать» на любом устройстве."),
+    )
+    steps.forEachIndexed { i, s ->
+        Row {
+            Text("${i + 1}.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(24.dp))
+            Text(s, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+
+    // The code itself: visible, selectable, and one button to copy it whole.
+    Box(
+        Modifier.fillMaxWidth().heightIn(max = 180.dp).clip(RoundedCornerShape(12.dp)).background(x.field)
+            .verticalScroll(rememberScrollState()).padding(10.dp),
+    ) {
+        SelectionContainer {
+            // Ligatures off: "===" must read as three characters, as it will be pasted.
+            Text(SheetSync.SCRIPT, fontFamily = Mono, fontSize = 11.sp, lineHeight = 14.sp, style = LocalTextStyle.current.copy(fontFeatureSettings = "liga 0, calt 0"))
+        }
+    }
+    ActionButton(tr("Скопировать код скрипта"), Icons.Filled.ContentCopy) {
+        clipboard.setText(AnnotatedString(SheetSync.SCRIPT))
+        vm.say(tr("Код скрипта скопирован: вставьте его в «Расширения → Apps Script»"))
+    }
+
+    var url by remember { mutableStateOf(vm.sheetUrl) }
+    val bad = url.isNotBlank() && !SheetSync.isScriptUrl(url)
+    OutlinedTextField(
+        value = url,
+        onValueChange = { url = it.trim(); vm.changeSheetUrl(url) },
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        label = { Text(tr("Адрес скрипта (…/exec)")) },
+        placeholder = { Text("https://script.google.com/macros/s/…/exec", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        singleLine = true,
+        isError = bad,
+        supportingText = if (bad) { { Text(tr("Нужен «URL веб-приложения» из развёртывания скрипта, а не ссылка на таблицу")) } } else null,
+        trailingIcon = {
+            IconButton(onClick = {
+                clipboard.getText()?.text?.trim()?.let { url = it; vm.changeSheetUrl(it) }
+            }) { Icon(Icons.Filled.ContentPaste, tr("Вставить из буфера")) }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrect = false),
+        shape = RoundedCornerShape(12.dp),
+    )
+    Button(
+        onClick = vm::syncSheet,
+        enabled = SheetSync.isScriptUrl(url) && !vm.sheetSyncing,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        if (vm.sheetSyncing) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+        else Icon(Icons.Filled.Sync, null)
+        Spacer(Modifier.width(8.dp))
+        Text(if (vm.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    }
+    if (vm.sheetStatus.isNotBlank()) {
+        Text(
+            vm.sheetStatus, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+            color = if (vm.sheetOk == false) MaterialTheme.colorScheme.error else if (vm.sheetOk == true) x.ok else x.muted,
+        )
+    }
+    Note(tr("Адрес скрипта — как пароль: кто его знает, может менять журнал. Саму таблицу открывать по ссылке не нужно."))
+    Note(tr("В таблице появится лист «QSO-LOG»: в первой строке — названия полей и их описание, дальше по строке на связь. Связи можно править прямо в таблице. Чтобы удалить связь на всех устройствах, поставьте Y в столбце deleted — строку не удаляйте. Голосовые заметки остаются на своём устройстве. «Удалить весь журнал» очищает только это устройство: при следующей синхронизации связи вернутся из таблицы."))
 }
 
 @Composable

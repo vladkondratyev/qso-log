@@ -75,4 +75,45 @@ class QsoDbTest {
         assertEquals("", old.audio)
         assertEquals(false, old.pendingLookup)
     }
+
+    @Test
+    fun oldLogGetsUuidsOnceAndKeepsThem() {
+        val file = tempDb()
+        // Schema of desktop 1.11: no uid column.
+        DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}").use { c ->
+            c.createStatement().use {
+                it.executeUpdate(
+                    "CREATE TABLE qso (id INTEGER PRIMARY KEY AUTOINCREMENT, call TEXT NOT NULL, time_utc INTEGER NOT NULL, band TEXT, mode TEXT, freq TEXT, " +
+                        "rst_sent TEXT, rst_rcvd TEXT, name TEXT, qth TEXT, country TEXT, locator TEXT, lat REAL, lon REAL, distance_km REAL, bearing REAL, " +
+                        "power TEXT, qsl_sent INTEGER, qsl_rcvd INTEGER, comment TEXT, my_call TEXT, my_locator TEXT, created_at INTEGER, updated_at INTEGER, " +
+                        "adif_extra TEXT, audio TEXT, pending_lookup INTEGER)"
+                )
+                it.executeUpdate("INSERT INTO qso (call, time_utc, band, mode, qsl_sent, qsl_rcvd, created_at, updated_at) VALUES ('EA5DEMO', 1790187720000, '15m', 'CW', 0, 0, 0, 0)")
+                it.executeUpdate("INSERT INTO qso (call, time_utc, band, mode, qsl_sent, qsl_rcvd, created_at, updated_at) VALUES ('DL1DEMO', 1790247060000, '40m', 'CW', 0, 0, 0, 0)")
+            }
+        }
+        val first = QsoDb(file).all().associate { it.call to it.uid }
+        assertEquals(2, first.values.toSet().size)
+        assert(first.values.all { java.util.UUID.fromString(it) != null })
+        // Opening again does not hand out new ones.
+        assertEquals(first, QsoDb(file).all().associate { it.call to it.uid })
+    }
+
+    @Test
+    fun editKeepsUuidAndImportMatchesByIt() {
+        val db = QsoDb(tempDb())
+        val id = db.save(Qso(call = "R9DEMO", timeUtc = 1_790_341_860_000, band = "20m", mode = "SSB"))
+        val uid = db.get(id)!!.uid
+        assert(uid.isNotBlank())
+        // The editor saves a card without the UUID: the stored one stays.
+        db.save(Qso(id = id, call = "R9DEMO", timeUtc = 1_790_341_860_000, band = "20m", mode = "SSB", name = "Demo"))
+        assertEquals(uid, db.get(id)!!.uid)
+        // A file record with that UUID is the same contact even with the callsign corrected; a new one keeps its own.
+        val other = java.util.UUID.randomUUID().toString()
+        assertEquals(1, db.insertAll(listOf(
+            Qso(call = "R9DEMA", timeUtc = 1_790_341_860_000, uid = uid),
+            Qso(call = "UA1DEMO", timeUtc = 1_790_341_900_000, uid = other),
+        )))
+        assertEquals(other, db.all().single { it.call == "UA1DEMO" }.uid)
+    }
 }

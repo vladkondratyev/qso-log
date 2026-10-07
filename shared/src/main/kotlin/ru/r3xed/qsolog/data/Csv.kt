@@ -21,7 +21,7 @@ object Csv {
         "call", "date_utc", "time_utc", "band", "mode", "freq_mhz", "rst_sent", "rst_rcvd",
         "name", "qth", "country", "locator", "lat", "lon", "distance_km", "bearing",
         "power", "qsl_sent", "qsl_rcvd", "comment", "my_call", "my_locator", "created_utc", "updated_utc",
-        "adif_extra",
+        "adif_extra", "uid",
     )
 
     fun export(list: List<Qso>, out: OutputStream) {
@@ -35,7 +35,7 @@ object Csv {
                 q.name, q.qth, q.country, q.locator, q.lat.fmt(6), q.lon.fmt(6), q.distanceKm.fmt(1), q.bearing.fmt(0),
                 q.power, yn(q.qslSent), yn(q.qslRcvd), q.comment, q.myCall, q.myLocator,
                 STAMP.format(Instant.ofEpochMilli(q.createdAt)), STAMP.format(Instant.ofEpochMilli(q.updatedAt)),
-                Adif.encodeFields(q.adif),
+                Adif.encodeFields(q.adif), q.uid,
             )
             w.write(row.joinToString(";") { quote(it) }); w.write("\r\n")
         }
@@ -73,6 +73,7 @@ object Csv {
                 createdAt = r.col("created_utc").instant() ?: System.currentTimeMillis(),
                 updatedAt = r.col("updated_utc").instant() ?: System.currentTimeMillis(),
                 adif = Adif.decodeFields(r.col("adif_extra")),
+                uid = r.col("uid"),
             )
         }
         return ImportResult(rows, skipped)

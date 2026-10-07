@@ -3,6 +3,11 @@ package ru.r3xed.qsolog.data
 /** One radio contact. Time is stored as epoch milliseconds in UTC. */
 data class Qso(
     val id: Long = 0,
+    /**
+     * The contact's identity across devices (a random UUID), unlike [id], which is the row number in this device's
+     * database. Kept in ADIF and CSV (APP_QSOLOG_UID) so a contact moved by file stays the same contact.
+     */
+    val uid: String = "",
     val call: String,
     val timeUtc: Long,
     val band: String = "",

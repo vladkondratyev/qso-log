@@ -107,4 +107,15 @@ class AdifTest {
             assertEquals("Демоград", r.rows.single().qth)
         }
     }
+
+    @Test
+    fun uidSurvivesAdifAndCsv() {
+        val q = Qso(call = "R9DEMO", timeUtc = 1_790_341_860_000, band = "20m", mode = "SSB", uid = "3f2c8a51-6d0e-4b7a-9c1d-2e5f6a7b8c9d")
+        val adif = ByteArrayOutputStream().also { Adif.export(listOf(q), it, Charsets.UTF_8) }.toByteArray()
+        val back = Adif.import(adif.inputStream()).rows.single()
+        assertEquals(q.uid, back.uid)
+        assertEquals(false, Adif.UID in back.adif) // not duplicated into the extra fields
+        val csv = ByteArrayOutputStream().also { Csv.export(listOf(q), it) }.toByteArray()
+        assertEquals(q.uid, Csv.import(csv.inputStream()).rows.single().uid)
+    }
 }

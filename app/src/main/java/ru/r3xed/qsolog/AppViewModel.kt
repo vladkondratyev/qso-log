@@ -32,6 +32,8 @@ import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
 import ru.r3xed.qsolog.data.QrzCom
 import ru.r3xed.qsolog.data.ContestMode
+import ru.r3xed.qsolog.data.SyncState
+import ru.r3xed.qsolog.data.SheetSync
 import ru.r3xed.qsolog.data.QrzException
 import ru.r3xed.qsolog.data.QrzInfo
 import ru.r3xed.qsolog.data.Qso
@@ -616,7 +618,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun restore(qso: Qso) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { db.save(qso.copy(id = 0)) }
+            // A fresh change time: a deletion already sent to the table must not win over the undo.
+            withContext(Dispatchers.IO) { db.save(qso.copy(id = 0, updatedAt = System.currentTimeMillis())) }
             reload()
         }
     }
@@ -1148,6 +1151,59 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+
+    // ---------- table sync ----------
+
+    /** The Apps Script address of the user's Google Sheet; sync runs only when the user asks for it. */
+    var sheetUrl by mutableStateOf(prefs.sheetUrl); private set
+    var sheetSyncing by mutableStateOf(false); private set
+    /** The last sync's outcome, kept across restarts; [sheetOk] false for an error. */
+    var sheetStatus by mutableStateOf(prefs.sheetStatus); private set
+    var sheetOk by mutableStateOf<Boolean?>(null); private set
+
+    fun changeSheetUrl(url: String) {
+        val u = url.trim()
+        if (u == sheetUrl) return
+        sheetUrl = u
+        prefs.sheetUrl = u
+        // Another table: everything is sent and taken again (the script merges what it already has).
+        prefs.sheetSince = ""
+        prefs.sheetLastPush = 0
+        sheetStatus = ""
+        prefs.sheetStatus = ""
+        sheetOk = null
+    }
+
+    fun syncSheet() {
+        val url = sheetUrl
+        if (sheetSyncing) return
+        if (!SheetSync.isScriptUrl(url)) {
+            sheetOk = false
+            sheetStatus = tr("Вставьте адрес веб-приложения скрипта: https://script.google.com/macros/s/…/exec")
+            return
+        }
+        sheetSyncing = true
+        viewModelScope.launch {
+            val r = runCatching {
+                withContext(Dispatchers.IO) { SheetSync.sync(url, db, SyncState(prefs.sheetSince, prefs.sheetLastPush)) }
+            }
+            sheetSyncing = false
+            val time = TIME_FMT.format(LocalDateTime.now(ZoneOffset.UTC)) + " UTC"
+            r.onSuccess { res ->
+                prefs.sheetSince = res.state.since
+                prefs.sheetLastPush = res.state.lastPush
+                sheetOk = true
+                sheetStatus = tr("Синхронизировано в %s: отправлено %s, получено %s", time, res.sent, res.received)
+                reload()
+                _messages.send(Message(tr("Журнал синхронизирован: отправлено %s, получено %s", res.sent, res.received)))
+            }.onFailure { e ->
+                sheetOk = false
+                sheetStatus = tr("Не удалось синхронизировать в %s: %s", time, e.message ?: e.javaClass.simpleName)
+                _messages.send(Message(sheetStatus))
+            }
+            prefs.sheetStatus = sheetStatus
+        }
+    }
 
     // ---------- contest mode ----------
 

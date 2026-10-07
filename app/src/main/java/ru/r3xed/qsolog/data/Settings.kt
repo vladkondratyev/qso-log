@@ -127,6 +127,20 @@ class Settings(context: Context) {
         get() = prefs.getString("contest_sent_text", "") ?: ""
         set(v) = prefs.edit().putString("contest_sent_text", v).apply()
 
+    /** Table sync: the address of the Apps Script web app (…/exec) and what the device remembers between syncs. */
+    var sheetUrl: String
+        get() = prefs.getString("sheet_url", "") ?: ""
+        set(v) = prefs.edit().putString("sheet_url", v).apply()
+    var sheetSince: String
+        get() = prefs.getString("sheet_since", "") ?: ""
+        set(v) = prefs.edit().putString("sheet_since", v).apply()
+    var sheetLastPush: Long
+        get() = prefs.getLong("sheet_last_push", 0)
+        set(v) = prefs.edit().putLong("sheet_last_push", v).apply()
+    var sheetStatus: String
+        get() = prefs.getString("sheet_status", "") ?: ""
+        set(v) = prefs.edit().putString("sheet_status", v).apply()
+
     /** Contest card: the app's own keyboard instead of the system one. */
     var contestKeypad: Boolean
         get() = prefs.getBoolean("contest_keypad", true)

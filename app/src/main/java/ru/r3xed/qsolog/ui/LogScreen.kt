@@ -67,6 +67,8 @@ import androidx.compose.material3.MaterialTheme
 import ru.r3xed.qsolog.SearchLookup
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenuItem
+import ru.r3xed.qsolog.data.SheetSync
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.OutlinedTextField
@@ -153,6 +155,15 @@ fun LogScreen(
                             leadingIcon = { Icon(Icons.Filled.Settings, null) },
                             onClick = { menu = false; vm.openSettings() },
                         )
+                        // Shown once the table is set up in the settings; the sync runs only from here or there.
+                        if (SheetSync.isScriptUrl(vm.sheetUrl)) {
+                            DropdownMenuItem(
+                                text = { Text(if (vm.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), fontSize = 18.sp) },
+                                leadingIcon = { Icon(Icons.Filled.Sync, null) },
+                                enabled = !vm.sheetSyncing,
+                                onClick = { menu = false; vm.syncSheet() },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text(tr("Дашборд"), fontSize = 18.sp) },
                             leadingIcon = { Icon(Icons.Filled.BarChart, null) },
