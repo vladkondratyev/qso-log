@@ -204,6 +204,13 @@ private fun MorseGrid(items: List<Pair<String, String>>, perRow: Int = 2, chants
 
 @Composable
 private fun MorseTables() {
+    // The table, or the trainer: sending with a key, receiving by ear.
+    var mode by rememberSaveable { mutableIntStateOf(0) }
+    Chips(listOf(tr("Таблица"), tr("Передача"), tr("Приём")), mode) { mode = it }
+    when (mode) {
+        1 -> { MorseSendTrainer(rememberMorseStore()); return }
+        2 -> { MorseReceiveTrainer(rememberMorseStore()); return }
+    }
     RefNote(tr("Точка — короткий сигнал, тире — втрое длиннее. Пауза между знаками буквы — одна точка, между буквами — три, между словами — семь. Нажмите на знак, чтобы услышать его (тон 700 Гц, 18 слов в минуту)."))
     RefHeading(tr("Латиница (международная)"))
     MorseGrid(Reference.MORSE_LATIN)

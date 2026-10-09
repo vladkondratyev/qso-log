@@ -27,11 +27,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 0.36.3 | [QSO-LOG-0.36.3.apk](../../releases/tag/v0.36.3) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 1.16.3 | [QSO-LOG-1.16.3-macos-arm64.dmg](../../releases/tag/desktop-v1.16.3) |
-| macOS 11 or newer, Intel | 1.16.3 | [QSO-LOG-1.16.3-macos-x64.dmg](../../releases/tag/desktop-v1.16.3) |
-| Windows 10 and 11, 64-bit | 1.16.3 | [QSO-LOG-1.16.3-windows-x64.zip](../../releases/tag/desktop-v1.16.3) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.16.3 | [QSO-LOG-1.16.3-linux-amd64.deb](../../releases/tag/desktop-v1.16.3) |
+| Android 8.0 or newer | 0.37.0 | [QSO-LOG-0.37.0.apk](../../releases/tag/v0.37.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 1.17.0 | [QSO-LOG-1.17.0-macos-arm64.dmg](../../releases/tag/desktop-v1.17.0) |
+| macOS 11 or newer, Intel | 1.17.0 | [QSO-LOG-1.17.0-macos-x64.dmg](../../releases/tag/desktop-v1.17.0) |
+| Windows 10 and 11, 64-bit | 1.17.0 | [QSO-LOG-1.17.0-windows-x64.zip](../../releases/tag/desktop-v1.17.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.17.0 | [QSO-LOG-1.17.0-linux-amd64.deb](../../releases/tag/desktop-v1.17.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -388,6 +388,33 @@ come back to the devices, and a deletion on one device deletes on the others. Th
 phonetic alphabets, Q-codes, power levels and EIRP, cable loss, antenna sizes, prefixes (country, zones, distance; RDA
 for Russia), propagation indices and Russian time zones.
 
+### Morse trainer
+
+The Morse tab has three modes at the top: Table, Sending and Receiving.
+
+- **Sending.** The app shows a group of characters, you key it, and what the app "heard" appears below: right
+  characters in green, mistakes in red. The key is on the screen (one pad for a straight key, two — "·" and "−" — for
+  paddles) or a real one. For paddles the app works as an electronic keyer, iambic mode A or B; for a straight key it
+  follows your timing and shows your speed. A 700 Hz sidetone sounds.
+- **Receiving** by the Koch method. The app plays a group of five, you type what you heard (any keyboard layout: K counts
+  as К). Two characters first; a new one is added when the last five groups are 90% right. Mistakes are shown with their
+  signal and chant. Characters sound at full speed, the gaps between them can be longer (Farnsworth).
+- Speed, key type, alphabet (Cyrillic or Latin) and the number of learned characters are remembered.
+
+To connect a real key or paddle (for example a Xiegu with a 3.5 mm plug):
+
+- **A USB or Bluetooth adapter that sends key presses like a keyboard** (ready-made, such as the Vail Adapter, or home-made
+  on a Seeed XIAO, Arduino Pro Micro or ESP32): dot — left Ctrl or "[", dash — right Ctrl or "]", a straight key — any of
+  them or Space. Phone via USB OTG, computer via any USB port.
+- **On a phone, as a headset button** through a 3.5 mm jack or a USB-C → 3.5 mm adapter with a microphone. In the Android
+  headset standard, shorting the microphone contact to ground is the headset button (straight key), through 240 Ω
+  volume + (dot), through 470 Ω volume − (dash). Latency is higher, and not every phone passes these buttons to the app.
+
+<p>
+<img src="docs/screenshots/61-morse-send.png" width="200" alt="Morse trainer: sending">
+<img src="docs/screenshots/62-morse-receive.png" width="200" alt="Morse trainer: receiving by the Koch method">
+</p>
+
 ## Settings
 
 Settings are grouped in blocks; each header says briefly what is chosen. My station; station data sources; QSO entry
@@ -420,26 +447,26 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-0.36.3.apk` from the [release page](../../releases/tag/v0.36.3) and open it on the phone; allow
+Download `QSO-LOG-0.37.0.apk` from the [release page](../../releases/tag/v0.37.0) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-1.16.3-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v1.16.3), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-1.17.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v1.17.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-1.16.3-windows-x64.zip` from the [release page](../../releases/tag/desktop-v1.16.3), unpack the
+Download `QSO-LOG-1.17.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v1.17.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-1.16.3-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v1.16.3) and install it:
+Download `QSO-LOG-1.17.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v1.17.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-1.16.3-linux-amd64.deb
+sudo apt install ./QSO-LOG-1.17.0-linux-amd64.deb
 ```
 
 ## Where the data is kept

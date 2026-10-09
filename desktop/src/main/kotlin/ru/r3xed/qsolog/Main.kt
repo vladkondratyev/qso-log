@@ -130,6 +130,18 @@ fun main() {
             icon = painterResource("icon.png"),
             state = windowState,
             onPreviewKeyEvent = { e ->
+                // The Morse trainer is open: an external key through an adapter sends these keys.
+                val morse = ru.r3xed.qsolog.morse.MorseKeyBus.session
+                val morseKey = when (e.key) {
+                    Key.CtrlLeft, Key.LeftBracket -> 1
+                    Key.CtrlRight, Key.RightBracket -> 2
+                    Key.Spacebar -> 0
+                    else -> -1
+                }
+                if (morse != null && morseKey >= 0 && (e.type == KeyEventType.KeyDown || e.type == KeyEventType.KeyUp)) {
+                    morse.press(morseKey, e.type == KeyEventType.KeyDown)
+                    return@Window true
+                }
                 // One key instead of two: F9 opens a new card from anywhere, F1 lists the keys.
                 val mod = if (IS_MAC) e.isMetaPressed else e.isCtrlPressed
                 if (e.type == KeyEventType.KeyDown && e.key == Key.F9) { state.addQso(); true }

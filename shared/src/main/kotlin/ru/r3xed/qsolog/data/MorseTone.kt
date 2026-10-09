@@ -12,7 +12,7 @@ object MorseTone {
     const val RATE = 44_100
 
     /** [code] of dots and dashes (".-"); [wpm] words per minute (PARIS), [hz] the tone. */
-    fun pcm(code: String, wpm: Int = 18, hz: Double = 700.0, volume: Double = 0.6): ShortArray {
+    fun pcm(code: String, wpm: Int = 18, hz: Double = 700.0, volume: Double = 0.6, tail: Boolean = true): ShortArray {
         val dot = RATE * 1.2 / wpm // samples per dot: 1200 ms / WPM
         val ramp = (RATE * 0.005).toInt() // 5 ms
         val out = ArrayList<Short>()
@@ -27,7 +27,7 @@ object MorseTone {
             if (i > 0) silence(dot.toInt())
             tone((if (c == '-') 3 * dot else dot).toInt())
         }
-        if (out.isNotEmpty()) silence((dot * 2).toInt()) // a little tail, so the end is not cut by the device
+        if (tail && out.isNotEmpty()) silence((dot * 2).toInt()) // a little tail, so the end is not cut by the device
         return out.toShortArray()
     }
 
