@@ -950,4 +950,8 @@ internal val EN: Map<String, String> = hashMapOf(
     "из позывного — к частоте или RST (Enter в позывном связь не записывает)" to "from the callsign to the frequency or RST (Enter in the callsign never logs)",
     "в остальных полях — записать (новая карточка — записать и открыть следующую)" to "in the other fields — log (a new card: log and open the next)",
     "в коде или RST — записать связь; F12 — из любого поля" to "in the exchange or RST — log the QSO; F12 — from any field",
+    // Morse: sound and chants.
+    "Послушать" to "Listen",
+    "Точка — короткий сигнал, тире — втрое длиннее. Пауза между знаками буквы — одна точка, между буквами — три, между словами — семь. Нажмите на знак, чтобы услышать его (тон 700 Гц, 18 слов в минуту)." to "A dot is a short signal, a dash is three times longer. The gap inside a letter is one dot, between letters three, between words seven. Tap a sign to hear it (700 Hz tone, 18 words per minute).",
+    "Перед русской буквой — латинская с тем же сигналом (W/В, Q/Щ). Для Ч, Ш, Ъ, Э, Ю, Я пары в латинице нет, указаны расширенные знаки. Под буквой — напев, по которому её учат: слог на каждый знак, долгие слоги (тире) заглавными. Нажмите на букву, чтобы услышать." to "Before each Russian letter is the Latin one with the same signal (W/В, Q/Щ). Ч, Ш, Ъ, Э, Ю, Я have no plain Latin twin, so the extended signs are shown. Under each letter is the Russian chant used to learn it: one syllable per element, long syllables (dashes) in capitals. Tap a letter to hear it.",
 )

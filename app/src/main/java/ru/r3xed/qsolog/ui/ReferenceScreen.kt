@@ -1,6 +1,11 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.compose.runtime.remember
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ScrollState
 import ru.r3xed.qsolog.data.LatLon
 import androidx.compose.foundation.horizontalScroll
@@ -151,18 +156,45 @@ private fun Signal(code: String) {
     }
 }
 
+/**
+ * Morse signals in cells; a tap plays the signal. [chants]: the Russian learning chant under the letter, in grey;
+ * [twins]: the Latin letter with the same signal, shown before it as "A/А".
+ */
 @Composable
-private fun MorseGrid(items: List<Pair<String, String>>, perRow: Int = 2) {
+private fun MorseGrid(items: List<Pair<String, String>>, perRow: Int = 2, chants: Map<String, String> = emptyMap(), twins: Map<String, String> = emptyMap()) {
     val x = LocalExtra.current
+    var playing by remember { mutableStateOf<String?>(null) }
     items.chunked(perRow).forEach { row ->
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             row.forEach { (ch, code) ->
-                Row(
-                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(x.field).padding(horizontal = 12.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                val chant = chants[ch]
+                val twin = twins[ch]
+                Column(
+                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                        // The cell lights up while its signal sounds.
+                        .background(if (playing == ch) MaterialTheme.colorScheme.primaryContainer else x.field)
+                        .clickable(onClickLabel = tr("Послушать")) { playing = ch; MorseSound.play(code) { if (playing == ch) playing = null } }
+                        .padding(horizontal = 12.dp, vertical = if (chant != null) 8.dp else 12.dp),
                 ) {
-                    Text(ch, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.width(44.dp))
-                    Signal(code)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (twin.isNullOrEmpty()) Text(ch, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.width(44.dp))
+                        else Text(
+                            // The Latin twin first, in grey: "A/А".
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(color = x.muted)) { append("$twin/") }
+                                append(ch)
+                            },
+                            fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, softWrap = false, modifier = Modifier.width(56.dp),
+                        )
+                        Signal(code)
+                    }
+                    // The chant under the whole cell: long ones fit.
+                    if (chant != null) Text(
+                        chant, style = MaterialTheme.typography.bodySmall, color = x.muted, maxLines = 1, softWrap = false,
+                        // The longest (Ъ "ТВЁР-ДЫЙ-не-МЯГ-КИЙ") a little smaller, so it stays on one line on a phone.
+                        fontSize = if (chant.length > 16) 11.sp else MaterialTheme.typography.bodySmall.fontSize,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
                 }
             }
             repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
@@ -172,11 +204,12 @@ private fun MorseGrid(items: List<Pair<String, String>>, perRow: Int = 2) {
 
 @Composable
 private fun MorseTables() {
-    RefNote(tr("Точка — короткий сигнал, тире — втрое длиннее. Пауза между знаками буквы — одна точка, между буквами — три, между словами — семь."))
+    RefNote(tr("Точка — короткий сигнал, тире — втрое длиннее. Пауза между знаками буквы — одна точка, между буквами — три, между словами — семь. Нажмите на знак, чтобы услышать его (тон 700 Гц, 18 слов в минуту)."))
     RefHeading(tr("Латиница (международная)"))
     MorseGrid(Reference.MORSE_LATIN)
     RefHeading(tr("Кириллица (русская)"))
-    MorseGrid(Reference.MORSE_CYRILLIC)
+    MorseGrid(Reference.MORSE_CYRILLIC, chants = Reference.MORSE_CHANTS, twins = Reference.MORSE_LATIN_TWIN)
+    RefNote(tr("Перед русской буквой — латинская с тем же сигналом (W/В, Q/Щ). Для Ч, Ш, Ъ, Э, Ю, Я пары в латинице нет, указаны расширенные знаки. Под буквой — напев, по которому её учат: слог на каждый знак, долгие слоги (тире) заглавными. Нажмите на букву, чтобы услышать."))
     RefHeading(tr("Цифры"))
     // Five or six elements: one per row, so a phone shows them whole.
     MorseGrid(Reference.MORSE_DIGITS, perRow = 1)

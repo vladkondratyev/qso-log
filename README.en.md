@@ -27,11 +27,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 0.36.1 | [QSO-LOG-0.36.1.apk](../../releases/tag/v0.36.1) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 1.16.1 | [QSO-LOG-1.16.1-macos-arm64.dmg](../../releases/tag/desktop-v1.16.1) |
-| macOS 11 or newer, Intel | 1.16.1 | [QSO-LOG-1.16.1-macos-x64.dmg](../../releases/tag/desktop-v1.16.1) |
-| Windows 10 and 11, 64-bit | 1.16.1 | [QSO-LOG-1.16.1-windows-x64.zip](../../releases/tag/desktop-v1.16.1) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.16.1 | [QSO-LOG-1.16.1-linux-amd64.deb](../../releases/tag/desktop-v1.16.1) |
+| Android 8.0 or newer | 0.36.2 | [QSO-LOG-0.36.2.apk](../../releases/tag/v0.36.2) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 1.16.2 | [QSO-LOG-1.16.2-macos-arm64.dmg](../../releases/tag/desktop-v1.16.2) |
+| macOS 11 or newer, Intel | 1.16.2 | [QSO-LOG-1.16.2-macos-x64.dmg](../../releases/tag/desktop-v1.16.2) |
+| Windows 10 and 11, 64-bit | 1.16.2 | [QSO-LOG-1.16.2-windows-x64.zip](../../releases/tag/desktop-v1.16.2) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.16.2 | [QSO-LOG-1.16.2-linux-amd64.deb](../../releases/tag/desktop-v1.16.2) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -384,7 +384,7 @@ come back to the devices, and a deletion on one device deletes on the others. Th
 
 ## Reference and calculators
 
-⋮ menu → "Reference and calculators", offline: Russian band plan, IARU Region 1 plan and activity frequencies, Morse,
+⋮ menu → "Reference and calculators", offline: Russian band plan, IARU Region 1 plan and activity frequencies, Morse (tap a sign to hear it; Russian letters show the Latin letter with the same signal, W/В, and the chant used to learn them),
 phonetic alphabets, Q-codes, power levels and EIRP, cable loss, antenna sizes, prefixes (country, zones, distance; RDA
 for Russia), propagation indices and Russian time zones.
 
@@ -420,26 +420,26 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-0.36.1.apk` from the [release page](../../releases/tag/v0.36.1) and open it on the phone; allow
+Download `QSO-LOG-0.36.2.apk` from the [release page](../../releases/tag/v0.36.2) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-1.16.1-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v1.16.1), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-1.16.2-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v1.16.2), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-1.16.1-windows-x64.zip` from the [release page](../../releases/tag/desktop-v1.16.1), unpack the
+Download `QSO-LOG-1.16.2-windows-x64.zip` from the [release page](../../releases/tag/desktop-v1.16.2), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-1.16.1-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v1.16.1) and install it:
+Download `QSO-LOG-1.16.2-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v1.16.2) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-1.16.1-linux-amd64.deb
+sudo apt install ./QSO-LOG-1.16.2-linux-amd64.deb
 ```
 
 ## Where the data is kept

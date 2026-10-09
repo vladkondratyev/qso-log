@@ -50,6 +50,30 @@ object Reference {
         "Ш" to "----", "Щ" to "--.-", "Ъ" to "--.--", "Ы" to "-.--", "Ь" to "-..-", "Э" to "..-..", "Ю" to "..--", "Я" to ".-.-",
     )
 
+    /**
+     * Russian chants for learning the letters: one syllable per element, long syllables (dashes) in capitals —
+     * А ·− "ай-ДА", Б −··· "БА-ки-те-кут". The classic set taught in Russian radio clubs.
+     */
+    val MORSE_CHANTS = mapOf(
+        "А" to "ай-ДА", "Б" to "БА-ки-те-кут", "В" to "ви-ДА-ЛА", "Г" to "ГА-РА-жи", "Д" to "ДО-ми-ки",
+        "Е" to "есть", "Ж" to "жи-ву-те-ЛЯ", "З" to "ЗА-КА-ти-ки", "И" to "и-ди", "Й" to "йош-КАР-О-ЛА",
+        "К" to "КАК-же-ТАК", "Л" to "лу-НА-ти-ки", "М" to "МА-МА", "Н" to "НО-мер", "О" to "О-КО-ЛО",
+        "П" to "пи-ЛА-ПО-ёт", "Р" to "ре-ША-ет", "С" to "са-ма-ми", "Т" to "ТАК", "У" to "у-не-СУ",
+        "Ф" to "фи-ли-МОН-чик", "Х" to "хи-ми-чи-те", "Ц" to "ЦА-пли-НА-ши", "Ч" to "ЧА-ША-ТО-нет",
+        "Ш" to "ША-РО-ВА-РЫ", "Щ" to "ЩА-ВА-не-НА", "Ъ" to "ТВЁР-ДЫЙ-не-МЯГ-КИЙ", "Ы" to "Ы-не-НА-ДО",
+        "Ь" to "ТО-мяг-кий-ЗНАК", "Э" to "э-ле-КТРО-ни-ки", "Ю" to "ю-ли-А-НА", "Я" to "я-МАЛ-я-МАЛ",
+    )
+
+    /**
+     * The Latin letter with the same signal as each Cyrillic one, shown as "A/А". Six Russian letters have no plain Latin
+     * twin; for them the usual extended signs are given (Ö, CH, Ñ, É, Ü, Ä).
+     */
+    val MORSE_LATIN_TWIN: Map<String, String> = MORSE_CYRILLIC.associate { (cyr, code) ->
+        cyr to (MORSE_LATIN.firstOrNull { it.second == code }?.first ?: mapOf(
+            "---." to "Ö", "----" to "CH", "--.--" to "Ñ", "..-.." to "É", "..--" to "Ü", ".-.-" to "Ä",
+        )[code].orEmpty())
+    }
+
     val MORSE_DIGITS = listOf(
         "1" to ".----", "2" to "..---", "3" to "...--", "4" to "....-", "5" to ".....",
         "6" to "-....", "7" to "--...", "8" to "---..", "9" to "----.", "0" to "-----",
