@@ -21,6 +21,7 @@ import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.CallHistory
+import ru.r3xed.qsolog.data.CallCommand
 import ru.r3xed.qsolog.data.Cabrillo
 import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.data.Csv
@@ -725,6 +726,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (f.removedAudio.isNotBlank()) voice.delete(f.removedAudio)
         }
         screen = editReturn
+        returnToNewCard(f.isNew)
     }
 
     /**
@@ -809,6 +811,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun edit(qso: Qso, from: Screen = Screen.Log) {
+        openedByKeys = false
         lookupJob?.cancel() // a lookup for another card must not land in this one
         cardFromLog = false
         editSession++
@@ -1106,14 +1109,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.lastMode = f.mode
         prefs.lastFreq = f.freq
         prefs.lastPower = f.power
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { db.save(finalQso) }
+        saveJob = viewModelScope.launch {
+            lastSavedId = withContext(Dispatchers.IO) { db.save(finalQso) }
             reload()
             if (f.isNew) newSavedTick++
             val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
             if (!quiet) _messages.send(Message((if (f.isNew) tr("Связь с %s записана", f.call) else tr("Изменения сохранены")) + note))
         }
         screen = editReturn
+        returnToNewCard(f.isNew)
         return null
     }
 
@@ -1130,6 +1134,93 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         form = form.copy(band = f.band, mode = f.mode, freq = freq, rstSent = defaultRst(f.mode), rstRcvd = defaultRst(f.mode))
         formOriginal = form
         return null
+    }
+
+    // ---------- keyboard-only work (an external keyboard on a tablet, or the computer) ----------
+
+    /** The contact saved last from a card: ↑ or Ctrl+E opens it to fix a letter right after Enter logged it. */
+    private var lastSavedId: Long? = null
+    private var saveJob: Job? = null
+
+    /** A card opened by ↑ / Ctrl+E from a new one: saving or closing it goes back to a new card. */
+    private var backToNew = false
+
+    private fun returnToNewCard(closedNew: Boolean) {
+        if (!backToNew || closedNew) return
+        backToNew = false
+        addQso()
+    }
+
+    /** A physical keyboard is attached: the app's on-screen keypad steps aside for the text fields. */
+    var hardKeyboard by mutableStateOf(false)
+
+    /** The app's keypad is on in the settings and no physical keyboard is attached. */
+    val keypadShown: Boolean
+        get() = keypad != KeypadMode.OFF && !hardKeyboard
+
+    /** F1 / Ctrl+/: the list of keys is open. */
+    var showKeys by mutableStateOf(false)
+
+    /** The card was opened by ↑ / Ctrl+E: the cursor goes to the callsign, so Enter and Esc work without a click. */
+    var openedByKeys by mutableStateOf(false); private set
+
+    /** Bumped by Ctrl+F: the log's search field takes the focus. */
+    var searchFocus by mutableStateOf(0); private set
+
+    fun requestSearchFocus() { searchFocus++ }
+
+    /**
+     * ↑ in an empty callsign or Ctrl+E: the last saved contact opens for editing (in the contest card — the previous
+     * contest contact). Nothing happens over a card with unsaved typing.
+     */
+    fun editLast() {
+        if (screen == Screen.Contest) { contestPrev(); return }
+        if (hasUnsavedChanges) return
+        val fromNew = screen == Screen.Edit && form.isNew
+        val job = saveJob
+        viewModelScope.launch {
+            job?.join()
+            val all = withContext(Dispatchers.IO) { db.all() }
+            val q = all.firstOrNull { it.id == lastSavedId } ?: all.maxByOrNull { it.createdAt } ?: return@launch
+            backToNew = false
+            edit(q)
+            backToNew = fromNew
+            openedByKeys = true
+        }
+    }
+
+    /**
+     * Enter on a callsign field holding "20m", "CW", "14195"…: switches the band, mode or frequency and clears the field.
+     * Returns false when the text is a callsign.
+     */
+    fun runCallCommand(): Boolean {
+        val c = CallCommand.parse(form.call) ?: return false
+        val untouched = form.isNew && formOriginal?.copy(call = form.call) == form
+        setCall("")
+        when (c) {
+            is CallCommand.Band -> setBand(c.band)
+            is CallCommand.Mode -> setMode(c.mode)
+            is CallCommand.Freq -> setFreq(c.freq)
+        }
+        // A fresh card stays "untouched": closing it does not ask.
+        if (untouched) formOriginal = form
+        return true
+    }
+
+    /** Esc on a new card with something typed: a clean card on the same band, mode and frequency. */
+    fun clearCard() {
+        val f = form
+        if (screen == Screen.Contest) {
+            setCall("")
+            setAdif(ContestMode.RCVD, "")
+            return
+        }
+        lookupJob?.cancel()
+        discardCardRecording()
+        if (f.audio.isNotBlank()) voice.delete(f.audio)
+        newQso()
+        form = form.copy(band = f.band, mode = f.mode, freq = f.freq, rstSent = defaultRst(f.mode), rstRcvd = defaultRst(f.mode))
+        formOriginal = form
     }
 
     /** Callsigns from the log that start with what is typed, most recent first: one tap instead of the rest of the call. */

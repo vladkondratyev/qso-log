@@ -138,9 +138,18 @@ fun ContestPane(vm: AppState) {
             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
             val plain = !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed
             when {
+                // Enter logs from any field ("20m", "CW", "14025" in the callsign switch band, mode or frequency);
+                // Space in the callsign goes on to the received number; ↑ in an empty callsign — the previous contact.
                 (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
-                    // The two fields typed in every contact: callsign → received number → logged.
-                    if (focused == Target.RCVD) next() else rcvdFocus.requestFocus()
+                    if (focused == Target.CALL && vm.runCallCommand()) {} else next()
+                    true
+                }
+                e.key == Key.Spacebar && focused == Target.CALL -> {
+                    if (!vm.runCallCommand()) rcvdFocus.requestFocus()
+                    true
+                }
+                e.key == Key.DirectionUp && focused == Target.CALL && f.isNew && f.call.isEmpty() -> {
+                    if (hasPrev) prev()
                     true
                 }
                 // F12 records the contact from any field, as "Сохранить" does in the usual card.
@@ -216,7 +225,7 @@ fun ContestPane(vm: AppState) {
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrect = false),
                 colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
             )
-            if (f.isNew) LaunchedEffect(Unit) { callFocus.requestFocus() }
+            LaunchedEffect(Unit) { callFocus.requestFocus() }
             // Calls from the log that start with what is typed: one click instead of the rest.
             if (f.isNew) {
                 val suggestions = remember(f.call, vm.allQsos) { vm.callSuggestions(f.call) }

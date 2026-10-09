@@ -72,6 +72,12 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -175,10 +181,22 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
             }
         }
 
+        // Ctrl+F (⌘F) puts the cursor here; Enter opens a new card for the station found, Esc clears the search.
+        val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        LaunchedEffect(state.searchFocus) { if (state.searchFocus > 0) searchFocus.requestFocus() }
         OutlinedTextField(
             value = state.query,
             onValueChange = state::search,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+                .focusRequester(searchFocus)
+                .onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when {
+                        (e.key == Key.Enter || e.key == Key.NumPadEnter) && state.query.isNotBlank() -> { state.addQso(); true }
+                        e.key == Key.Escape && state.query.isNotEmpty() -> { state.search(""); true }
+                        else -> false
+                    }
+                },
             placeholder = { Text(tr("Поиск: позывной, имя, город"), style = MaterialTheme.typography.bodyLarge) },
             leadingIcon = { Icon(Icons.Filled.Search, null) },
             trailingIcon = {

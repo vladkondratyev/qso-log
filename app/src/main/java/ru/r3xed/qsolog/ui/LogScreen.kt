@@ -45,6 +45,14 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
@@ -179,14 +187,31 @@ fun LogScreen(
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
                             onClick = { menu = false; vm.openReference() },
                         )
+                        DropdownMenuItem(
+                            text = { Text(tr("Внешняя клавиатура"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.Filled.Keyboard, null) },
+                            onClick = { menu = false; vm.showKeys = true },
+                        )
                     }
                 }
             }
 
+            // Ctrl+F on a physical keyboard puts the cursor here; Enter opens a new card for the station found, Esc clears.
+            val searchFocus = remember { FocusRequester() }
+            LaunchedEffect(vm.searchFocus) { if (vm.searchFocus > 0) searchFocus.requestFocus() }
             OutlinedTextField(
                 value = vm.query,
                 onValueChange = vm::search,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    .focusRequester(searchFocus)
+                    .onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown || !e.fromHardware()) return@onPreviewKeyEvent false
+                        when {
+                            (e.key == Key.Enter || e.key == Key.NumPadEnter) && vm.query.isNotBlank() -> { vm.addQso(); true }
+                            e.key == Key.Escape && vm.query.isNotEmpty() -> { vm.search(""); true }
+                            else -> false
+                        }
+                    },
                 // One line on narrow phones and with a large system font: smaller than the typed text, never wrapped.
                 placeholder = { OneLineText(tr("Поиск: позывной, имя, город"), maxSize = 16.sp, minSize = 11.sp) },
                 leadingIcon = { Icon(Icons.Filled.Search, null) },

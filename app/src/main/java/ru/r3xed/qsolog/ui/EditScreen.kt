@@ -116,6 +116,15 @@ import ru.r3xed.qsolog.TIME_FMT
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.ContestMode
 import ru.r3xed.qsolog.data.KeypadMode
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -151,16 +160,16 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
     val rstFocus = remember { FocusRequester() }
     val rstRcvdFocus = remember { FocusRequester() }
 
-    // The app's keypad (settings → "Ввод связи", or the keyboard button above): callsign, frequency and reports are
+    // The app's keypad (settings → "Ввод связи"): callsign, frequency and reports are
     // typed on it, the rest of the card on the system keyboard. No active field — the keypad is hidden.
-    val keypad = vm.keypad != KeypadMode.OFF
+    val keypad = vm.keypadShown
     val compact = vm.keypad == KeypadMode.COMPACT
     var active by remember(f.id, f.createdAt) { mutableStateOf(if (f.isNew) KeyTarget.CALL else null) }
     var replace by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
-    // A system text field took the focus: its keyboard opens, ours steps aside.
+    // A system text field took the focus: while its keyboard is open ours steps aside, then comes back.
+    // (It is not switched off here: on a phone the closing system keyboard still counts as open for a moment.)
     val imeVisible = WindowInsets.isImeVisible
-    LaunchedEffect(imeVisible) { if (imeVisible) active = null }
     val freqView = remember { BringIntoViewRequester() }
     val rstView = remember { BringIntoViewRequester() }
     fun valueOf(t: KeyTarget) = when (t) {
@@ -206,16 +215,61 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
     val me = vm.myPositionFor(vm.form)
     val them = f.position
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().imePadding()) {
+    // Show a save problem where it is: the callsign at the top, the date/time fields opened.
+    fun showSaveError(e: String?) {
+        error = e
+        when {
+            e == CALL_ERROR -> { scope.launch { scroll.animateScrollTo(0) }; if (keypad) activate(KeyTarget.CALL) else callFocus.requestFocus() }
+            e != null -> editTime = true
+        }
+    }
+    val saveIt = { showSaveError(vm.save()) }
+    val saveNext = { showSaveError(vm.saveAndNext()) }
+
+    // A physical keyboard (Bluetooth, USB OTG) — a whole outing without touching the screen: Space in the callsign goes
+    // on to the frequency or report, Enter logs from any field (a new card: logs and opens the next), "20m", "CW",
+    // "14195" in the callsign switch band, mode or frequency, ↑ in an empty callsign opens the contact just logged,
+    // Esc wipes a new card (a second Esc closes it). F2–F6, F8, F12 and Alt+1…9 as on the computer.
+    var callFocused by remember { mutableStateOf(false) }
+    val hardKeys = Modifier.onPreviewKeyEvent { e ->
+        if (e.type != KeyEventType.KeyDown || !e.fromHardware()) return@onPreviewKeyEvent false
+        val plain = !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed
+        val digit = DIGIT_KEYS.indexOf(e.key)
+        val form = vm.form
+        when {
+            (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
+                when {
+                    callFocused && vm.runCallCommand() -> {}
+                    form.isNew -> saveNext()
+                    else -> saveIt()
+                }
+                true
+            }
+            e.key == Key.Spacebar && callFocused -> {
+                if (!vm.runCallCommand()) { if (vm.form.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus() }
+                true
+            }
+            e.key == Key.DirectionUp && callFocused && form.isNew && form.call.isEmpty() -> { vm.editLast(); true }
+            e.key == Key.Escape -> { if (form.isNew && form.call.isNotBlank()) vm.clearCard() else close(); true }
+            e.key == Key.F2 -> { callFocus.requestFocus(); true }
+            e.key == Key.F3 -> { freqFocus.requestFocus(); true }
+            e.key == Key.F4 -> { rstFocus.requestFocus(); true }
+            e.key == Key.F5 -> { rstRcvdFocus.requestFocus(); true }
+            e.key == Key.F6 -> { vm.setNow(); true }
+            e.key == Key.F8 -> { if (form.isNew) saveNext(); true }
+            e.key == Key.F12 -> { saveIt(); true }
+            e.isAltPressed && digit >= 0 && !e.isShiftPressed -> { BANDS.filter { it in vm.enabledBands }.getOrNull(digit)?.let(vm::setBand); true }
+            e.isAltPressed && digit >= 0 && e.isShiftPressed -> { MODES.filter { it in vm.enabledModes }.getOrNull(digit)?.let(vm::setMode); true }
+            else -> false
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().imePadding().then(hardKeys)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = close, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Filled.Close, tr("Закрыть без сохранения"), Modifier.size(30.dp))
             }
             Text(if (f.isNew) tr("Новый QSO") else tr("Запись QSO"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-            KeypadMenuButton(vm.keypad) { m ->
-                vm.changeKeypad(m)
-                if (m != KeypadMode.OFF && active == null && f.isNew && f.call.isBlank()) activate(KeyTarget.CALL)
-            }
             // A voice note for a card typed by hand: offered once QRZ.ru has found the station, runs until ■ or "Сохранить".
             val since = vm.cardRecordingSince
             if (since != null) CardRecording(since, onStop = vm::stopCardRecording)
@@ -241,7 +295,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                 else OutlinedTextField(
                     value = f.call,
                     onValueChange = { error = null; vm.setCall(it) },
-                    modifier = Modifier.weight(1f).focusRequester(callFocus),
+                    modifier = Modifier.weight(1f).focusRequester(callFocus).onFocusChanged { callFocused = it.isFocused },
                     label = { Text(tr("Позывной корреспондента"), fontSize = 16.sp) },
                     isError = error == CALL_ERROR,
                     supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
@@ -272,7 +326,8 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                 }
             }
             if (keypad && error == CALL_ERROR) Text(CALL_ERROR, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-            if (f.isNew && !keypad) LaunchedEffect(Unit) { callFocus.requestFocus() }
+            // With a physical keyboard a saved card takes the cursor too, so its keys work at once.
+            if (!keypad && (f.isNew || vm.hardKeyboard || vm.openedByKeys)) LaunchedEffect(Unit) { callFocus.requestFocus() }
             // Callsigns from the log that start with what is typed: one tap instead of the rest.
             if (f.isNew) CallSuggestions(vm) { call ->
                 vm.setCall(call)
@@ -466,13 +521,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                 }
                 // New card: "＋ Следующая" saves and opens the next card on the same band, mode and frequency.
                 if (f.isNew) FilledTonalButton(
-                    onClick = {
-                        error = vm.saveAndNext()
-                        when {
-                            error == CALL_ERROR -> { scope.launch { scroll.animateScrollTo(0) }; if (keypad) activate(KeyTarget.CALL) else callFocus.requestFocus() }
-                            error != null -> editTime = true
-                        }
-                    },
+                    onClick = saveNext,
                     modifier = Modifier.height(60.dp),
                     shape = RoundedCornerShape(16.dp),
                     contentPadding = PaddingValues(horizontal = 14.dp),
@@ -482,14 +531,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                     Text(tr("Следующая"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
                 Button(
-                    onClick = {
-                        error = vm.save()
-                        when {
-                            // Show the problem where it is: the callsign at the top, the date/time fields opened.
-                            error == CALL_ERROR -> { scope.launch { scroll.animateScrollTo(0) }; if (keypad) activate(KeyTarget.CALL) else callFocus.requestFocus() }
-                            error != null -> editTime = true
-                        }
-                    },
+                    onClick = saveIt,
                     modifier = Modifier.weight(1f).height(60.dp),
                     shape = RoundedCornerShape(16.dp),
                 ) { Text(tr("Сохранить"), fontSize = 21.sp, fontWeight = FontWeight.Bold) }

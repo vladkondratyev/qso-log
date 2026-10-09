@@ -177,31 +177,7 @@ internal fun Keypad(compact: Boolean, onKey: (String) -> Unit, onBackspace: () -
     }
 }
 
-/** The keyboard button in a card's header: one tap shows the three choices, the chosen one is ticked and remembered. */
-@Composable
-internal fun KeypadMenuButton(mode: KeypadMode, size: Int = 48, onChange: (KeypadMode) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }, modifier = Modifier.size(size.dp)) {
-            Icon(
-                Icons.Filled.Keyboard, tr("Клавиатура"), Modifier.size(26.dp),
-                tint = if (mode == KeypadMode.OFF) LocalExtra.current.muted else MaterialTheme.colorScheme.primary,
-            )
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Text(tr("Клавиатура"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-            KeypadMode.entries.forEach { m ->
-                DropdownMenuItem(
-                    text = { Text(m.label(), style = MaterialTheme.typography.bodyLarge) },
-                    leadingIcon = { if (m == mode) Icon(Icons.Filled.Check, null) else Box(Modifier.size(24.dp)) },
-                    onClick = { open = false; onChange(m) },
-                )
-            }
-        }
-    }
-}
-
-/** The same three choices in the settings, as one row of buttons like the theme. */
+/** The three keyboard choices in the settings, as one row of buttons like the theme. */
 @Composable
 internal fun KeypadModeRow(mode: KeypadMode, onChange: (KeypadMode) -> Unit) {
     val x = LocalExtra.current

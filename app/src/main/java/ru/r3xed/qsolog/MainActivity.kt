@@ -5,6 +5,11 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
+import android.view.KeyCharacterMap
+import android.view.KeyEvent
+import android.content.res.Configuration as AndroidConfig
+import androidx.compose.ui.platform.LocalConfiguration
+import ru.r3xed.qsolog.ui.HardwareKeysDialog
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -50,6 +55,51 @@ import java.io.File
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
 
+    /**
+     * Keys of a physical keyboard that work on every screen, before the focused field sees them: Ctrl+N / F9 a new
+     * contact, Ctrl+E the contact just logged, Ctrl+F the search, F1 / Ctrl+/ the list of keys, Ctrl+D / Ctrl+M /
+     * Ctrl+, the dashboard, map and settings. Esc nobody took goes back, as the system Back does.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val soft = event.flags and KeyEvent.FLAG_SOFT_KEYBOARD != 0
+        val physical = !soft && event.deviceId != KeyCharacterMap.VIRTUAL_KEYBOARD
+        // Typing on a keyboard whose attachment the system did not report: switch to the text fields all the same.
+        if (physical && event.action == KeyEvent.ACTION_DOWN && vm.keypadShown && event.isPrintingKey &&
+            (vm.screen == Screen.Edit || vm.screen == Screen.Contest)) vm.hardKeyboard = true
+        if (soft || event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
+        val inCard = vm.screen == Screen.Edit || vm.screen == Screen.Contest
+        val inLog = vm.screen == Screen.Log
+        val ctrl = event.isCtrlPressed || event.isMetaPressed
+        val handled = when {
+            event.keyCode == KeyEvent.KEYCODE_F9 || (ctrl && event.keyCode == KeyEvent.KEYCODE_N) -> {
+                if (!inCard) vm.addQso()
+                true
+            }
+            ctrl && event.keyCode == KeyEvent.KEYCODE_E -> {
+                if (inLog || inCard) vm.editLast()
+                true
+            }
+            ctrl && event.keyCode == KeyEvent.KEYCODE_F -> {
+                // From a card: only an untouched one is left for the log.
+                if (inCard && !vm.hasUnsavedChanges) vm.closeEditor()
+                if (vm.screen == Screen.Log) vm.requestSearchFocus()
+                true
+            }
+            event.keyCode == KeyEvent.KEYCODE_F1 || (ctrl && event.keyCode == KeyEvent.KEYCODE_SLASH) -> { vm.showKeys = !vm.showKeys; true }
+            ctrl && event.keyCode == KeyEvent.KEYCODE_D && inLog -> { vm.openDashboard(); true }
+            ctrl && event.keyCode == KeyEvent.KEYCODE_M && inLog -> { vm.openMap(); true }
+            ctrl && event.keyCode == KeyEvent.KEYCODE_COMMA && inLog -> { vm.openSettings(); true }
+            else -> false
+        }
+        if (handled) return true
+        if (super.dispatchKeyEvent(event)) return true
+        if (event.keyCode == KeyEvent.KEYCODE_ESCAPE && vm.screen != Screen.Log) {
+            onBackPressedDispatcher.onBackPressed()
+            return true
+        }
+        return false
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().apply {
@@ -69,6 +119,11 @@ class MainActivity : ComponentActivity() {
                 val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 onDispose {}
+            }
+            // A Bluetooth or USB keyboard attached: the app's on-screen keypad gives way to the text fields.
+            val cfg = LocalConfiguration.current
+            LaunchedEffect(cfg.keyboard, cfg.hardKeyboardHidden) {
+                vm.hardKeyboard = cfg.keyboard == AndroidConfig.KEYBOARD_QWERTY && cfg.hardKeyboardHidden == AndroidConfig.HARDKEYBOARDHIDDEN_NO
             }
             QsoTheme(dark) {
                 val snackbar = remember { SnackbarHostState() }
@@ -143,6 +198,7 @@ class MainActivity : ComponentActivity() {
                                 onImportContest = { importContest.launch(arrayOf("*/*")) },
                             )
                         }
+                        if (vm.showKeys) HardwareKeysDialog(onClose = { vm.showKeys = false })
                         vm.contestTarget?.let { target ->
                             ContestExportDialog(
                                 defaults = vm.contestDefaults(),

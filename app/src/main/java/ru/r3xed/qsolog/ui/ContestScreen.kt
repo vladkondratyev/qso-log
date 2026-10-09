@@ -103,6 +103,15 @@ import ru.r3xed.qsolog.TIME_FMT
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.ContestMode
 import ru.r3xed.qsolog.data.KeypadMode
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.bandForFreq
 import ru.r3xed.qsolog.data.defaultRst
@@ -124,7 +133,7 @@ private enum class Target { CALL, SENT, RCVD, RST_SENT, RST_RCVD }
 fun ContestScreen(vm: AppViewModel) {
     val f = vm.form
     val x = LocalExtra.current
-    val keypad = vm.keypad != KeypadMode.OFF
+    val keypad = vm.keypadShown
     val compact = vm.keypad == KeypadMode.COMPACT
     var error by remember { mutableStateOf<String?>(null) }
     var confirmClose by remember { mutableStateOf(false) }
@@ -211,7 +220,30 @@ fun ContestScreen(vm: AppViewModel) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().imePadding()) {
+    // A physical keyboard: Space in the callsign goes on to the received code, Enter logs from any field ("20m", "CW",
+    // "14025" in the callsign switch band, mode or frequency), ↑ in an empty callsign or PgUp — the previous contact,
+    // PgDn — the next one, Esc wipes the new card (a second Esc closes it), F12 logs.
+    var callFocused by remember { mutableStateOf(false) }
+    val hardKeys = Modifier.onPreviewKeyEvent { e ->
+        if (e.type != KeyEventType.KeyDown || !e.fromHardware()) return@onPreviewKeyEvent false
+        val plain = !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed
+        val form = vm.form
+        when {
+            (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> { if (callFocused && vm.runCallCommand()) {} else next(); true }
+            e.key == Key.Spacebar && callFocused -> { if (!vm.runCallCommand()) rcvdFocus.requestFocus(); true }
+            e.key == Key.DirectionUp && callFocused && form.isNew && form.call.isEmpty() -> { prev(); true }
+            e.key == Key.PageUp || (e.isAltPressed && e.key == Key.DirectionLeft) -> { prev(); true }
+            e.key == Key.PageDown || (e.isAltPressed && e.key == Key.DirectionRight) -> { next(); true }
+            e.key == Key.F12 -> { next(); true }
+            e.key == Key.Escape -> {
+                if (form.isNew && (form.call.isNotBlank() || !form.adif[ContestMode.RCVD].isNullOrBlank())) vm.clearCard() else close()
+                true
+            }
+            else -> false
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().imePadding().then(hardKeys)) {
       Column(Modifier.weight(1f).then(swipe)) {
         // --- header: close, what is being worked, what is sent ---
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -224,7 +256,6 @@ fun ContestScreen(vm: AppViewModel) {
             Spacer(Modifier.width(8.dp))
             BandModePicker(vm)
             Spacer(Modifier.weight(1f))
-            KeypadMenuButton(vm.keypad, size = 40, onChange = vm::changeKeypad)
             ContestRate(vm)
         }
         // Where this card is among the contest contacts; the arrows do what the swipes do.
@@ -266,7 +297,7 @@ fun ContestScreen(vm: AppViewModel) {
                 OutlinedTextField(
                     value = f.call,
                     onValueChange = { error = null; vm.setCall(it) },
-                    modifier = Modifier.fillMaxWidth().focusRequester(callFocus),
+                    modifier = Modifier.fillMaxWidth().focusRequester(callFocus).onFocusChanged { callFocused = it.isFocused },
                     label = { Text(tr("Позывной"), fontSize = 16.sp) },
                     isError = callError,
                     textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 36.sp, letterSpacing = 1.sp),
@@ -281,7 +312,7 @@ fun ContestScreen(vm: AppViewModel) {
                     keyboardActions = KeyboardActions(onNext = { rcvdFocus.requestFocus() }),
                     colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
                 )
-                if (f.isNew) LaunchedEffect(Unit) { callFocus.requestFocus() }
+                LaunchedEffect(Unit) { callFocus.requestFocus() }
             }
             // Calls from the log that start with what is typed: one tap instead of the rest.
             if (f.isNew) {

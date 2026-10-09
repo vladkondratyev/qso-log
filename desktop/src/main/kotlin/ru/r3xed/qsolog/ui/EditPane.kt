@@ -159,12 +159,14 @@ fun EditPane(vm: AppState) {
         }
     }
     val focusManager = LocalFocusManager.current
-    var rstRcvdFocused by remember { mutableStateOf(false) }
+    var callFocused by remember { mutableStateOf(false) }
 
     val me = vm.myPositionFor(vm.form)
     val them = f.position
 
-    // Keyboard-first entry: Enter goes to the next field and saves from "RST принят";
+    // Keyboard-first entry: Space in the callsign goes on to the frequency or report, Enter logs the contact from any
+    // field (a new card: saves and opens the next one; "20m", "CW", "14195" in the callsign switch band, mode or
+    // frequency instead), ↑ in an empty callsign opens the contact just logged. Shift+Enter is a new line in the comment.
     // Alt+1…9 picks the n-th band that is switched on, Alt+Shift+1…9 the n-th mode.
     // F2–F5 jump to the callsign, frequency and reports, F6 sets the current time, F8 saves and opens the next card,
     // F12 saves (F1 and F9 work in the whole window, see Main.kt).
@@ -174,9 +176,18 @@ fun EditPane(vm: AppState) {
             val digit = DIGIT_KEYS.indexOf(e.key)
             when {
                 (e.key == Key.Enter || e.key == Key.NumPadEnter) && !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed -> {
-                    if (rstRcvdFocused) showSaveError(vm.trySave()) else focusManager.moveFocus(FocusDirection.Next)
+                    when {
+                        callFocused && vm.runCallCommand() -> {}
+                        f.isNew -> showSaveError(vm.saveAndNext())
+                        else -> showSaveError(vm.trySave())
+                    }
                     true
                 }
+                e.key == Key.Spacebar && callFocused -> {
+                    if (vm.runCallCommand()) {} else if (vm.form.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
+                    true
+                }
+                e.key == Key.DirectionUp && callFocused && f.isNew && f.call.isEmpty() -> { vm.editLast(); true }
                 e.key == Key.F2 -> { callFocus.requestFocus(); true }
                 e.key == Key.F3 -> { freqFocus.requestFocus(); true }
                 e.key == Key.F4 -> { rstFocus.requestFocus(); true }
@@ -243,7 +254,7 @@ fun EditPane(vm: AppState) {
                 OutlinedTextField(
                     value = f.call,
                     onValueChange = vm::setCall,
-                    modifier = Modifier.weight(1f).focusRequester(callFocus),
+                    modifier = Modifier.weight(1f).focusRequester(callFocus).onFocusChanged { callFocused = it.isFocused },
                     label = { Text(tr("Позывной корреспондента"), fontSize = 16.sp) },
                     isError = error == CALL_ERROR,
                     supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
@@ -274,7 +285,7 @@ fun EditPane(vm: AppState) {
                     )
                 }
             }
-            LaunchedEffect(vm.editSession) { if (f.isNew) callFocus.requestFocus() }
+            LaunchedEffect(vm.editSession) { if (f.isNew || vm.openedByKeys) callFocus.requestFocus() }
             // Callsigns from the log that start with what is typed: one click instead of the rest.
             if (f.isNew) CallSuggestions(vm) { call ->
                 vm.setCall(call)
@@ -306,7 +317,7 @@ fun EditPane(vm: AppState) {
                     QuickValues(quick, f.rstSent, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstSent = it)) }
                 }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(150.dp).focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
+                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(150.dp).focusRequester(rstRcvdFocus), rstKeyboard, onNext = null)
                     QuickValues(quick, f.rstRcvd, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstRcvd = it)) }
                 }
             }

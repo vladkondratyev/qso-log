@@ -28,11 +28,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.KeyShortcut
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -81,13 +86,28 @@ fun main() {
             state = windowState,
             onPreviewKeyEvent = { e ->
                 // One key instead of two: F9 opens a new card from anywhere, F1 lists the keys.
+                val mod = if (IS_MAC) e.isMetaPressed else e.isCtrlPressed
                 if (e.type == KeyEventType.KeyDown && e.key == Key.F9) { state.addQso(); true }
+                // Ctrl+E (⌘E): the contact just logged opens to be fixed; Ctrl+F (⌘F): the search.
+                else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.E) { state.editLast(); true }
+                else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.F) { state.requestSearchFocus(); true }
                 else if (e.type == KeyEventType.KeyDown && e.key == Key.F1) { state.showKeys = !state.showKeys; true }
                 else if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) when {
                     state.showKeys -> { state.showKeys = false; true }
                     state.selecting -> { state.clearSelection(); true }
-                    state.pane == Pane.Edit -> { if (state.confirmClose) state.confirmClose = false else state.requestClose(); true }
-                    state.pane == Pane.Contest -> { if (state.confirmClose) state.confirmClose = false else state.requestCloseContest(); true }
+                    // A new card with something typed is wiped first (the band, mode and frequency stay), a second Esc closes it.
+                    state.pane == Pane.Edit -> {
+                        if (state.confirmClose) state.confirmClose = false
+                        else if (state.form.isNew && state.form.call.isNotBlank()) state.clearCard()
+                        else state.requestClose()
+                        true
+                    }
+                    state.pane == Pane.Contest -> {
+                        if (state.confirmClose) state.confirmClose = false
+                        else if (state.form.isNew && (state.form.call.isNotBlank() || !state.form.adif[ru.r3xed.qsolog.data.ContestMode.RCVD].isNullOrBlank())) state.clearCard()
+                        else state.requestCloseContest()
+                        true
+                    }
                     state.pane == Pane.Settings -> { state.closeSettings(); true }
                     state.pane != Pane.Empty -> { state.pane = Pane.Empty; true }
                     else -> false
@@ -281,23 +301,43 @@ private fun KeysDialog(onClose: () -> Unit) {
         "F8 · $NEXT_SHORTCUT" to tr("сохранить и открыть следующую"),
         "F9 · $NEW_SHORTCUT" to tr("новая связь"),
         "F12 · $SAVE_SHORTCUT" to tr("сохранить"),
-        "Enter" to tr("следующее поле, в «RST принят» — сохранить"),
+        "Enter" to tr("записать связь из любого поля (новая карточка — записать и открыть следующую)"),
+        tr("Пробел") to tr("из позывного — к частоте или RST (в контесте — к принятому коду)"),
+        "Tab · Shift+Tab" to tr("следующее и предыдущее поле"),
+        "↑ · ${mod}E" to tr("исправить последнюю записанную связь (↑ — в пустом позывном)"),
+        "${mod}F" to tr("поиск по журналу; Enter в поиске — новая связь с найденным"),
         "Alt+1…9" to tr("выбрать диапазон"),
         "Alt+Shift+1…9" to tr("выбрать вид связи"),
-        "Esc" to tr("закрыть карточку или отменить выбор"),
+        "Esc" to tr("очистить новую карточку, второй раз — закрыть; отменить выбор"),
+        "PgUp · PgDn" to tr("контест: предыдущая и следующая связь"),
         "${mod}D · ${mod}M · $mod," to tr("дашборд, карта QSO, настройки"),
+        "Shift+Enter" to tr("новая строка в комментарии"),
     )
+    // Two columns in a wide dialog: the whole list fits the default window; it scrolls in a smaller one.
     AlertDialog(
         onDismissRequest = onClose,
+        modifier = Modifier.widthIn(max = 1100.dp).fillMaxWidth(0.92f),
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         title = { Text(tr("Горячие клавиши")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                keys.forEach { (k, what) ->
-                    Row {
-                        Text(k, fontFamily = Mono, fontWeight = FontWeight.Bold, modifier = Modifier.width(210.dp))
-                        Text(what, style = MaterialTheme.typography.bodyLarge)
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val half = (keys.size + 1) / 2
+                Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                    listOf(keys.take(half), keys.drop(half)).forEach { part ->
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            part.forEach { (k, what) ->
+                                Row {
+                                    Text(k, fontFamily = Mono, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(190.dp))
+                                    Text(what, style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
+                        }
                     }
                 }
+                Text(
+                    tr("Команды в поле позывного (вместо позывного, затем Enter или Пробел): 20m или 20 — диапазон, CW, SSB, FT8 — вид связи, 14195 или 7.074 — частота. Поле очищается, карточка остаётся."),
+                    style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp),
+                )
                 if (IS_MAC) Text(
                     tr("На Mac клавиши F нажимаются вместе с fn, если в настройках клавиатуры не включено «Использовать F1, F2 и т. д. как стандартные функциональные клавиши»."),
                     style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted, modifier = Modifier.padding(top = 8.dp),
