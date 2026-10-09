@@ -302,11 +302,11 @@ fun EditPane(vm: AppState) {
             val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.width(124.dp).focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.width(150.dp).focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
                     QuickValues(quick, f.rstSent, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstSent = it)) }
                 }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(124.dp).focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
+                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(150.dp).focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
                     QuickValues(quick, f.rstRcvd, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstRcvd = it)) }
                 }
             }
@@ -321,10 +321,7 @@ fun EditPane(vm: AppState) {
             // In the narrowest window the two go one under the other.
             BoxWithConstraints {
                 val wide = maxWidth >= 640.dp
-                val left = @Composable {
-                    StationCard(vm)
-                    DistanceCard(vm, onOpenMap = { showMap = true })
-                }
+                val left = @Composable { StationCard(vm) }
                 val right = @Composable {
                     DupeCard(vm)
                     HistoryCard(vm)
@@ -337,6 +334,8 @@ fun EditPane(vm: AppState) {
                     right()
                 }
             }
+            // --- distance & map, the whole width of the card ---
+            DistanceCard(vm, onOpenMap = { showMap = true })
 
             // --- all fields: each group opens on its own, the header says how many fields are filled ---
             Label(tr("Все поля ADIF"))
@@ -611,17 +610,16 @@ private fun DistanceCard(vm: AppState, onOpenMap: () -> Unit) {
         else -> {
             val km = Geo.distanceKm(me, them)
             val az = Geo.bearing(me, them)
-            // Small map on the left, distance and bearing next to it; a click anywhere on the map opens the full one.
-            Row(
-                Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(16.dp)).border(1.dp, x.line, RoundedCornerShape(16.dp)),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.width(140.dp).height(96.dp)) {
-                    TileMap(me, them, vm.form.myCall.ifBlank { vm.settings.myCall }, vm.form.call, interactive = false, modifier = Modifier.fillMaxSize())
-                    // Transparent layer on top: the preview itself does not scroll, a tap opens the full map.
-                    Box(Modifier.fillMaxSize().clickable(onClickLabel = tr("Карта"), onClick = onOpenMap))
-                }
-                Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 6.dp)) {
+            // The map across the whole card, distance and bearing over its corner; a click anywhere opens the full map.
+            Box(Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)).border(1.dp, x.line, RoundedCornerShape(16.dp))) {
+                TileMap(me, them, vm.form.myCall.ifBlank { vm.settings.myCall }, vm.form.call, interactive = false, modifier = Modifier.fillMaxSize())
+                // Transparent layer on top: the preview itself does not scroll, a tap opens the full map.
+                Box(Modifier.fillMaxSize().clickable(onClickLabel = tr("Карта"), onClick = onOpenMap))
+                Column(
+                    Modifier.align(Alignment.BottomStart).padding(10.dp)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
                     val approx = vm.form.approxPosition
                     Text((if (approx) "≈ " else "") + formatKm(km), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                     Text(
@@ -629,7 +627,9 @@ private fun DistanceCard(vm: AppState, onOpenMap: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium, color = x.muted,
                     )
                 }
-                IconButton(onClick = onOpenMap) { Icon(Icons.Filled.Map, tr("Карта")) }
+                FilledTonalIconButton(onClick = onOpenMap, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                    Icon(Icons.Filled.Map, tr("Карта"))
+                }
             }
         }
     }
