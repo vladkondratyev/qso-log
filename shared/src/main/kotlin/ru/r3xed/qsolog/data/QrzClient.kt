@@ -23,7 +23,7 @@ data class QrzInfo(
     val locator: String,
     val lat: Double?,
     val lon: Double?,
-    /** Region and RDA district: only the site page ([QrzSite]) gives them. */
+    /** Region and RDA district: the site page ([QrzSite]) gives them, the XML API only RDA and only if it has it. */
     val region: String = "",
     val rda: String = "",
     /** CQ and ITU zones: only the QRZ.com page ([QrzCom]) gives them. */
@@ -110,6 +110,7 @@ class QrzClient(private val credentials: () -> Pair<String, String>) {
             locator = c["qthloc"].orEmpty(),
             lat = c["latitude"]?.toDoubleOrNull(),
             lon = c["longitude"]?.toDoubleOrNull(),
+            rda = c["rda"]?.uppercase()?.takeIf { Regex("[A-Z]{2}-\\d{2}").matches(it) }.orEmpty(),
         )
     }
 

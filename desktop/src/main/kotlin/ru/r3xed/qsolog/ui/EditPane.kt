@@ -58,6 +58,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -165,6 +166,8 @@ fun EditPane(vm: AppState) {
 
     // Keyboard-first entry: Enter goes to the next field and saves from "RST принят";
     // Alt+1…9 picks the n-th band that is switched on, Alt+Shift+1…9 the n-th mode.
+    // F2–F5 jump to the callsign, frequency and reports, F6 sets the current time, F8 saves and opens the next card,
+    // F12 saves (F1 and F9 work in the whole window, see Main.kt).
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).onPreviewKeyEvent { e ->
             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -174,6 +177,13 @@ fun EditPane(vm: AppState) {
                     if (rstRcvdFocused) showSaveError(vm.trySave()) else focusManager.moveFocus(FocusDirection.Next)
                     true
                 }
+                e.key == Key.F2 -> { callFocus.requestFocus(); true }
+                e.key == Key.F3 -> { freqFocus.requestFocus(); true }
+                e.key == Key.F4 -> { rstFocus.requestFocus(); true }
+                e.key == Key.F5 -> { rstRcvdFocus.requestFocus(); true }
+                e.key == Key.F6 -> { vm.setNow(); true }
+                e.key == Key.F8 -> { if (f.isNew) showSaveError(vm.saveAndNext()); true }
+                e.key == Key.F12 -> { showSaveError(vm.trySave()); true }
                 e.isAltPressed && digit >= 0 && !e.isShiftPressed -> {
                     BANDS.filter { it in vm.enabledBands }.getOrNull(digit)?.let(vm::setBand)
                     true
@@ -186,16 +196,37 @@ fun EditPane(vm: AppState) {
             }
         },
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = close, modifier = Modifier.size(56.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = close, modifier = Modifier.size(52.dp)) {
                 Icon(Icons.Filled.Close, tr("Закрыть (Esc)"), Modifier.size(30.dp))
             }
-            Text(if (f.isNew) tr("Новый QSO") else tr("Запись QSO"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            Text(if (f.isNew) tr("Новый QSO") else tr("Запись QSO"), style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.width(16.dp))
+            // Time of the contact in the header: one line until ✎ opens the date and time fields below.
+            if (!editTime) Row(
+                Modifier.clip(RoundedCornerShape(12.dp)).background(x.field)
+                    .clickable(onClickLabel = tr("Изменить дату и время")) { editTime = true }
+                    .padding(start = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.Schedule, null, Modifier.size(20.dp), tint = x.muted)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)) { append(f.time) }
+                        withStyle(SpanStyle(fontSize = 13.sp, color = x.muted)) { append(" UTC  ") }
+                        withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 15.sp)) { append(f.date) }
+                    },
+                    maxLines = 1,
+                )
+                IconButton(onClick = vm::setNow) { Icon(Icons.Filled.Refresh, tr("Текущее время") + " (F6)") }
+            }
+            Spacer(Modifier.weight(1f))
             // A voice note for a card typed by hand: offered once QRZ.ru has found the station, runs until ■ or "Сохранить".
             val since = vm.cardRecordingSince
             if (since != null) CardRecording(since, onStop = vm::stopCardRecording)
             else if (f.isNew && f.audio.isBlank() && vm.lookup is Lookup.Found) {
-                IconButton(onClick = vm::startCardRecording, modifier = Modifier.size(56.dp)) {
+                IconButton(onClick = vm::startCardRecording, modifier = Modifier.size(52.dp)) {
                     Icon(Icons.Filled.Mic, tr("Записать голосовую заметку"), Modifier.size(28.dp), tint = x.muted.copy(alpha = 0.6f))
                 }
             }
@@ -203,9 +234,10 @@ fun EditPane(vm: AppState) {
 
         Column(
             Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // --- callsign ---
+            // What is typed comes first and never moves: the station's data, found later, shows up below the reports.
+            // --- callsign and frequency ---
             // IntrinsicSize.Min: the play button takes the height of the field; top padding skips the floating label.
             Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -215,7 +247,7 @@ fun EditPane(vm: AppState) {
                     label = { Text(tr("Позывной корреспондента"), fontSize = 16.sp) },
                     isError = error == CALL_ERROR,
                     supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
-                    textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 1.sp),
+                    textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = 1.sp),
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(
@@ -228,6 +260,8 @@ fun EditPane(vm: AppState) {
                     keyboardActions = KeyboardActions(onNext = { if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus() }),
                     colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
                 )
+                // Frequency next to the callsign: typing it picks the band below by itself.
+                Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.width(190.dp).padding(top = 8.dp).focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
                 if (f.audio.isNotBlank()) {
                     AudioPlayButton(
                         vm.voice.file(f.audio),
@@ -247,63 +281,33 @@ fun EditPane(vm: AppState) {
                 if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
             }
 
-            StationCard(vm)
-            DupeCard(vm)
-            HistoryCard(vm)
-
-            // --- date/time ---
+            // --- date/time, opened from the header ---
             if (editTime) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Field(tr("Дата UTC"), f.date, { vm.update(f.copy(date = it)) }, Modifier.weight(1.3f), KeyboardType.Number, mono = true)
                     Field(tr("Время UTC"), f.time, { vm.update(f.copy(time = it)) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
-                    IconButton(onClick = vm::setNow, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Refresh, tr("Текущее время")) }
-                }
-            } else {
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
-                        .clickable(onClickLabel = tr("Изменить дату и время")) { editTime = true }
-                        .padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Filled.Schedule, null, Modifier.size(22.dp), tint = x.muted)
-                    Spacer(Modifier.width(10.dp))
-                    // Time first (what changes), then the date; wraps to a second line with a large system font.
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp)) { append(f.time) }
-                            withStyle(SpanStyle(fontSize = 14.sp, color = x.muted)) { append(" UTC   ") }
-                            withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp)) { append(f.date) }
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = vm::setNow) { Icon(Icons.Filled.Refresh, tr("Текущее время")) }
-                    IconButton(onClick = { editTime = true }) { Icon(Icons.Filled.Edit, tr("Изменить дату и время")) }
+                    IconButton(onClick = vm::setNow, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Refresh, tr("Текущее время") + " (F6)") }
                 }
             }
 
-            // Frequency first: typing it picks the band below by itself.
-            Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
-
-            // One scrolling row each: what is switched on in the settings, plus the record's own value if that one is off.
-            // Nothing to choose from (one value on, and the record has it) — the label alone shows it.
+            // One scrolling row each, the label on its left: what is switched on in the settings, plus the record's own
+            // value if that one is off. Nothing to choose from (one value on, and the record has it) — the label alone shows it.
             val modes = MODES.filter { it in vm.enabledModes || it == f.mode } + listOfNotNull(f.mode.takeIf { it.isNotBlank() && it !in MODES })
             val bands = BANDS.filter { it in vm.enabledBands || it == f.band } + listOfNotNull(f.band.takeIf { it.isNotBlank() && it !in BANDS })
-            Label(tr("Вид связи"), f.mode)
-            if (modes != listOf(f.mode)) ChipRow(modes, f.mode, vm::setMode)
-            Label(tr("Диапазон"), f.band)
-            if (bands != listOf(f.band)) ChipRow(bands, f.band, vm::setBand)
+            ChoiceRow(tr("Вид связи"), modes, f.mode, vm::setMode)
+            ChoiceRow(tr("Диапазон"), bands, f.band, vm::setBand)
 
-            // Reports: the usual values one tap away, digits keyboard unless the mode reports in dB.
+            // Reports: field and the usual values one click away on the same line, digits unless the mode reports in dB.
             val quick = quickReports(f.mode)
             val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
-                    QuickValues(quick, f.rstSent) { vm.update(vm.form.copy(rstSent = it)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
+                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.width(124.dp).focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                    QuickValues(quick, f.rstSent, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstSent = it)) }
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
-                    QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
+                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(124.dp).focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
+                    QuickValues(quick, f.rstRcvd, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstRcvd = it)) }
                 }
             }
             // A contest contact: the exchanged numbers right under the reports, as in the contest card.
@@ -313,8 +317,26 @@ fun EditPane(vm: AppState) {
                 Field(tr("Код принят"), f.adif[ContestMode.RCVD].orEmpty(), { vm.setAdif(ContestMode.RCVD, it) }, Modifier.weight(1f), KeyboardType.Number, mono = true, last = true)
             }
 
-            // --- distance & map ---
-            DistanceCard(vm, onOpenMap = { showMap = true })
+            // --- two columns: who the station is and how far | whether and when it was worked ---
+            // In the narrowest window the two go one under the other.
+            BoxWithConstraints {
+                val wide = maxWidth >= 640.dp
+                val left = @Composable {
+                    StationCard(vm)
+                    DistanceCard(vm, onOpenMap = { showMap = true })
+                }
+                val right = @Composable {
+                    DupeCard(vm)
+                    HistoryCard(vm)
+                }
+                if (wide) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) { left() }
+                    if (f.call.length >= 3) Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) { right() }
+                } else Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    left()
+                    right()
+                }
+            }
 
             // --- all fields: each group opens on its own, the header says how many fields are filled ---
             Label(tr("Все поля ADIF"))
@@ -394,7 +416,7 @@ fun EditPane(vm: AppState) {
                     Spacer(Modifier.width(4.dp))
                     Text(tr("Следующая"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(8.dp))
-                    Text(NEXT_SHORTCUT, fontSize = 13.sp, color = LocalContentColor.current.copy(alpha = 0.7f))
+                    Text("F8 · $NEXT_SHORTCUT", fontSize = 13.sp, color = LocalContentColor.current.copy(alpha = 0.7f))
                 }
                 Button(
                     onClick = { showSaveError(vm.trySave()) },
@@ -403,7 +425,7 @@ fun EditPane(vm: AppState) {
                 ) {
                     Text(tr("Сохранить"), fontSize = 21.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(10.dp))
-                    Text(SAVE_SHORTCUT, fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f))
+                    Text("F12 · $SAVE_SHORTCUT", fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f))
                 }
             }
         }
@@ -459,8 +481,8 @@ private fun StationCard(vm: AppState) {
     Column(
         Modifier.fillMaxWidth()
             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-            .padding(start = 18.dp, end = 6.dp, top = 8.dp, bottom = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         val ink = MaterialTheme.colorScheme.onPrimaryContainer
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -479,16 +501,15 @@ private fun StationCard(vm: AppState) {
                 }
             }
         } else if (hasInfo) {
-            if (f.name.isNotBlank()) Text(f.name, fontSize = 30.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, color = ink)
+            if (f.name.isNotBlank()) Text(f.name, fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, color = ink, modifier = Modifier.padding(end = 12.dp))
             val place = listOf(f.qth, f.country).filter { it.isNotBlank() }.joinToString(", ")
-            if (place.isNotBlank()) Text(place, fontSize = 24.sp, lineHeight = 30.sp, color = ink)
-            if (f.locator.isNotBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                    Text(tr("Локатор"), fontSize = 18.sp, color = ink, modifier = Modifier.padding(end = 10.dp))
-                    Text(
-                        f.locator, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 28.sp, color = ink,
-                        modifier = Modifier.border(2.dp, ink.copy(alpha = 0.5f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 2.dp),
-                    )
+            if (place.isNotBlank()) Text(place, fontSize = 17.sp, lineHeight = 22.sp, color = ink, modifier = Modifier.padding(end = 12.dp))
+            // Locator and RDA district (from the QRZ.ru site page) side by side.
+            val rda = f.adif["CNTY"].orEmpty()
+            if (f.locator.isNotBlank() || rda.isNotBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                    if (f.locator.isNotBlank()) Tag(tr("Локатор"), f.locator, ink)
+                    if (rda.isNotBlank()) Tag("RDA", rda, ink)
                 }
             }
         }
@@ -496,9 +517,9 @@ private fun StationCard(vm: AppState) {
             Lookup.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = ink)
                 Spacer(Modifier.width(10.dp))
-                Text(tr("Ищу на QRZ.ru…"), fontSize = 18.sp, color = ink)
+                Text(tr("Ищу на QRZ.ru…"), fontSize = 16.sp, color = ink)
             }
-            Lookup.NotFound -> if (!hasInfo) Text(tr("На QRZ.ru такого позывного нет"), fontSize = 18.sp, color = ink)
+            Lookup.NotFound -> if (!hasInfo) Text(tr("На QRZ.ru такого позывного нет"), fontSize = 16.sp, color = ink)
             // Country and region by prefix from HamQTH; say where the data came from and why QRZ.ru did not help.
             is Lookup.Approx -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(tr("≈ Страна и область по позывному (HamQTH)"), fontSize = 16.sp, color = ink.copy(alpha = 0.8f))
@@ -519,8 +540,20 @@ private fun StationCard(vm: AppState) {
                 if (lookup.noAccount) TextButton(onClick = { vm.openSettings(from = Pane.Edit) }) { Text(tr("Настройки")) }
                 else TextButton(onClick = vm::retryLookup) { Text(tr("Повторить")) }
             }
-            else -> if (!hasInfo && !editing) Text(tr("Данные появятся здесь. Ввести вручную: ✎ справа"), fontSize = 18.sp, color = x.muted)
+            else -> if (!hasInfo && !editing) Text(tr("Данные появятся здесь. Ввести вручную: ✎ справа"), fontSize = 16.sp, color = x.muted)
         }
+    }
+}
+
+/** "Локатор KO85ts": a small caption and the value in a frame. */
+@Composable
+private fun Tag(caption: String, value: String, ink: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(caption, fontSize = 14.sp, color = ink.copy(alpha = 0.8f), modifier = Modifier.padding(end = 6.dp))
+        Text(
+            value, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 19.sp, color = ink, maxLines = 1,
+            modifier = Modifier.border(1.5.dp, ink.copy(alpha = 0.5f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 1.dp),
+        )
     }
 }
 
@@ -534,7 +567,7 @@ private fun HistoryCard(vm: AppState) {
         // For a saved record "no other contacts" is not news; the green note is only for a new one.
         if (!vm.form.isNew) return
         Row(
-            Modifier.fillMaxWidth().background(x.okBg, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().background(x.okBg, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(tr("Новый позывной: связей ещё не было"), color = x.ok, style = MaterialTheme.typography.titleMedium)
@@ -547,19 +580,18 @@ private fun HistoryCard(vm: AppState) {
         Modifier.fillMaxWidth()
             .background(x.hl, RoundedCornerShape(14.dp))
             .border(2.dp, x.hlBorder, RoundedCornerShape(14.dp))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Text("${h.count}", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 40.sp, color = x.hlInk)
-        Spacer(Modifier.width(14.dp))
+        Text("${h.count}", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 30.sp, color = x.hlInk)
+        Spacer(Modifier.width(12.dp))
         Column {
-            Text(if (vm.form.isNew) tr("Уже работали: %s QSO", h.count) else tr("Других QSO: %s", h.count), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = x.hlInk)
-            Text(
-                tr("Последняя %s %s UTC", DATE_FMT.format(t), TIME_FMT.format(t)),
-                fontSize = 17.sp, color = x.hlInk,
-            )
+            Text(if (vm.form.isNew) tr("Уже работали: %s QSO", h.count) else tr("Других QSO: %s", h.count), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = x.hlInk)
             val det = listOf(last.band, last.mode).filter { it.isNotBlank() }.joinToString(" ")
-            if (det.isNotBlank()) Text(det, fontSize = 17.sp, color = x.hlInk)
+            Text(
+                tr("Последняя %s %s UTC", DATE_FMT.format(t), TIME_FMT.format(t)) + if (det.isNotBlank()) " · $det" else "",
+                fontSize = 15.sp, color = x.hlInk,
+            )
             // The last contact on each band: is this one a new band for the station, and when was it worked there.
             if (h.byBand.size > 1 || (h.byBand.size == 1 && !h.byBand[0].band.equals(vm.form.band, ignoreCase = true))) {
                 BandChips(h.byBand, ink = x.hlInk, chip = x.hlBorder.copy(alpha = 0.22f), current = vm.form.band, modifier = Modifier.padding(top = 6.dp))
@@ -579,27 +611,25 @@ private fun DistanceCard(vm: AppState, onOpenMap: () -> Unit) {
         else -> {
             val km = Geo.distanceKm(me, them)
             val az = Geo.bearing(me, them)
-            Column(Modifier.fillMaxWidth().border(1.dp, x.line, RoundedCornerShape(16.dp))) {
-                Box(Modifier.fillMaxWidth().height(240.dp)) {
+            // Small map on the left, distance and bearing next to it; a click anywhere on the map opens the full one.
+            Row(
+                Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(16.dp)).border(1.dp, x.line, RoundedCornerShape(16.dp)),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.width(140.dp).height(96.dp)) {
                     TileMap(me, them, vm.form.myCall.ifBlank { vm.settings.myCall }, vm.form.call, interactive = false, modifier = Modifier.fillMaxSize())
                     // Transparent layer on top: the preview itself does not scroll, a tap opens the full map.
-                    Box(Modifier.fillMaxSize().clickable(onClick = onOpenMap))
+                    Box(Modifier.fillMaxSize().clickable(onClickLabel = tr("Карта"), onClick = onOpenMap))
                 }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        val approx = vm.form.approxPosition
-                        Text((if (approx) "≈ " else "") + formatKm(km), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 30.sp)
-                        Text(
-                            tr("азимут %s°", az.toInt()) + if (approx) tr(" · до центра области") else "",
-                            style = MaterialTheme.typography.bodyLarge, color = x.muted,
-                        )
-                    }
-                    OutlinedButton(onClick = onOpenMap, shape = RoundedCornerShape(12.dp)) {
-                        Icon(Icons.Filled.Map, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(tr("Карта"))
-                    }
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    val approx = vm.form.approxPosition
+                    Text((if (approx) "≈ " else "") + formatKm(km), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                    Text(
+                        tr("азимут %s°", az.toInt()) + if (approx) tr(" · до центра области") else "",
+                        style = MaterialTheme.typography.bodyMedium, color = x.muted,
+                    )
                 }
+                IconButton(onClick = onOpenMap) { Icon(Icons.Filled.Map, tr("Карта")) }
             }
         }
     }
@@ -698,13 +728,13 @@ private fun quickReports(mode: String): List<String> = when (defaultRst(mode)) {
 }
 
 @Composable
-private fun QuickValues(values: List<String>, current: String, onPick: (String) -> Unit) {
+private fun QuickValues(values: List<String>, current: String, modifier: Modifier = Modifier, onPick: (String) -> Unit) {
     val x = LocalExtra.current
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         values.forEach { v ->
             val on = v == current
             Box(
-                Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp))
+                Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(10.dp))
                     .background(if (on) MaterialTheme.colorScheme.primary else x.field)
                     .clickable(onClickLabel = tr("Отчёт %s", v)) { onPick(v) },
                 contentAlignment = Alignment.Center,
@@ -747,6 +777,22 @@ private fun ChipRow(items: List<String>, selected: String, onPick: (String) -> U
     }
     LazyRow(state = state, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
         items(items) { item -> Chip(item, item == selected) { onPick(item) } }
+    }
+}
+
+/** Label with the chosen value on the left, the chips to choose from on the same line. */
+@Composable
+private fun ChoiceRow(label: String, items: List<String>, selected: String, onPick: (String) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.width(120.dp)) {
+            Text(label.uppercase(), style = MaterialTheme.typography.labelMedium, color = LocalExtra.current.muted, letterSpacing = 1.sp)
+            Text(
+                selected.ifBlank { tr("не выбран") },
+                fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp,
+                color = if (selected.isBlank()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (items != listOf(selected)) Box(Modifier.weight(1f)) { ChipRow(items, selected, onPick) }
     }
 }
 
@@ -896,14 +942,14 @@ private fun DupeCard(vm: AppState) {
         Modifier.fillMaxWidth()
             .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(14.dp))
             .border(2.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(14.dp))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(tr("Повтор"), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+        Text(tr("Повтор"), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.width(12.dp))
         Text(
             tr("%s %s — уже было %s в %s UTC", dupe.band, dupe.mode, if (today) tr("сегодня") else DATE_FMT.format(t), TIME_FMT.format(t)),
-            fontSize = 17.sp, color = MaterialTheme.colorScheme.onErrorContainer,
+            fontSize = 15.sp, color = MaterialTheme.colorScheme.onErrorContainer,
         )
     }
 }

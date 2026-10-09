@@ -143,6 +143,11 @@ fun ContestPane(vm: AppState) {
                     if (focused == Target.RCVD) next() else rcvdFocus.requestFocus()
                     true
                 }
+                // F12 records the contact from any field, as "Сохранить" does in the usual card.
+                e.key == Key.F12 -> {
+                    next()
+                    true
+                }
                 e.key == Key.PageUp || (e.isAltPressed && e.key == Key.DirectionLeft) -> {
                     if (hasPrev) prev()
                     true

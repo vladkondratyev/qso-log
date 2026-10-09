@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.font.FontWeight
+import ru.r3xed.qsolog.ui.Mono
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -76,7 +80,11 @@ fun main() {
             icon = painterResource("icon.png"),
             state = windowState,
             onPreviewKeyEvent = { e ->
-                if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) when {
+                // One key instead of two: F9 opens a new card from anywhere, F1 lists the keys.
+                if (e.type == KeyEventType.KeyDown && e.key == Key.F9) { state.addQso(); true }
+                else if (e.type == KeyEventType.KeyDown && e.key == Key.F1) { state.showKeys = !state.showKeys; true }
+                else if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) when {
+                    state.showKeys -> { state.showKeys = false; true }
                     state.selecting -> { state.clearSelection(); true }
                     state.pane == Pane.Edit -> { if (state.confirmClose) state.confirmClose = false else state.requestClose(); true }
                     state.pane == Pane.Contest -> { if (state.confirmClose) state.confirmClose = false else state.requestCloseContest(); true }
@@ -139,6 +147,7 @@ fun main() {
                     Item(tr("Дашборд"), shortcut = shortcut(Key.D), onClick = state::openDashboard)
                     Item(tr("Карта QSO"), shortcut = shortcut(Key.M), onClick = state::openMap)
                     Item(tr("Справка и калькуляторы"), onClick = state::openReference)
+                    Item(tr("Горячие клавиши") + " (F1)", onClick = { state.showKeys = true })
                     Item(tr("Настройки"), shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
                     // Shown once the table is set up in the settings; the sync runs only when asked.
                     if (ru.r3xed.qsolog.data.SheetSync.isScriptUrl(state.sheetUrl)) {
@@ -228,6 +237,7 @@ fun App(state: AppState, files: Exports) {
                     onUtf8 = state::chooseAdifUtf8,
                 )
             }
+            if (state.showKeys) KeysDialog(onClose = { state.showKeys = false })
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).widthIn(max = 640.dp))
         }
     }
@@ -255,6 +265,47 @@ private fun EmptyPane(state: AppState) {
             Text("${s.myCall} · ${s.myLocator}" + if (s.myQth.isNotBlank()) " · ${s.myQth}" else "", style = MaterialTheme.typography.titleMedium, color = x.muted)
         }
     }
+}
+
+/** F1: every key of the card in one table. */
+@Composable
+private fun KeysDialog(onClose: () -> Unit) {
+    val mod = if (IS_MAC) "⌘" else "Ctrl+"
+    val keys = listOf(
+        "F1" to tr("эта подсказка"),
+        "F2" to tr("позывной"),
+        "F3" to tr("частота"),
+        "F4" to tr("RST отправлен"),
+        "F5" to tr("RST принят"),
+        "F6" to tr("текущее время UTC"),
+        "F8 · $NEXT_SHORTCUT" to tr("сохранить и открыть следующую"),
+        "F9 · $NEW_SHORTCUT" to tr("новая связь"),
+        "F12 · $SAVE_SHORTCUT" to tr("сохранить"),
+        "Enter" to tr("следующее поле, в «RST принят» — сохранить"),
+        "Alt+1…9" to tr("выбрать диапазон"),
+        "Alt+Shift+1…9" to tr("выбрать вид связи"),
+        "Esc" to tr("закрыть карточку или отменить выбор"),
+        "${mod}D · ${mod}M · $mod," to tr("дашборд, карта QSO, настройки"),
+    )
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(tr("Горячие клавиши")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                keys.forEach { (k, what) ->
+                    Row {
+                        Text(k, fontFamily = Mono, fontWeight = FontWeight.Bold, modifier = Modifier.width(210.dp))
+                        Text(what, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                if (IS_MAC) Text(
+                    tr("На Mac клавиши F нажимаются вместе с fn, если в настройках клавиатуры не включено «Использовать F1, F2 и т. д. как стандартные функциональные клавиши»."),
+                    style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted, modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text(tr("Закрыть")) } },
+    )
 }
 
 /** Native file dialog (Finder / Explorer). */

@@ -83,8 +83,11 @@ fun main(args: Array<String>) {
 
             state.edit(log().first { it.call == "R9DEMO" })
             shot("03-card", 1000)
-            scrollRight(68, step = 1f)
+            // The whole card fits now: the same view once the map tiles are in.
             shot("04-card-map", 6000)
+            state.showKeys = true
+            shot("18-keys", 500)
+            state.showKeys = false
             scrollRight(60)
             shot("05-all-fields")
             // The very bottom of the card: when the contact went into ADIF, CSV and contest-report files.

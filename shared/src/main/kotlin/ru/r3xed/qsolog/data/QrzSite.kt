@@ -37,6 +37,26 @@ class QrzSite(private val credentials: () -> Pair<String, String>) {
     fun reset() {
         web.clear()
         loggedIn = false
+        synchronized(rdaCache) { rdaCache.clear() }
+    }
+
+    private val rdaCache = mutableMapOf<String, QrzInfo?>()
+
+    /**
+     * [info] with the RDA district (and region) from the site page when the XML API found a Russian station without
+     * them. Works without a site account too (the page shows RDA to everyone); any failure leaves [info] as it is.
+     */
+    suspend fun withRda(info: QrzInfo): QrzInfo {
+        if (info.rda.isNotBlank() || RussianRegions.of(info.call) == null) return info
+        val key = info.call.uppercase()
+        val page = synchronized(rdaCache) { rdaCache[key] } ?: try {
+            lookup(key).also { synchronized(rdaCache) { rdaCache[key] = it } }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return info
+        return info.copy(rda = page.rda, region = info.region.ifBlank { page.region })
     }
 
     private suspend fun loginLocked() {

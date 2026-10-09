@@ -462,6 +462,17 @@ private fun StationCard(vm: AppViewModel) {
                     )
                 }
             }
+            // RDA district from the QRZ.ru site page (ADIF CNTY).
+            val rda = f.adif["CNTY"].orEmpty()
+            if (rda.isNotBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                    Text("RDA", fontSize = 18.sp, color = ink, modifier = Modifier.padding(end = 10.dp))
+                    Text(
+                        rda, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = ink,
+                        modifier = Modifier.border(2.dp, ink.copy(alpha = 0.5f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 2.dp),
+                    )
+                }
+            }
         }
         when (lookup) {
             Lookup.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {

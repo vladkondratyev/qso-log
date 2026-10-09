@@ -807,4 +807,18 @@ internal val EN: Map<String, String> = hashMapOf(
     // Desktop contest card (1.12.0).
     "Enter — из позывного в принятый код, там — записать. PgUp / PgDn — предыдущая и следующая связь контеста. Esc — закрыть." to "Enter goes from the callsign to the received exchange and logs the QSO there. PgUp / PgDn — previous and next contest QSO. Esc — close.",
     "Режим соревнований: «Добавить QSO» открывает упрощённую карточку — позывной, контрольные номера и RST; время ставится при записи. Принятый номер может быть любым: 015, MO69, EU, 16. Enter переходит из позывного в принятый код и там записывает связь; PgUp и PgDn листают связи контеста, чтобы их поправить. Такие связи отмечены в журнале флажком. Режим выключается при каждом запуске программы." to "Contest mode: “Add QSO” opens a simplified card — callsign, exchange and RST; the time is set when the QSO is logged. The received exchange can be anything: 015, MO69, EU, 16. Enter goes from the callsign to the received exchange and logs the QSO there; PgUp and PgDn go through the contest QSOs to correct them. Such QSOs are flagged in the log. The mode turns off every time the program starts.",
+    // Desktop function keys (1.13.0).
+    "Горячие клавиши" to "Keyboard shortcuts",
+    "эта подсказка" to "this list",
+    "позывной" to "callsign",
+    "частота" to "frequency",
+    "текущее время UTC" to "current UTC time",
+    "сохранить и открыть следующую" to "save and open the next card",
+    "сохранить" to "save",
+    "следующее поле, в «RST принят» — сохранить" to "next field; in “RST rcvd” — save",
+    "выбрать диапазон" to "pick a band",
+    "выбрать вид связи" to "pick a mode",
+    "закрыть карточку или отменить выбор" to "close the card or cancel the selection",
+    "дашборд, карта QSO, настройки" to "dashboard, QSO map, settings",
+    "На Mac клавиши F нажимаются вместе с fn, если в настройках клавиатуры не включено «Использовать F1, F2 и т. д. как стандартные функциональные клавиши»." to "On a Mac press the F keys together with fn unless “Use F1, F2, etc. keys as standard function keys” is on in the keyboard settings.",
 )

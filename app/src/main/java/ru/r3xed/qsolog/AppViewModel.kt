@@ -160,7 +160,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (problem == null) problem = e
             null
         }
-        if (settings.qrzLogin.isNotBlank()) ask { qrz.lookup(call, stillWanted) }?.let { return it }
+        // The XML API gives no RDA district: for a Russian station it is read from the callsign page of the site.
+        if (settings.qrzLogin.isNotBlank()) ask { qrz.lookup(call, stillWanted) }?.let { return qrzSite.withRda(it) }
         // The QRZ.ru site is the same database as its XML API: asked only when the API is not set or failed.
         if (settings.qrzSiteEmail.isNotBlank() && !notFound) ask { qrzSite.lookup(call) }?.let { return it }
         if (settings.qrzComLogin.isNotBlank()) ask { qrzCom.lookup(call) }?.let { return it }
