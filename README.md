@@ -5,6 +5,8 @@
 </picture>
 </h1>
 
+**Русский** · [English](README.en.md)
+
 QSO-LOG — аппаратный журнал радиолюбителя. Работает на Android, macOS, Windows и Linux, на телефоне и на компьютере
 умеет одно и то же.
 
