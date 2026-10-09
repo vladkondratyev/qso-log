@@ -102,6 +102,7 @@ import ru.r3xed.qsolog.Lookup
 import ru.r3xed.qsolog.TIME_FMT
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.ContestMode
+import ru.r3xed.qsolog.data.KeypadMode
 import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.bandForFreq
 import ru.r3xed.qsolog.data.defaultRst
@@ -123,7 +124,8 @@ private enum class Target { CALL, SENT, RCVD, RST_SENT, RST_RCVD }
 fun ContestScreen(vm: AppViewModel) {
     val f = vm.form
     val x = LocalExtra.current
-    val keypad = vm.contestKeypad
+    val keypad = vm.keypad != KeypadMode.OFF
+    val compact = vm.keypad == KeypadMode.COMPACT
     var error by remember { mutableStateOf<String?>(null) }
     var confirmClose by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -213,15 +215,16 @@ fun ContestScreen(vm: AppViewModel) {
       Column(Modifier.weight(1f).then(swipe)) {
         // --- header: close, what is being worked, what is sent ---
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = close, modifier = Modifier.size(56.dp)) {
+            IconButton(onClick = close, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Filled.Close, tr("Закрыть"), Modifier.size(30.dp))
             }
             Icon(Icons.Filled.Flag, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(6.dp))
             Text("CONTEST", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(8.dp))
             BandModePicker(vm)
             Spacer(Modifier.weight(1f))
+            KeypadMenuButton(vm.keypad, size = 40, onChange = vm::changeKeypad)
             ContestRate(vm)
         }
         // Where this card is among the contest contacts; the arrows do what the swipes do.
@@ -369,6 +372,7 @@ fun ContestScreen(vm: AppViewModel) {
             val saveLabel = if (f.isNew) tr("Записать и следующая") else tr("Сохранить и далее")
             if (keypad) {
                 Keypad(
+                    compact = compact,
                     onKey = { c ->
                         val v = if (replace) c else valueOf(active) + c
                         replace = false
@@ -377,18 +381,18 @@ fun ContestScreen(vm: AppViewModel) {
                     onBackspace = { setValue(active, if (replace) "" else valueOf(active).dropLast(1)); replace = false },
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (!f.isNew) deleteButton(54)
+                    if (!f.isNew) deleteButton(keypadButtonHeight(compact).value.toInt())
                     // From the callsign to the received number and back: the two fields typed in every contact.
                     val toRcvd = active == Target.CALL
                     OutlinedButton(
                         onClick = { activate(if (toRcvd) Target.RCVD else Target.CALL) },
-                        modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(keypadButtonHeight(compact)), shape = RoundedCornerShape(10.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
                     ) {
                         Text(if (toRcvd) tr("→ Код") else tr("→ Позывной"), fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                     Button(
-                        onClick = next, modifier = Modifier.weight(if (f.isNew) 1.6f else 1.3f).height(54.dp), shape = RoundedCornerShape(10.dp),
+                        onClick = next, modifier = Modifier.weight(if (f.isNew) 1.6f else 1.3f).height(keypadButtonHeight(compact)), shape = RoundedCornerShape(10.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
                         colors = if (dupeArmed) dupeColors() else ButtonDefaults.buttonColors(),
                     ) {
@@ -435,115 +439,6 @@ fun ContestScreen(vm: AppViewModel) {
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Отмена")) } },
         )
-    }
-}
-
-/**
- * A field of the keypad mode: looks like a text field but never opens the system keyboard. The active one has a
- * thick border and a blinking cursor; a [selected] value (the next key replaces it) is shaded.
- */
-@Composable
-private fun KeyField(
-    label: String,
-    value: String,
-    active: Boolean,
-    selected: Boolean,
-    isError: Boolean,
-    modifier: Modifier,
-    big: Boolean = false,
-    onClick: () -> Unit,
-) {
-    val x = LocalExtra.current
-    val c = MaterialTheme.colorScheme
-    val border = when {
-        isError -> c.error
-        active -> c.primary
-        else -> x.line
-    }
-    Column(
-        modifier.clip(RoundedCornerShape(if (big) 16.dp else 12.dp))
-            .border(if (active || isError) 2.dp else 1.dp, border, RoundedCornerShape(if (big) 16.dp else 12.dp))
-            .clickable(onClickLabel = label, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = if (big) 6.dp else 4.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = if (isError) c.error else if (active) c.primary else x.muted, maxLines = 1)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(if (big) 50.dp else 38.dp)) {
-            Text(
-                value,
-                fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = if (big) 36.sp else 26.sp, letterSpacing = if (big) 1.sp else 0.sp,
-                maxLines = 1, softWrap = false,
-                modifier = if (active && selected && value.isNotEmpty()) Modifier.clip(RoundedCornerShape(4.dp)).background(c.primaryContainer) else Modifier,
-            )
-            if (active && !(selected && value.isNotEmpty())) {
-                // On for half a second, off for half a second.
-                val phase by rememberInfiniteTransition(label = "cursor").animateFloat(
-                    0f, 1f, infiniteRepeatable(tween(1060, easing = LinearEasing)), label = "cursor",
-                )
-                Box(Modifier.padding(start = 2.dp).width(3.dp).height(if (big) 38.dp else 28.dp).graphicsLayer { alpha = if (phase < 0.5f) 1f else 0f }.background(c.primary))
-            }
-        }
-    }
-}
-
-/**
- * The app's keyboard for the contest card, in the spirit of contest loggers: digits on top, Latin letters, "/" for
- * portable calls, "-" for dB reports. Holding ⌫ keeps deleting, as on a phone keyboard.
- */
-@Composable
-private fun Keypad(onKey: (String) -> Unit, onBackspace: () -> Unit) {
-    val x = LocalExtra.current
-    val c = MaterialTheme.colorScheme
-    val view = LocalView.current
-    val tap = { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
-    val back by rememberUpdatedState(onBackspace)
-    var backDown by remember { mutableStateOf(false) }
-    val rows = listOf("1234567890", "QWERTYUIOP", "ASDFGHJKL/", "ZXCVBNM-")
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        rows.forEachIndexed { i, keys ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                keys.forEach { k ->
-                    Box(
-                        Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(8.dp))
-                            // Digits stand out: serials and reports are typed there.
-                            .background(if (i == 0) c.primaryContainer else x.field)
-                            .clickable { tap(); onKey(k.toString()) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            k.toString(), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp,
-                            color = if (i == 0) c.onPrimaryContainer else c.onSurface,
-                        )
-                    }
-                }
-                if (i == rows.lastIndex) {
-                    Box(
-                        Modifier.weight(2f).height(50.dp).clip(RoundedCornerShape(8.dp))
-                            .background(if (backDown) c.primary.copy(alpha = 0.35f) else c.primaryContainer)
-                            .semantics { contentDescription = tr("Стереть"); role = Role.Button }
-                            .pointerInput(Unit) {
-                                detectTapGestures(onPress = {
-                                    backDown = true
-                                    tap()
-                                    back()
-                                    coroutineScope {
-                                        val repeat = launch {
-                                            delay(450)
-                                            while (true) {
-                                                back()
-                                                delay(70)
-                                            }
-                                        }
-                                        tryAwaitRelease()
-                                        repeat.cancel()
-                                    }
-                                    backDown = false
-                                })
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.AutoMirrored.Filled.Backspace, null, Modifier.size(26.dp), tint = c.onPrimaryContainer) }
-                }
-            }
-        }
     }
 }
 

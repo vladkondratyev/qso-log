@@ -46,8 +46,8 @@ fun main(args: Array<String>) {
             state.changeLanguage(Lang.RU)
             val files = Exports({}, {}, {}, {}, {}, { _, _, _, _ -> }, {}, { _, _ -> })
             var dark by mutableStateOf(false)
-            // Sized in pixels: a 1280×860 window at 2× (Retina) scale.
-            val big = ImageComposeScene(2560, 1720, Density(2f)) { QsoTheme(dark) { key(state.language) { App(state, files) } } }
+            // Sized in pixels: the default 1024×700 window at 2× (Retina) scale.
+            val big = ImageComposeScene(2048, 1400, Density(2f)) { QsoTheme(dark) { key(state.language) { App(state, files) } } }
             // Frames need a clock, or animations (floating field labels, colours) never move past their first frame.
             val t0 = System.nanoTime()
             fun frame() = big.render(System.nanoTime() - t0)
@@ -65,10 +65,10 @@ fun main(args: Array<String>) {
 
             // Mouse wheel over the right pane.
             fun scrollRight(steps: Int, step: Float = 20f) {
-                big.sendPointerEvent(PointerEventType.Enter, Offset(1800f, 900f))
-                big.sendPointerEvent(PointerEventType.Move, Offset(1800f, 900f))
+                big.sendPointerEvent(PointerEventType.Enter, Offset(1500f, 760f))
+                big.sendPointerEvent(PointerEventType.Move, Offset(1500f, 760f))
                 repeat(steps) {
-                    big.sendPointerEvent(PointerEventType.Scroll, Offset(1800f, 900f), scrollDelta = Offset(0f, step))
+                    big.sendPointerEvent(PointerEventType.Scroll, Offset(1500f, 760f), scrollDelta = Offset(0f, step))
                     frame()
                 }
             }
@@ -88,7 +88,7 @@ fun main(args: Array<String>) {
             state.showKeys = true
             shot("18-keys", 500)
             state.showKeys = false
-            scrollRight(60)
+            scrollRight(12)
             shot("05-all-fields")
             // The very bottom of the card: when the contact went into ADIF, CSV and contest-report files.
             scrollRight(400)

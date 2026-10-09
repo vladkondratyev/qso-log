@@ -141,10 +141,14 @@ class Settings(context: Context) {
         get() = prefs.getString("sheet_status", "") ?: ""
         set(v) = prefs.edit().putString("sheet_status", v).apply()
 
-    /** Contest card: the app's own keyboard instead of the system one. */
-    var contestKeypad: Boolean
-        get() = prefs.getBoolean("contest_keypad", true)
-        set(v) = prefs.edit().putBoolean("contest_keypad", v).apply()
+    /**
+     * The app's own keyboard in the QSO cards (normal and contest) instead of the system one, and its size.
+     * Before 0.34.0 it was a contest-only switch, `contest_keypad`: its value carries over.
+     */
+    var keypad: KeypadMode
+        get() = prefs.getString("keypad", null)?.let { v -> KeypadMode.entries.firstOrNull { it.name == v } }
+            ?: if (prefs.getBoolean("contest_keypad", true)) KeypadMode.NORMAL else KeypadMode.OFF
+        set(v) = prefs.edit().putString("keypad", v.name).apply()
 
     /** Contest card: the RST fields are shown (else folded into one line). */
     var contestRstShown: Boolean
@@ -154,3 +158,6 @@ class Settings(context: Context) {
         get() = prefs.getString("last_power", "") ?: ""
         set(v) = prefs.edit().putString("last_power", v).apply()
 }
+
+/** The app's keyboard in the QSO cards: off (the system one), full size or compact (keys 30% lower). */
+enum class KeypadMode { OFF, NORMAL, COMPACT }

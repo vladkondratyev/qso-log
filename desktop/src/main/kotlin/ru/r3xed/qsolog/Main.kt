@@ -73,7 +73,7 @@ fun main() {
     }
     application {
         val state = remember { AppState() }
-        val windowState = rememberWindowState(width = 1280.dp, height = 880.dp, position = WindowPosition(Alignment.Center))
+        val windowState = rememberWindowState(width = 1024.dp, height = 700.dp, position = WindowPosition(Alignment.Center))
         Window(
             onCloseRequest = { state.flushSettings(); exitApplication() },
             title = "QSO-LOG",
@@ -94,7 +94,7 @@ fun main() {
                 } else false
             },
         ) {
-            LaunchedEffect(Unit) { window.minimumSize = Dimension(980, 640) }
+            LaunchedEffect(Unit) { window.minimumSize = Dimension(720, 480) }
             // ADIF and CSV: first the dialog (only new or all, the export mark), then the save dialog.
             val exportCsv = { state.openExport(ExportFormat.CSV, selectedOnly = false) }
             val exportAdif = { state.openExport(ExportFormat.ADIF, selectedOnly = false) }

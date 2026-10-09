@@ -87,9 +87,17 @@ private val AppTypography = Typography(
     labelSmall = base.labelSmall.sans().copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
 )
 
+/** How much smaller than its sizes in dp the desktop interface is drawn (1.14.0: 30% more compact). */
+const val UI_SCALE = 0.7f
+
 @Composable
 fun QsoTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    androidx.compose.runtime.CompositionLocalProvider(LocalExtra provides if (dark) DarkExtra else LightExtra) {
+    // The whole window drawn 30% smaller than the phone sizes the screens were made with: text, buttons and gaps alike.
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalExtra provides if (dark) DarkExtra else LightExtra,
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density * UI_SCALE, d.fontScale),
+    ) {
         MaterialTheme(colorScheme = if (dark) Dark else Light, typography = AppTypography, content = content)
     }
 }

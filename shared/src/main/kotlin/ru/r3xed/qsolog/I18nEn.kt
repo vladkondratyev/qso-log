@@ -821,4 +821,16 @@ internal val EN: Map<String, String> = hashMapOf(
     "закрыть карточку или отменить выбор" to "close the card or cancel the selection",
     "дашборд, карта QSO, настройки" to "dashboard, QSO map, settings",
     "На Mac клавиши F нажимаются вместе с fn, если в настройках клавиатуры не включено «Использовать F1, F2 и т. д. как стандартные функциональные клавиши»." to "On a Mac press the F keys together with fn unless “Use F1, F2, etc. keys as standard function keys” is on in the keyboard settings.",
+    // Android 0.34.0: the app's keypad in both cards, normal or compact.
+    "Системная" to "System",
+    "Своя" to "Built-in",
+    "Своя компактная" to "Built-in, compact",
+    "Клавиатура" to "Keyboard",
+    "Клавиатура в карточке" to "Keyboard in the card",
+    "клавиатура: %s" to "keyboard: %s",
+    "Спрятать клавиатуру" to "Hide the keyboard",
+    "→ Частота" to "→ Frequency",
+    "→ RST отправлен" to "→ RST sent",
+    "→ RST принят" to "→ RST rcvd",
+    "Своя клавиатура — крупные клавиши с цифрами и латиницей прямо в карточке, системная не открывается. Ею вводятся позывной, частота и RST в обычной карточке и все поля в карточке соревнований; имя, город и комментарий — системной. Компактная на треть ниже, карточке остаётся больше места. Переключить можно и в самой карточке — кнопкой с клавиатурой вверху. Выбор запоминается." to "The built-in keyboard has big keys with digits and Latin letters right in the card; the system keyboard stays closed. It types the callsign, frequency and RST in the normal card and every field in the contest card; name, city and comment use the system keyboard. The compact one is a third lower and leaves more room for the card. You can also switch it in the card with the keyboard button at the top. The choice is remembered.",
 )

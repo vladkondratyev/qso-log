@@ -287,8 +287,12 @@ fun SettingsScreen(
 
             SettingsBlock(
                 tr("Ввод связи"),
-                (if (vm.contestMode) "CONTEST MODE · " else "") + if (vm.timeOnSave) tr("время — при сохранении") else tr("время — при открытии карточки"),
+                (if (vm.contestMode) "CONTEST MODE · " else "") + tr("клавиатура: %s", vm.keypad.label().lowercase()) + " · " +
+                    if (vm.timeOnSave) tr("время — при сохранении") else tr("время — при открытии карточки"),
             ) {
+                Text(tr("Клавиатура в карточке"), style = MaterialTheme.typography.titleSmall)
+                KeypadModeRow(vm.keypad, vm::changeKeypad)
+                Note(tr("Своя клавиатура — крупные клавиши с цифрами и латиницей прямо в карточке, системная не открывается. Ею вводятся позывной, частота и RST в обычной карточке и все поля в карточке соревнований; имя, город и комментарий — системной. Компактная на треть ниже, карточке остаётся больше места. Переключить можно и в самой карточке — кнопкой с клавиатурой вверху. Выбор запоминается."))
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                         .toggleable(value = vm.timeOnSave, role = Role.Switch, onValueChange = vm::changeTimeOnSave)
@@ -792,8 +796,6 @@ private fun ContestModeSettings(vm: AppViewModel) {
                 shape = RoundedCornerShape(12.dp),
             )
         }
-        SwitchRow(tr("Своя клавиатура в карточке"), vm.contestKeypad, vm::changeContestKeypad)
-        Note(tr("Крупные клавиши с цифрами и латиницей прямо в карточке, системная клавиатура не открывается. Выключите, чтобы вводить системной."))
     }
     Note(tr("Режим соревнований: «Добавить QSO» открывает упрощённую карточку — позывной, контрольные номера и RST; время ставится при записи. Принятый номер может быть любым: 015, MO69, EU, 16. Свайп справа налево — записать и открыть следующую, слева направо — вернуться к предыдущим связям контеста и поправить их. Такие связи отмечены в журнале флажком. Режим выключается при каждом запуске программы."))
 }

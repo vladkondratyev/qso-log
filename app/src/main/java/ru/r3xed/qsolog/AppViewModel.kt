@@ -32,6 +32,7 @@ import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
 import ru.r3xed.qsolog.data.QrzCom
 import ru.r3xed.qsolog.data.ContestMode
+import ru.r3xed.qsolog.data.KeypadMode
 import ru.r3xed.qsolog.data.SyncState
 import ru.r3xed.qsolog.data.SheetSync
 import ru.r3xed.qsolog.data.QrzException
@@ -1252,12 +1253,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** What the next contest contact sends: the fixed code or the serial. */
     fun contestSentNext(): String = if (contestSentFixed) contestSentText else ContestMode.serial(contestSerial)
 
-    var contestKeypad by mutableStateOf(prefs.contestKeypad); private set
     var contestRstShown by mutableStateOf(prefs.contestRstShown); private set
 
-    fun changeContestKeypad(on: Boolean) {
-        contestKeypad = on
-        prefs.contestKeypad = on
+    /** The app's own keyboard in both cards, remembered between starts. */
+    var keypad by mutableStateOf(prefs.keypad); private set
+
+    fun changeKeypad(mode: KeypadMode) {
+        keypad = mode
+        prefs.keypad = mode
     }
 
     fun changeContestRstShown(on: Boolean) {

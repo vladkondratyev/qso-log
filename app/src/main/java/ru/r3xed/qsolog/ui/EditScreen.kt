@@ -115,12 +115,25 @@ import ru.r3xed.qsolog.Screen
 import ru.r3xed.qsolog.TIME_FMT
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.ContestMode
+import ru.r3xed.qsolog.data.KeypadMode
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.material.icons.filled.KeyboardHide
+import androidx.compose.ui.platform.LocalFocusManager
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.utc
 
 
+/** The fields of the normal card typed on the app's keypad. */
+private enum class KeyTarget { CALL, FREQ, RST_SENT, RST_RCVD }
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPermission: () -> Unit) {
     val f = vm.form
@@ -138,6 +151,54 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
     val rstFocus = remember { FocusRequester() }
     val rstRcvdFocus = remember { FocusRequester() }
 
+    // The app's keypad (settings → "Ввод связи", or the keyboard button above): callsign, frequency and reports are
+    // typed on it, the rest of the card on the system keyboard. No active field — the keypad is hidden.
+    val keypad = vm.keypad != KeypadMode.OFF
+    val compact = vm.keypad == KeypadMode.COMPACT
+    var active by remember(f.id, f.createdAt) { mutableStateOf(if (f.isNew) KeyTarget.CALL else null) }
+    var replace by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    // A system text field took the focus: its keyboard opens, ours steps aside.
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible) { if (imeVisible) active = null }
+    val freqView = remember { BringIntoViewRequester() }
+    val rstView = remember { BringIntoViewRequester() }
+    fun valueOf(t: KeyTarget) = when (t) {
+        KeyTarget.CALL -> vm.form.call
+        KeyTarget.FREQ -> vm.form.freq
+        KeyTarget.RST_SENT -> vm.form.rstSent
+        KeyTarget.RST_RCVD -> vm.form.rstRcvd
+    }
+    fun setValue(t: KeyTarget, v: String) {
+        when (t) {
+            KeyTarget.CALL -> { error = null; vm.setCall(v) }
+            KeyTarget.FREQ -> vm.setFreq(v)
+            KeyTarget.RST_SENT -> vm.update(vm.form.copy(rstSent = v))
+            KeyTarget.RST_RCVD -> vm.update(vm.form.copy(rstRcvd = v))
+        }
+    }
+    // A second tap on the active field selects its value (the next key replaces it), as in the contest card.
+    fun activate(t: KeyTarget?) {
+        focusManager.clearFocus()
+        replace = t != null && if (t == active) !replace && valueOf(t).isNotBlank() else t != KeyTarget.CALL && valueOf(t).isNotBlank()
+        active = t
+    }
+    // What is usually typed next: the frequency (if empty), the reports, then the keypad folds away.
+    fun nextOf(t: KeyTarget) = when (t) {
+        KeyTarget.CALL -> if (vm.form.freq.isBlank()) KeyTarget.FREQ else KeyTarget.RST_SENT
+        KeyTarget.FREQ -> KeyTarget.RST_SENT
+        KeyTarget.RST_SENT -> KeyTarget.RST_RCVD
+        KeyTarget.RST_RCVD -> null
+    }
+    // Again when the lookup answers: the station card above grows and pushes the field down.
+    LaunchedEffect(active, vm.lookup) {
+        when (active) {
+            KeyTarget.FREQ -> freqView.bringIntoView()
+            KeyTarget.RST_SENT, KeyTarget.RST_RCVD -> rstView.bringIntoView()
+            else -> {}
+        }
+    }
+
     // Closing a card with typed data asks first; an untouched one closes at once.
     val close = { if (vm.hasUnsavedChanges) confirmClose = true else vm.closeEditor() }
     BackHandler { if (showMap) showMap = false else close() }
@@ -151,6 +212,10 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                 Icon(Icons.Filled.Close, tr("Закрыть без сохранения"), Modifier.size(30.dp))
             }
             Text(if (f.isNew) tr("Новый QSO") else tr("Запись QSO"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            KeypadMenuButton(vm.keypad) { m ->
+                vm.changeKeypad(m)
+                if (m != KeypadMode.OFF && active == null && f.isNew && f.call.isBlank()) activate(KeyTarget.CALL)
+            }
             // A voice note for a card typed by hand: offered once QRZ.ru has found the station, runs until ■ or "Сохранить".
             val since = vm.cardRecordingSince
             if (since != null) CardRecording(since, onStop = vm::stopCardRecording)
@@ -169,7 +234,11 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             // --- callsign ---
             // IntrinsicSize.Min: the play button takes the height of the field; top padding skips the floating label.
             Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
+                if (keypad) KeyField(
+                    tr("Позывной корреспондента"), f.call, active == KeyTarget.CALL, replace && active == KeyTarget.CALL,
+                    error == CALL_ERROR, Modifier.weight(1f), big = true,
+                ) { activate(KeyTarget.CALL) }
+                else OutlinedTextField(
                     value = f.call,
                     onValueChange = { error = null; vm.setCall(it) },
                     modifier = Modifier.weight(1f).focusRequester(callFocus),
@@ -202,11 +271,13 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                     )
                 }
             }
-            if (f.isNew) LaunchedEffect(Unit) { callFocus.requestFocus() }
+            if (keypad && error == CALL_ERROR) Text(CALL_ERROR, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            if (f.isNew && !keypad) LaunchedEffect(Unit) { callFocus.requestFocus() }
             // Callsigns from the log that start with what is typed: one tap instead of the rest.
             if (f.isNew) CallSuggestions(vm) { call ->
                 vm.setCall(call)
-                if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
+                if (keypad) activate(nextOf(KeyTarget.CALL))
+                else if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
             }
 
             StationCard(vm)
@@ -244,7 +315,11 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             }
 
             // Frequency first: typing it picks the band below by itself.
-            Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
+            if (keypad) KeyField(
+                tr("Частота, МГц"), f.freq, active == KeyTarget.FREQ, replace && active == KeyTarget.FREQ, false,
+                Modifier.fillMaxWidth().bringIntoViewRequester(freqView),
+            ) { activate(KeyTarget.FREQ) }
+            else Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
 
             // One scrolling row each: what is switched on in the settings, plus the record's own value if that one is off.
             // Nothing to choose from (one value on, and the record has it) — the label alone shows it.
@@ -258,13 +333,15 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             // Reports: the usual values one tap away, digits keyboard unless the mode reports in dB.
             val quick = quickReports(f.mode)
             val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.bringIntoViewRequester(rstView), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                    if (keypad) KeyField(tr("RST отправлен"), f.rstSent, active == KeyTarget.RST_SENT, replace && active == KeyTarget.RST_SENT, false, Modifier.fillMaxWidth()) { activate(KeyTarget.RST_SENT) }
+                    else RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
                     QuickValues(quick, f.rstSent) { vm.update(vm.form.copy(rstSent = it)) }
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus), rstKeyboard, onNext = null)
+                    if (keypad) KeyField(tr("RST принят"), f.rstRcvd, active == KeyTarget.RST_RCVD, replace && active == KeyTarget.RST_RCVD, false, Modifier.fillMaxWidth()) { activate(KeyTarget.RST_RCVD) }
+                    else RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus), rstKeyboard, onNext = null)
                     QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
                 }
             }
@@ -320,6 +397,46 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             Spacer(Modifier.height(8.dp))
         }
 
+        // --- the app's keypad, while one of its fields is active: keys, then "hide" and "to the next field" ---
+        val target = active
+        if (keypad && target != null && !imeVisible) {
+            HorizontalDivider(color = x.line)
+            Column(Modifier.padding(horizontal = 6.dp, vertical = if (compact) 4.dp else 6.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)) {
+                Keypad(
+                    compact = compact,
+                    onKey = { c ->
+                        val v = if (replace) c else valueOf(target) + c
+                        replace = false
+                        setValue(target, v.take(if (target == KeyTarget.CALL) 15 else if (target == KeyTarget.FREQ) 12 else 6))
+                    },
+                    onBackspace = { setValue(target, if (replace) "" else valueOf(target).dropLast(1)); replace = false },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    OutlinedIconButton(
+                        onClick = { activate(null) },
+                        modifier = Modifier.size(keypadButtonHeight(compact)),
+                        shape = RoundedCornerShape(10.dp),
+                    ) { Icon(Icons.Filled.KeyboardHide, tr("Спрятать клавиатуру")) }
+                    val next = nextOf(target)
+                    OutlinedButton(
+                        onClick = { activate(next) },
+                        modifier = Modifier.weight(1f).height(keypadButtonHeight(compact)), shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp),
+                    ) {
+                        Text(
+                            when (next) {
+                                KeyTarget.FREQ -> tr("→ Частота")
+                                KeyTarget.RST_SENT -> tr("→ RST отправлен")
+                                KeyTarget.RST_RCVD -> tr("→ RST принят")
+                                else -> tr("Готово")
+                            },
+                            fontSize = if (compact) 16.sp else 17.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+
         // --- bottom bar ---
         HorizontalDivider(color = x.line)
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -352,7 +469,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                     onClick = {
                         error = vm.saveAndNext()
                         when {
-                            error == CALL_ERROR -> { scope.launch { scroll.animateScrollTo(0) }; callFocus.requestFocus() }
+                            error == CALL_ERROR -> { scope.launch { scroll.animateScrollTo(0) }; if (keypad) activate(KeyTarget.CALL) else callFocus.requestFocus() }
                             error != null -> editTime = true
                         }
                     },
@@ -369,7 +486,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                         error = vm.save()
                         when {
                             // Show the problem where it is: the callsign at the top, the date/time fields opened.
-                            error == CALL_ERROR -> { scope.launch { scroll.animateScrollTo(0) }; callFocus.requestFocus() }
+                            error == CALL_ERROR -> { scope.launch { scroll.animateScrollTo(0) }; if (keypad) activate(KeyTarget.CALL) else callFocus.requestFocus() }
                             error != null -> editTime = true
                         }
                     },
