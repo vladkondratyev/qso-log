@@ -193,6 +193,8 @@ fun EditPane(vm: AppState) {
                 e.key == Key.F4 -> { rstFocus.requestFocus(); true }
                 e.key == Key.F5 -> { rstRcvdFocus.requestFocus(); true }
                 e.key == Key.F6 -> { vm.setNow(); true }
+                // F7: a voice note for this card, as the microphone button above does.
+                e.key == Key.F7 -> { if (vm.cardRecordingSince != null) vm.stopCardRecording() else if (f.isNew && f.audio.isBlank()) vm.startCardRecording(); true }
                 e.key == Key.F8 -> { if (f.isNew) showSaveError(vm.saveAndNext()); true }
                 e.key == Key.F12 -> { showSaveError(vm.trySave()); true }
                 e.isAltPressed && digit >= 0 && !e.isShiftPressed -> {
@@ -531,6 +533,19 @@ private fun StationCard(vm: AppState) {
             }
             Lookup.NotFound -> if (!hasInfo) Text(tr("На QRZ.ru такого позывного нет"), fontSize = 16.sp, color = ink)
             // Country and region by prefix from HamQTH; say where the data came from and why QRZ.ru did not help.
+            // No answer online: filled from the search history, with where and when it was found.
+            is Lookup.FromHistory -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    tr("Из истории поиска: %s, %s", sourceTitle(lookup.entry.source), DATE_FMT.format(utc(lookup.entry.searchedAt))),
+                    fontSize = 16.sp, color = ink.copy(alpha = 0.8f),
+                )
+                lookup.problem?.let { p ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(p, fontSize = 16.sp, color = ink.copy(alpha = 0.8f), modifier = Modifier.weight(1f))
+                        TextButton(onClick = vm::retryLookup) { Text(tr("Повторить")) }
+                    }
+                }
+            }
             is Lookup.Approx -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(tr("≈ Страна и область по позывному (HamQTH)"), fontSize = 16.sp, color = ink.copy(alpha = 0.8f))
                 Row(verticalAlignment = Alignment.CenterVertically) {

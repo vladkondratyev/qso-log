@@ -21,6 +21,13 @@ import ru.r3xed.qsolog.data.Cabrillo
 import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.data.CallHistory
 import ru.r3xed.qsolog.data.CallCommand
+import ru.r3xed.qsolog.data.SearchEntry
+import ru.r3xed.qsolog.data.SearchHistory
+import ru.r3xed.qsolog.data.SearchSource
+import ru.r3xed.qsolog.data.HistoryFilter
+import ru.r3xed.qsolog.data.HistorySort
+import ru.r3xed.qsolog.data.HistoryView
+import ru.r3xed.qsolog.data.HISTORY_FIELDS
 import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.QrzInfo
 import ru.r3xed.qsolog.data.Csv
@@ -60,6 +67,8 @@ enum class Pane {
     Contest,
     /** Charts of the log: bands, modes, days, stations… */
     Dashboard,
+    /** Stations looked up but not logged. */
+    History,
 }
 
 /** The contest card's message when the received number is missing; the card then puts the cursor in that field. */
@@ -154,10 +163,10 @@ class AppState {
             null
         }
         // The XML API gives no RDA district: for a Russian station it is read from the callsign page of the site.
-        if (settings.qrzLogin.isNotBlank()) ask { qrz.lookup(call, stillWanted) }?.let { return qrzSite.withRda(it) }
+        if (settings.qrzLogin.isNotBlank()) ask { qrz.lookup(call, stillWanted) }?.let { return qrzSite.withRda(it).copy(source = SearchSource.QRZ_RU.key) }
         // The QRZ.ru site is the same database as its XML API: asked only when the API is not set or failed.
-        if (settings.qrzSiteEmail.isNotBlank() && !notFound) ask { qrzSite.lookup(call) }?.let { return it }
-        if (settings.qrzComLogin.isNotBlank()) ask { qrzCom.lookup(call) }?.let { return it }
+        if (settings.qrzSiteEmail.isNotBlank() && !notFound) ask { qrzSite.lookup(call) }?.let { return it.copy(source = SearchSource.QRZ_RU_SITE.key) }
+        if (settings.qrzComLogin.isNotBlank()) ask { qrzCom.lookup(call) }?.let { return it.copy(source = SearchSource.QRZ_COM.key) }
         if (notFound) return null
         throw problem ?: QrzException(403, tr("Укажите учётную запись QRZ.ru в настройках"))
     }
@@ -733,6 +742,7 @@ class AppState {
 
     /** Closes the card without saving; a voice note recorded for an unsaved contact is deleted. */
     fun closeEditor() {
+        rememberSearch()
         lookupJob?.cancel() // a lookup for another card must not land in this one
         discardCardRecording()
         contestDraft = null
@@ -948,7 +958,7 @@ class AppState {
     private suspend fun runLookup(call: String) {
         lookup = Lookup.Loading
         if (!hasQrzAccount) {
-            lookup = hamqthFallback(call, qrzProblem = null)
+            lookup = historyFallback(call, problem = null) ?: hamqthFallback(call, qrzProblem = null)
                 ?: Lookup.Failed(tr("Укажите учётную запись QRZ.ru в настройках"), noAccount = true)
             return
         }
@@ -979,10 +989,10 @@ class AppState {
             throw e
         } catch (e: QrzException) {
             val msg = e.message ?: tr("Ошибка QRZ.ru")
-            hamqthFallback(call, qrzProblem = msg) ?: Lookup.Failed(msg)
+            historyFallback(call, msg) ?: hamqthFallback(call, qrzProblem = msg) ?: Lookup.Failed(msg)
         } catch (e: Exception) {
             val msg = networkError(e)
-            hamqthFallback(call, qrzProblem = msg) ?: Lookup.Failed(msg)
+            historyFallback(call, msg) ?: hamqthFallback(call, qrzProblem = msg) ?: Lookup.Failed(msg)
         }
     }
 
@@ -1121,7 +1131,7 @@ class AppState {
         // QRZ.ru did not answer (no internet, error, still waiting): keep a mark so the log can retry later.
         val l = lookup
         val lookupMissed = hasQrzAccount &&
-            (!f.infoFromQrz && (l is Lookup.Failed || l is Lookup.Loading) || (l is Lookup.Approx && l.qrzProblem != null))
+            (!f.infoFromQrz && (l is Lookup.Failed || l is Lookup.Loading) || (l is Lookup.Approx && l.qrzProblem != null) || (l is Lookup.FromHistory && l.problem != null))
         val finalQso = qso.copy(pendingLookup = lookupMissed || (!f.isNew && f.pendingLookup && !(f.infoFromQrz && l is Lookup.Found)))
         prefs.lastBand = f.band
         prefs.lastMode = f.mode
@@ -1130,6 +1140,7 @@ class AppState {
         lookupJob?.cancel()
         saveJob = scope.launch {
             lastSavedId = withContext(Dispatchers.IO) { db.save(finalQso) }
+            forgetSearch(finalQso.call)
             reload()
             val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
             if (f.isNew) newSavedTick++
@@ -1153,6 +1164,247 @@ class AppState {
         form = form.copy(band = f.band, mode = f.mode, freq = freq, rstSent = defaultRst(f.mode), rstRcvd = defaultRst(f.mode))
         formOriginal = form
         return null
+    }
+
+    // ---------- moving through lists with the keyboard ----------
+
+    /** The log row the arrows are on (its id); the list draws it outlined and scrolls to it. */
+    var logCursor by mutableStateOf<Long?>(null)
+    /** The rows in the order the log shows them (groups and sorting applied), set by the list. */
+    var logOrder: List<Long> = emptyList()
+    /** The log's search field has the cursor: letters and arrows belong to it. */
+    var searchFocused by mutableStateOf(false)
+
+    /** ↑ ↓ PgUp PgDn: [delta] rows; [to] ±1 jumps to the first (Home) or last (End). */
+    fun moveLogCursor(delta: Int, to: Int = 0) {
+        val o = logOrder
+        if (o.isEmpty()) return
+        val i = o.indexOf(logCursor)
+        logCursor = o[when {
+            to < 0 -> 0
+            to > 0 -> o.lastIndex
+            i < 0 -> if (delta >= 0) 0 else o.lastIndex
+            else -> (i + delta).coerceIn(0, o.lastIndex)
+        }]
+    }
+
+    private fun cursorQso(): Qso? = logCursor?.let { id -> qsos.firstOrNull { it.id == id } }
+
+    /** Enter on the log: opens the row (while picking, picks it). */
+    fun openLogCursor() {
+        val q = cursorQso() ?: return
+        if (selecting) toggleSelected(q.id) else edit(q)
+    }
+
+    /** Space on the log: picks or unpicks the row. */
+    fun toggleLogCursor() { cursorQso()?.let { toggleSelected(it.id) } }
+
+    /** Delete on the log: the row goes (the message offers to undo), the cursor stays at that place. */
+    fun deleteLogCursor() {
+        val q = cursorQso() ?: return
+        val o = logOrder
+        val i = o.indexOf(q.id)
+        logCursor = o.getOrNull(i + 1) ?: o.getOrNull(i - 1)
+        delete(q)
+    }
+
+    /** Ctrl+K: contest mode on or off. */
+    fun toggleContestMode() {
+        changeContestMode(!contestMode)
+        say(if (contestMode) tr("CONTEST MODE включён") else tr("CONTEST MODE выключен"))
+    }
+
+    /** Ctrl+R: the table sync, if it is set up. */
+    fun syncByKey() {
+        if (sheetUrl.isBlank()) say(tr("Синхронизация не настроена: укажите адрес таблицы в настройках")) else syncSheet()
+    }
+
+    /** The history row the arrows are on (its callsign). */
+    var historyCursor by mutableStateOf<String?>(null)
+    /** The history's filter field has the cursor: letters belong to it. */
+    var historyTyping by mutableStateOf(false)
+    /** The edit dialog of the history: these callsigns (one or several); null — closed. */
+    var historyEditCalls by mutableStateOf<List<String>?>(null)
+    /** "Удалить из истории?" for these callsigns; null — closed. */
+    var historyDeleteAsk by mutableStateOf<List<String>?>(null)
+
+    fun moveHistoryCursor(delta: Int) {
+        val list = historyShown()
+        if (list.isEmpty()) return
+        val i = list.indexOfFirst { it.call == historyCursor }
+        historyCursor = list[if (i < 0) (if (delta >= 0) 0 else list.lastIndex) else (i + delta).coerceIn(0, list.lastIndex)].call
+    }
+
+    /** What a history key acts on: the open entry, else the picked ones, else the row under the cursor. */
+    fun historyTargets(): List<String> = historyOpen?.let { listOf(it.call) }
+        ?: historySelected.toList().ifEmpty { listOfNotNull(historyCursor) }
+
+    fun openHistoryCursor() {
+        val e = historyEntries.firstOrNull { it.call == historyCursor } ?: return
+        if (historySelected.isNotEmpty()) toggleHistorySelected(e.call) else openHistoryEntry(e)
+    }
+
+    fun newQsoFromHistoryTarget() {
+        val call = historyOpen?.call ?: historyCursor ?: return
+        historyEntries.firstOrNull { it.call == call }?.let(::newQsoFromHistory)
+    }
+
+    // ---------- search history ----------
+
+    /** Stations looked up but not logged: the "История поиска" screen, and a card filled without the internet. */
+    private val searchHistory = SearchHistory(java.io.File(AppDirs.data, "search_history.json"))
+    var historyOn by mutableStateOf(prefs.searchHistory); private set
+    var historyEntries by mutableStateOf(searchHistory.all()); private set
+    /** Callsigns picked with a long press (a click with ⌘/Ctrl on the computer): delete or edit them together. */
+    var historySelected by mutableStateOf<Set<String>>(emptySet()); private set
+    /** The entry shown with its map; null — the list. */
+    var historyOpen by mutableStateOf<SearchEntry?>(null); private set
+
+    fun changeHistoryOn(on: Boolean) {
+        historyAsk = false
+        historyOn = on
+        prefs.searchHistory = on
+    }
+
+    /** "Включить историю поиска?" is on screen: switching it on says first what it is used for. */
+    var historyAsk by mutableStateOf(false)
+
+    /** The switch in the menu or on the history screen: on asks first, off is at once (the entries stay). */
+    fun requestHistoryOn(on: Boolean) {
+        if (on && !historyOn) historyAsk = true else changeHistoryOn(on)
+    }
+
+    fun openHistory() {
+        historySelected = emptySet()
+        historyOpen = null
+        historyEntries = searchHistory.all()
+        historyMap = false
+        pane = Pane.History
+    }
+
+    /** Back: from an entry to the list, from a selection to the plain list, from the list to the log. */
+    fun closeHistory() {
+        when {
+            historyOpen != null -> historyOpen = null
+            historyMap -> historyMap = false
+            historySelected.isNotEmpty() -> historySelected = emptySet()
+            else -> pane = Pane.Empty
+        }
+    }
+
+    fun openHistoryEntry(e: SearchEntry) { historyMap = false; historyOpen = e }
+
+    /** Filters and order of the list; starred entries are always on top. */
+    var historyFilter by mutableStateOf(HistoryFilter()); private set
+    var historySort by mutableStateOf(HistorySort.DATE); private set
+    /** All shown entries on one map instead of the list. */
+    var historyMap by mutableStateOf(false)
+
+    fun changeHistoryFilter(f: HistoryFilter) { historyFilter = f }
+    fun changeHistorySort(s: HistorySort) { historySort = s }
+
+    /** The list as shown: filtered, sorted, starred first. */
+    fun historyShown(): List<SearchEntry> = HistoryView.of(historyEntries, historyFilter, historySort, settings.myPosition)
+
+    /** Stars or unstars [calls] (all get the same mark: starred unless every one already is). */
+    fun toggleFavorite(calls: Collection<String>) {
+        val star = !calls.all { c -> historyEntries.firstOrNull { it.call == c }?.favorite == true }
+        searchHistory.update(calls) { it.copy(favorite = star) }
+        historyEntries = searchHistory.all()
+        historyOpen = historyOpen?.let { o -> historyEntries.firstOrNull { it.call == o.call } }
+        historySelected = emptySet()
+    }
+
+    fun toggleHistorySelected(call: String) {
+        historySelected = if (call in historySelected) historySelected - call else historySelected + call
+    }
+
+    fun selectAllHistory() { historySelected = historyEntries.map { it.call }.toSet() }
+
+    fun deleteHistory(calls: Collection<String>) {
+        searchHistory.delete(calls)
+        historyEntries = searchHistory.all()
+        historySelected = historySelected - calls.toSet()
+        if (historyOpen?.call in calls) historyOpen = null
+        say(tr("Удалено из истории поиска: %s", calls.size))
+    }
+
+    /**
+     * Sets the given fields of all [calls] at once; a null field stays as each entry has it. A new locator moves the
+     * station there (the coordinates of the old answer no longer apply).
+     */
+    fun editHistory(calls: Collection<String>, name: String?, qth: String?, country: String?, locator: String?, note: String?) {
+        val n = searchHistory.update(calls) { e ->
+            val loc = locator?.trim()?.let { if (it.length >= 4) it.substring(0, 4).uppercase() + it.substring(4).lowercase() else it.uppercase() }
+            e.copy(
+                name = name?.trim() ?: e.name, qth = qth?.trim() ?: e.qth, country = country?.trim() ?: e.country,
+                locator = loc ?: e.locator,
+                lat = if (loc != null && loc != e.locator) null else e.lat, lon = if (loc != null && loc != e.locator) null else e.lon,
+                note = note?.trim() ?: e.note,
+            )
+        }
+        historyEntries = searchHistory.all()
+        historyOpen = historyOpen?.let { o -> historyEntries.firstOrNull { it.call == o.call } }
+        historySelected = emptySet()
+        say(tr("Изменено записей: %s", n))
+    }
+
+    /** A new card for a station from the history; online, the card is refreshed as usual. */
+    fun newQsoFromHistory(e: SearchEntry) {
+        addQso()
+        if (pane != Pane.Edit) return // the contest card fills only the callsign
+        form = form.copy(
+            call = e.call, name = e.name, qth = e.qth, country = e.country, locator = e.locator,
+            lat = e.lat, lon = e.lon, infoFromQrz = true,
+            adif = form.adif + e.adif.filter { (k, v) -> v.isNotBlank() && form.adif[k].isNullOrBlank() },
+        )
+        formOriginal = form
+        cardFromLog = true
+        editReturn = Pane.History
+        loadHistory(e.call)
+        lookup = Lookup.FromHistory(e)
+        if (hasQrzAccount) lookupJob = scope.launch { runLookup(e.call) }
+    }
+
+    /** The card was filled from the history: the station's data as it was found earlier. */
+    private fun historyFallback(call: String, problem: String?): Lookup? {
+        if (!historyOn) return null
+        val e = searchHistory.get(call) ?: return null
+        val f = form
+        if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
+            form = f.copy(
+                name = e.name, qth = e.qth, country = e.country, locator = e.locator, lat = e.lat, lon = e.lon, infoFromQrz = true,
+                adif = f.adif + e.adif.filter { (k, v) -> v.isNotBlank() && f.adif[k].isNullOrBlank() },
+            )
+        }
+        return Lookup.FromHistory(e, problem)
+    }
+
+    /** A new card closed or wiped without saving: what was found about the station goes to the history. */
+    private fun rememberSearch() {
+        if (!historyOn) return
+        val f = form
+        if (!f.isNew || f.call.length < 3 || allQsos.any { it.call == f.call }) return
+        val source = when (val l = lookup) {
+            is Lookup.Found -> SearchSource.of(l.info.source.ifBlank { SearchSource.QRZ_RU.key })
+            is Lookup.Approx -> SearchSource.HAMQTH
+            is Lookup.FromHistory -> l.entry.source
+            else -> return
+        }
+        val e = SearchEntry(
+            call = f.call, name = f.name, qth = f.qth, country = f.country, locator = f.locator, lat = f.lat, lon = f.lon,
+            adif = f.adif.filterKeys { it in HISTORY_FIELDS }.filterValues { it.isNotBlank() }, source = source,
+        )
+        if (e.isEmpty) return
+        searchHistory.put(e)
+        historyEntries = searchHistory.all()
+    }
+
+    /** The station is in the log now: the history no longer needs it. */
+    private fun forgetSearch(call: String) {
+        if (searchHistory.get(call) == null) return
+        searchHistory.delete(listOf(call))
+        historyEntries = searchHistory.all()
     }
 
     // ---------- keyboard-only work (an external keyboard on a tablet, or the computer) ----------
@@ -1224,6 +1476,7 @@ class AppState {
             setAdif(ContestMode.RCVD, "")
             return
         }
+        rememberSearch()
         lookupJob?.cancel()
         discardCardRecording()
         if (f.audio.isNotBlank()) voice.delete(f.audio)

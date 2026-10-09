@@ -36,6 +36,19 @@ data class StatSummary(
     val perActiveDay: Double get() = if (activeDays == 0) 0.0 else total.toDouble() / activeDays
 }
 
+/** One country of the log: contacts, different callsigns, bands and modes worked, first and last contact. */
+data class CountryStat(
+    val country: String,
+    val continent: String?,
+    val qsos: Int,
+    val calls: Int,
+    /** In the order of [BANDS]: low frequencies first. */
+    val bands: List<String>,
+    val modes: List<String>,
+    val first: Long,
+    val last: Long,
+)
+
 /** One column of the time chart: [start] of the day, week (Monday) or month, the count and its split by [byKey]. */
 data class TimePoint(val start: LocalDate, val count: Int, val byKey: Map<String, Int> = emptyMap())
 
@@ -78,6 +91,24 @@ object Stats {
         list.mapNotNull { key(it)?.ifBlank { null } }.groupingBy { it }.eachCount()
             .entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
             .map { it.key to it.value }
+
+    /** Every country of [list] (by callsign prefix), most contacts first, ties by name. */
+    fun countryStats(list: List<Qso>): List<CountryStat> =
+        list.mapNotNull { q -> country(q)?.let { it to q } }.groupBy({ it.first }, { it.second })
+            .map { (name, qs) ->
+                CountryStat(
+                    country = name,
+                    continent = continent(qs.first()),
+                    qsos = qs.size,
+                    calls = qs.map { it.call.uppercase() }.distinct().size,
+                    bands = qs.map { it.band.lowercase() }.filter { it.isNotBlank() }.distinct()
+                        .sortedBy { b -> BANDS.indexOf(b).let { if (it < 0) Int.MAX_VALUE else it } },
+                    modes = qs.map { it.mode.uppercase() }.filter { it.isNotBlank() }.distinct().sorted(),
+                    first = qs.minOf { it.timeUtc },
+                    last = qs.maxOf { it.timeUtc },
+                )
+            }
+            .sortedWith(compareByDescending<CountryStat> { it.qsos }.thenBy { it.country })
 
     /** The first [n] entries, the rest summed into one [OTHER] entry (if there is a rest). */
     fun top(counts: List<Pair<String, Int>>, n: Int): List<Pair<String, Int>> {

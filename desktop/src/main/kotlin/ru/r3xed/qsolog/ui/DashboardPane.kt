@@ -57,6 +57,8 @@ import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.Qso
 import ru.r3xed.qsolog.data.StatBucket
 import ru.r3xed.qsolog.data.StatFilter
+import ru.r3xed.qsolog.data.CountryStat
+import androidx.compose.ui.text.style.TextOverflow
 import ru.r3xed.qsolog.data.StatPeriod
 import ru.r3xed.qsolog.data.StatSummary
 import ru.r3xed.qsolog.data.Stats
@@ -79,7 +81,7 @@ private class DashData(
     val modeKeys: List<String>,
     val bandKeys: List<String>,
     val calls: List<Pair<String, Int>>,
-    val countries: List<Pair<String, Int>>,
+    val countries: List<CountryStat>,
     val continents: List<Pair<String, Int>>,
     val weekHour: Array<IntArray>,
     val distance: IntArray,
@@ -104,7 +106,7 @@ private fun compute(all: List<Qso>, f: StatFilter, bucket: StatBucket): DashData
         modeKeys = modeRank.take(Viz.SLOTS - 1),
         bandKeys = bandRank.take(Viz.SLOTS - 1),
         calls = Stats.top(Stats.counts(list) { it.call.uppercase() }, 10).filter { it.first != Stats.OTHER },
-        countries = Stats.top(Stats.counts(list) { Stats.country(it) }, 10).filter { it.first != Stats.OTHER },
+        countries = Stats.countryStats(list),
         continents = Stats.counts(list) { Stats.continent(it) },
         weekHour = Stats.weekHour(list),
         distance = Stats.distanceBins(list),
@@ -182,11 +184,7 @@ fun DashboardPane(vm: AppState) {
                     BarList(d.calls, Viz.accent(), labelWidth = 120, mono = true)
                 }
             }
-            item {
-                ChartCard(tr("Страны DXCC"), tr("Первые 10, по префиксу позывного")) {
-                    BarList(d.countries, Viz.accent(), labelWidth = 150)
-                }
-            }
+            item { CountryCard(d.countries) }
             item {
                 ChartCard(tr("Континенты"), null) {
                     BarList(d.continents.map { continentName(it.first) to it.second }, Viz.accent(), labelWidth = 150)
@@ -313,6 +311,61 @@ private fun DistanceCard(d: DashData) {
         val labels = b.indices.map { i -> if (i == 0) "< ${b[0]}" else "${fmt(b[i - 1])}–${fmt(b[i])}" } + "> ${fmt(b.last())}"
         // Ordered bins on one series: one colour, in their own order (not sorted by count).
         BarList(labels.zip(d.distance.toList()).map { (l, n) -> "$l " + tr("км") to n }, Viz.accent(), labelWidth = 160)
+    }
+}
+
+/** How the country list is ordered. */
+private enum class CountrySort { QSOS, NAME, RECENT }
+
+/**
+ * Every country of the filtered log: contacts with a bar, different callsigns, continent, bands worked and the last
+ * contact. The first 10 are shown, the rest open with one tap.
+ */
+@Composable
+private fun CountryCard(stats: List<CountryStat>) {
+    val x = LocalExtra.current
+    var sort by remember { mutableStateOf(CountrySort.QSOS) }
+    var all by remember { mutableStateOf(false) }
+    val sorted = remember(stats, sort) {
+        when (sort) {
+            CountrySort.QSOS -> stats
+            CountrySort.NAME -> stats.sortedBy { it.country }
+            CountrySort.RECENT -> stats.sortedByDescending { it.last }
+        }
+    }
+    val max = stats.maxOfOrNull { it.qsos }?.coerceAtLeast(1) ?: 1
+    val color = Viz.accent()
+    ChartCard(tr("Страны"), tr("стран DXCC: %s · по префиксу позывного", stats.size)) {
+        Choice(listOf(CountrySort.QSOS to tr("Больше связей"), CountrySort.NAME to tr("А–Я"), CountrySort.RECENT to tr("Недавние")), sort) { sort = it }
+        Spacer(Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            (if (all) sorted else sorted.take(10)).forEach { c ->
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(c.country, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text("${c.qsos} QSO", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                    }
+                    // The bar shows the share at a glance; the number above says it exactly.
+                    Box(Modifier.padding(vertical = 3.dp).fillMaxWidth(c.qsos.toFloat() / max).height(6.dp).background(color, RoundedCornerShape(3.dp)))
+                    Text(
+                        listOfNotNull(
+                            c.continent?.let { continentName(it) },
+                            tr("позывных: %s", c.calls),
+                            c.bands.joinToString(" "),
+                            tr("последняя %s", DATE_FMT.format(java.time.Instant.ofEpochMilli(c.last).atOffset(java.time.ZoneOffset.UTC).toLocalDate())),
+                        ).filter { it.isNotBlank() }.joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall, color = x.muted,
+                    )
+                }
+            }
+            if (sorted.size > 10) {
+                Text(
+                    if (all) tr("Свернуть") else tr("Показать все: %s", sorted.size),
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { all = !all }.padding(vertical = 6.dp),
+                )
+            }
+        }
     }
 }
 

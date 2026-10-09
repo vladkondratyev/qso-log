@@ -53,17 +53,17 @@ import kotlin.math.log10
 import kotlin.math.pow
 
 /**
- * Chart colours, validated with the dataviz palette checker against the app's own surfaces (#FFFFFF, #10171E):
- * categorical slots in fixed order (blue, orange, aqua, yellow, magenta), a recessive grey for "other",
- * and a one-hue blue ramp for magnitude. Aqua and yellow are below 3:1 on white, so every chart that uses them
- * shows the values as text (legend with numbers).
+ * Chart colours in the app's own palette (QSO-LOG blue #0A5C8A first, then amber, green, violet, rose), validated
+ * with the dataviz palette checker against the app's surfaces (#FFFFFF, #10171E): categorical slots in fixed order,
+ * a recessive grey for "other", and a one-hue ramp of the app's blue for magnitude. Amber is below 3:1 on white and
+ * green/amber are close for protanopes on the dark surface, so every chart shows its values as text (legend with numbers).
  */
 object Viz {
-    private val seriesLight = listOf(Color(0xFF2A78D6), Color(0xFFEB6834), Color(0xFF1BAF7A), Color(0xFFEDA100), Color(0xFFE87BA4))
-    private val seriesDark = listOf(Color(0xFF3987E5), Color(0xFFD95926), Color(0xFF199E70), Color(0xFFC98500), Color(0xFFD55181))
-    private val rampLight = listOf(0xFFCDE2FB, 0xFF9EC5F4, 0xFF6DA7EC, 0xFF3987E5, 0xFF256ABF, 0xFF184F95, 0xFF0D366B).map(::Color)
+    private val seriesLight = listOf(Color(0xFF0A5C8A), Color(0xFFD98B00), Color(0xFF1E7B45), Color(0xFF7B61C9), Color(0xFFC0507A))
+    private val seriesDark = listOf(Color(0xFF3A9AD4), Color(0xFFC08A00), Color(0xFF2F9E62), Color(0xFF8C76DA), Color(0xFFC95C88))
+    private val rampLight = listOf(0xFFD3E8F5, 0xFFA9D2EC, 0xFF7AB8DE, 0xFF4A9ACB, 0xFF1F7BB0, 0xFF0A5C8A, 0xFF06324D).map(::Color)
     // On the dark surface "more" is lighter: the same blue ramp read the other way.
-    private val rampDark = listOf(0xFF104281, 0xFF184F95, 0xFF1C5CAB, 0xFF256ABF, 0xFF2A78D6, 0xFF5598E7, 0xFF86B6EF).map(::Color)
+    private val rampDark = listOf(0xFF12405E, 0xFF175A82, 0xFF1F74A6, 0xFF3A8FC2, 0xFF6BBEEF, 0xFF9FD4F4, 0xFFD3E8F5).map(::Color)
 
     @Composable
     fun dark() = MaterialTheme.colorScheme.background.luminance() < 0.5f

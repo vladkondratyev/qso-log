@@ -76,6 +76,8 @@ sealed interface Lookup {
     data class Approx(val dxcc: ru.r3xed.qsolog.data.DxccInfo, val qrzProblem: String? = null) : Lookup
     /** [noAccount]: no QRZ.ru login in the settings, so the card offers to open them instead of retrying. */
     data class Failed(val message: String, val noAccount: Boolean = false) : Lookup
+    /** No answer online ([problem]): the card was filled from the search history, as the station was found before. */
+    data class FromHistory(val entry: ru.r3xed.qsolog.data.SearchEntry, val problem: String? = null) : Lookup
 }
 
 val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")

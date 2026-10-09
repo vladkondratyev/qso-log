@@ -15,6 +15,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ru.r3xed.qsolog.KeyHints
 import ru.r3xed.qsolog.tr
 
 /**
@@ -25,46 +26,29 @@ internal fun KeyEvent.fromHardware(): Boolean = (nativeKeyEvent.flags and androi
 
 internal val DIGIT_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine)
 
-/** F1 or Ctrl+/: every key of an external keyboard on one screen. */
+/** F1 or Ctrl+/: every key of an external keyboard, by screen (the same list as on the computer). */
 @Composable
 fun HardwareKeysDialog(onClose: () -> Unit) {
-    val keys = listOf(
-        "Ctrl+N · F9" to tr("новая связь"),
-        "Enter" to tr("записать связь из любого поля (новая карточка — записать и открыть следующую)"),
-        tr("Пробел") to tr("из позывного — к частоте или RST (в контесте — к принятому коду)"),
-        "Tab · Shift+Tab" to tr("следующее и предыдущее поле"),
-        "↑ · Ctrl+E" to tr("исправить последнюю записанную связь (↑ — в пустом позывном)"),
-        "Esc" to tr("очистить новую карточку, второй раз — закрыть"),
-        "Ctrl+F" to tr("поиск по журналу; Enter в поиске — новая связь с найденным"),
-        "F2 · F3 · F4 · F5" to tr("позывной, частота, RST отправлен, RST принят"),
-        "F6" to tr("текущее время UTC"),
-        "F8" to tr("сохранить и открыть следующую"),
-        "F12" to tr("сохранить"),
-        "Alt+1…9" to tr("выбрать диапазон"),
-        "Alt+Shift+1…9" to tr("выбрать вид связи"),
-        "PgUp · PgDn" to tr("контест: предыдущая и следующая связь"),
-        "Ctrl+D · Ctrl+M · Ctrl+," to tr("дашборд, карта QSO, настройки"),
-        "F1 · Ctrl+/" to tr("эта подсказка"),
-    )
+    val x = LocalExtra.current
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text(tr("Внешняя клавиатура")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // The key on its own line, what it does under it: long combinations fit on a phone.
-                keys.forEach { (k, what) ->
-                    Column {
-                        Text(k, fontFamily = Mono, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        Text(what, style = MaterialTheme.typography.bodyMedium)
+                KeyHints.sections(mac = false).forEach { sec ->
+                    Text(sec.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                    // The key on its own line, what it does under it: long combinations fit on a phone.
+                    sec.keys.forEach { (k, what) ->
+                        Column {
+                            Text(k, fontFamily = Mono, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(what, style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
                 }
-                Text(
-                    tr("Команды в поле позывного (вместо позывного, затем Enter или Пробел): 20m или 20 — диапазон, CW, SSB, FT8 — вид связи, 14195 или 7.074 — частота. Поле очищается, карточка остаётся."),
-                    style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp),
-                )
+                Text(KeyHints.commands, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
                 Text(
                     tr("Когда подключена клавиатура, своя экранная клавиатура программы прячется, а курсор сразу стоит в позывном."),
-                    style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted,
+                    style = MaterialTheme.typography.bodyMedium, color = x.muted,
                 )
             }
         },

@@ -38,6 +38,7 @@ fun main(args: Array<String>) {
     val data = Files.createTempDirectory("qsolog-demo").toFile()
     System.setProperty("qsolog.data", data.absolutePath)
     seed(data)
+    seedHistory(data)
 
     runBlocking {
         withContext(Dispatchers.Main) {
@@ -126,6 +127,16 @@ fun main(args: Array<String>) {
             shot("16-dashboard", 2000)
             scrollRight(60)
             shot("17-dashboard-more", 1500)
+            state.pane = Pane.Empty
+
+            // Search history: stations looked up but not logged, one starred; the list, all on the map, one entry.
+            state.changeHistoryOn(true)
+            state.openHistory()
+            shot("19-history", 1000)
+            state.historyMap = true
+            shot("20-history-map", 6000)
+            state.openHistoryEntry(state.historyEntries.first { it.call == "VK2DEMO" })
+            shot("21-history-entry", 6000)
             state.pane = Pane.Empty
 
             state.pane = Pane.Settings
@@ -220,4 +231,18 @@ private fun seed(dir: File) {
         "station_MY_RIG" to "IC-7300", "station_MY_ANTENNA" to "Delta", "last_band" to "20m", "last_mode" to "SSB", "contest_serial" to "5",
     ).forEach { (k, v) -> props.setProperty(k, v) }
     File(dir, "settings.properties").outputStream().use { props.store(it, null) }
+}
+
+/** Made-up stations for the search history screenshots (fictional callsigns, places approximate). */
+private fun seedHistory(dir: File) {
+    val h = ru.r3xed.qsolog.data.SearchHistory(File(dir, "search_history.json"))
+    val now = System.currentTimeMillis()
+    val hour = 3_600_000L
+    listOf(
+        ru.r3xed.qsolog.data.SearchEntry("VK2DEMO", name = "Jack", qth = "Sydney", country = "Australia", locator = "QF56od", source = ru.r3xed.qsolog.data.SearchSource.QRZ_COM, searchedAt = now - 2 * hour, favorite = true, adif = mapOf("CQZ" to "30", "ITUZ" to "59")),
+        ru.r3xed.qsolog.data.SearchEntry("UA0DEMO", name = "Олег", qth = "Хабаровск", country = "Россия", locator = "PN78lk", source = ru.r3xed.qsolog.data.SearchSource.QRZ_RU, searchedAt = now - hour, adif = mapOf("STATE" to "HK", "CNTY" to "HK-01")),
+        ru.r3xed.qsolog.data.SearchEntry("EA8DEMO", country = "Canary Islands", qth = "Canary Islands", lat = 28.3, lon = -15.6, source = ru.r3xed.qsolog.data.SearchSource.HAMQTH, searchedAt = now - 3 * hour, adif = mapOf(ru.r3xed.qsolog.data.HamQth.POSITION_FIELD to ru.r3xed.qsolog.data.HamQth.POSITION_REGION)),
+        ru.r3xed.qsolog.data.SearchEntry("W1DEMO", name = "John", qth = "Boston", country = "United States", locator = "FN42kj", source = ru.r3xed.qsolog.data.SearchSource.QRZ_COM, searchedAt = now - 26 * hour, note = "QSL via LoTW"),
+        ru.r3xed.qsolog.data.SearchEntry("R2DEMO", name = "Пётр", qth = "Калининград", country = "Россия", locator = "KO04gq", source = ru.r3xed.qsolog.data.SearchSource.QRZ_RU_SITE, searchedAt = now - 30 * hour),
+    ).forEach(h::put)
 }

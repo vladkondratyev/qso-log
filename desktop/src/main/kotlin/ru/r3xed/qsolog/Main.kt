@@ -56,6 +56,10 @@ import ru.r3xed.qsolog.ui.LocalExtra
 import ru.r3xed.qsolog.ui.LogPane
 import ru.r3xed.qsolog.ui.MapPane
 import ru.r3xed.qsolog.ui.QsoTheme
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import ru.r3xed.qsolog.ui.HistoryOnDialog
+import ru.r3xed.qsolog.ui.HistoryPane
 import ru.r3xed.qsolog.ui.SettingsPane
 import ru.r3xed.qsolog.ui.WelcomePane
 import ru.r3xed.qsolog.ui.ReferencePane
@@ -70,6 +74,47 @@ val SAVE_SHORTCUT = if (IS_MAC) "⌘S" else "Ctrl+S"
 val NEXT_SHORTCUT = if (IS_MAC) "⇧⌘S" else "Ctrl+Shift+S"
 
 private fun shortcut(key: Key) = KeyShortcut(key, meta = IS_MAC, ctrl = !IS_MAC)
+
+private val DASH_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four)
+
+/** The log with no card open: the arrows walk through the rows, Enter opens, Space picks, Delete deletes. */
+private fun logKey(state: AppState, e: androidx.compose.ui.input.key.KeyEvent, mod: Boolean): Boolean {
+    when {
+        mod && e.key == Key.A -> state.selectAllShown()
+        mod -> return false
+        e.key == Key.DirectionDown -> state.moveLogCursor(1)
+        e.key == Key.DirectionUp -> state.moveLogCursor(-1)
+        e.key == Key.PageDown -> state.moveLogCursor(10)
+        e.key == Key.PageUp -> state.moveLogCursor(-10)
+        e.key == Key.MoveHome -> state.moveLogCursor(0, to = -1)
+        e.key == Key.MoveEnd -> state.moveLogCursor(0, to = 1)
+        (e.key == Key.Enter || e.key == Key.NumPadEnter) && state.logCursor != null -> state.openLogCursor()
+        e.key == Key.Spacebar && state.logCursor != null -> state.toggleLogCursor()
+        (e.key == Key.Delete || (IS_MAC && e.key == Key.Backspace)) && state.logCursor != null -> state.deleteLogCursor()
+        else -> return false
+    }
+    return true
+}
+
+/** The search history: arrows, Enter, Space, and one letter per action on the row, the picked ones or the open entry. */
+private fun historyKey(state: AppState, e: androidx.compose.ui.input.key.KeyEvent, mod: Boolean): Boolean {
+    val open = state.historyOpen != null
+    when {
+        mod && e.key == Key.A && !open -> state.selectAllHistory()
+        mod || e.isAltPressed -> return false
+        e.key == Key.DirectionDown && !open -> state.moveHistoryCursor(1)
+        e.key == Key.DirectionUp && !open -> state.moveHistoryCursor(-1)
+        (e.key == Key.Enter || e.key == Key.NumPadEnter) && !open -> state.openHistoryCursor()
+        e.key == Key.Spacebar && !open -> state.historyCursor?.let(state::toggleHistorySelected)
+        e.key == Key.F -> state.historyTargets().ifEmpty { null }?.let(state::toggleFavorite)
+        e.key == Key.E -> state.historyTargets().ifEmpty { null }?.let { state.historyEditCalls = it }
+        e.key == Key.Delete || (IS_MAC && e.key == Key.Backspace) -> state.historyTargets().ifEmpty { null }?.let { state.historyDeleteAsk = it }
+        e.key == Key.N -> state.newQsoFromHistoryTarget()
+        e.key == Key.M && !open -> state.historyMap = !state.historyMap
+        else -> return false
+    }
+    return true
+}
 
 fun main() {
     if (IS_MAC) {
@@ -89,7 +134,16 @@ fun main() {
                 val mod = if (IS_MAC) e.isMetaPressed else e.isCtrlPressed
                 if (e.type == KeyEventType.KeyDown && e.key == Key.F9) { state.addQso(); true }
                 // Ctrl+E (⌘E): the contact just logged opens to be fixed; Ctrl+F (⌘F): the search.
+                else if (e.type == KeyEventType.KeyDown && mod && e.isShiftPressed && e.key == Key.E) { state.openExport(ExportFormat.ADIF, selectedOnly = false); true }
                 else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.E) { state.editLast(); true }
+                else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.K && state.pane != Pane.Edit && state.pane != Pane.Contest) { state.toggleContestMode(); true }
+                else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.R) { state.syncByKey(); true }
+                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Empty && !state.searchFocused && !state.showKeys && logKey(state, e, mod)) true
+                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.History && !state.historyTyping && state.historyEditCalls == null && state.historyDeleteAsk == null && historyKey(state, e, mod)) true
+                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Dashboard && !mod && DASH_KEYS.indexOf(e.key) >= 0) {
+                    state.changeDashFilter(state.dashFilter.copy(period = ru.r3xed.qsolog.data.StatPeriod.entries[DASH_KEYS.indexOf(e.key)]))
+                    true
+                }
                 else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.F) { state.requestSearchFocus(); true }
                 else if (e.type == KeyEventType.KeyDown && e.key == Key.F1) { state.showKeys = !state.showKeys; true }
                 else if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) when {
@@ -109,6 +163,7 @@ fun main() {
                         true
                     }
                     state.pane == Pane.Settings -> { state.closeSettings(); true }
+                    state.pane == Pane.History -> { state.closeHistory(); true }
                     state.pane != Pane.Empty -> { state.pane = Pane.Empty; true }
                     else -> false
                 } else false
@@ -166,6 +221,7 @@ fun main() {
                     Separator()
                     Item(tr("Дашборд"), shortcut = shortcut(Key.D), onClick = state::openDashboard)
                     Item(tr("Карта QSO"), shortcut = shortcut(Key.M), onClick = state::openMap)
+                    Item(tr("История поиска"), shortcut = shortcut(Key.H), onClick = state::openHistory)
                     Item(tr("Справка и калькуляторы"), onClick = state::openReference)
                     Item(tr("Горячие клавиши") + " (F1)", onClick = { state.showKeys = true })
                     Item(tr("Настройки"), shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
@@ -229,6 +285,7 @@ fun App(state: AppState, files: Exports) {
                         Pane.Edit -> key(state.editSession) { EditPane(state) }
                         Pane.Contest -> key(state.editSession) { ContestPane(state) }
                         Pane.Dashboard -> DashboardPane(state)
+                        Pane.History -> HistoryPane(state)
                         Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif, files.importContest)
                         Pane.Map -> MapPane(state)
                         Pane.Welcome -> WelcomePane(state)
@@ -258,6 +315,7 @@ fun App(state: AppState, files: Exports) {
                 )
             }
             if (state.showKeys) KeysDialog(onClose = { state.showKeys = false })
+            if (state.historyAsk) HistoryOnDialog(onConfirm = { state.changeHistoryOn(true) }, onDismiss = { state.historyAsk = false })
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).widthIn(max = 640.dp))
         }
     }
@@ -290,54 +348,33 @@ private fun EmptyPane(state: AppState) {
 /** F1: every key of the card in one table. */
 @Composable
 private fun KeysDialog(onClose: () -> Unit) {
-    val mod = if (IS_MAC) "⌘" else "Ctrl+"
-    val keys = listOf(
-        "F1" to tr("эта подсказка"),
-        "F2" to tr("позывной"),
-        "F3" to tr("частота"),
-        "F4" to tr("RST отправлен"),
-        "F5" to tr("RST принят"),
-        "F6" to tr("текущее время UTC"),
-        "F8 · $NEXT_SHORTCUT" to tr("сохранить и открыть следующую"),
-        "F9 · $NEW_SHORTCUT" to tr("новая связь"),
-        "F12 · $SAVE_SHORTCUT" to tr("сохранить"),
-        "Enter" to tr("записать связь из любого поля (новая карточка — записать и открыть следующую)"),
-        tr("Пробел") to tr("из позывного — к частоте или RST (в контесте — к принятому коду)"),
-        "Tab · Shift+Tab" to tr("следующее и предыдущее поле"),
-        "↑ · ${mod}E" to tr("исправить последнюю записанную связь (↑ — в пустом позывном)"),
-        "${mod}F" to tr("поиск по журналу; Enter в поиске — новая связь с найденным"),
-        "Alt+1…9" to tr("выбрать диапазон"),
-        "Alt+Shift+1…9" to tr("выбрать вид связи"),
-        "Esc" to tr("очистить новую карточку, второй раз — закрыть; отменить выбор"),
-        "PgUp · PgDn" to tr("контест: предыдущая и следующая связь"),
-        "${mod}D · ${mod}M · $mod," to tr("дашборд, карта QSO, настройки"),
-        "Shift+Enter" to tr("новая строка в комментарии"),
-    )
-    // Two columns in a wide dialog: the whole list fits the default window; it scrolls in a smaller one.
+    // The sections in two columns of a wide dialog; it scrolls in a small window.
+    val sections = KeyHints.sections(IS_MAC)
     AlertDialog(
         onDismissRequest = onClose,
-        modifier = Modifier.widthIn(max = 1100.dp).fillMaxWidth(0.92f),
+        modifier = Modifier.widthIn(max = 1180.dp).fillMaxWidth(0.94f),
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         title = { Text(tr("Горячие клавиши")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val half = (keys.size + 1) / 2
+                // Balanced by lines: "everywhere" and the card on the left, the log, contest, history and dashboard on the right.
+                val columns = listOf(listOf(sections[0], sections[2]), listOf(sections[1], sections[3], sections[4], sections[5]))
                 Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                    listOf(keys.take(half), keys.drop(half)).forEach { part ->
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            part.forEach { (k, what) ->
-                                Row {
-                                    Text(k, fontFamily = Mono, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(190.dp))
-                                    Text(what, style = MaterialTheme.typography.bodyLarge)
+                    columns.forEach { col ->
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            col.forEach { sec ->
+                                Text(sec.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 6.dp))
+                                sec.keys.forEach { (k, what) ->
+                                    Row {
+                                        Text(k, fontFamily = Mono, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(200.dp))
+                                        Text(what, style = MaterialTheme.typography.bodyLarge)
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                Text(
-                    tr("Команды в поле позывного (вместо позывного, затем Enter или Пробел): 20m или 20 — диапазон, CW, SSB, FT8 — вид связи, 14195 или 7.074 — частота. Поле очищается, карточка остаётся."),
-                    style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp),
-                )
+                Text(KeyHints.commands, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
                 if (IS_MAC) Text(
                     tr("На Mac клавиши F нажимаются вместе с fn, если в настройках клавиатуры не включено «Использовать F1, F2 и т. д. как стандартные функциональные клавиши»."),
                     style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted, modifier = Modifier.padding(top = 8.dp),

@@ -73,6 +73,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -149,29 +150,30 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
-                        text = { Text(tr("Настройки"), fontSize = 17.sp) },
+                        text = { MenuText(tr("Настройки"), (if (IS_MAC) "⌘" else "Ctrl+") + ",") },
                         leadingIcon = { Icon(Icons.Filled.Settings, null) },
                         onClick = { menu = false; state.openSettings() },
                     )
                     // Shown once the table is set up in the settings; the sync runs only from here or there.
                     if (SheetSync.isScriptUrl(state.sheetUrl)) {
                         DropdownMenuItem(
-                            text = { Text(if (state.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), fontSize = 17.sp) },
+                            text = { MenuText(if (state.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), (if (IS_MAC) "⌘" else "Ctrl+") + "R") },
                             leadingIcon = { Icon(Icons.Filled.Sync, null) },
                             enabled = !state.sheetSyncing,
                             onClick = { menu = false; state.syncSheet() },
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text(tr("Дашборд"), fontSize = 17.sp) },
+                        text = { MenuText(tr("Дашборд"), (if (IS_MAC) "⌘" else "Ctrl+") + "D") },
                         leadingIcon = { Icon(Icons.Filled.BarChart, null) },
                         onClick = { menu = false; state.openDashboard() },
                     )
                     DropdownMenuItem(
-                        text = { Text(tr("Карта QSO"), fontSize = 17.sp) },
+                        text = { MenuText(tr("Карта QSO"), (if (IS_MAC) "⌘" else "Ctrl+") + "M") },
                         leadingIcon = { Icon(Icons.Filled.Map, null) },
                         onClick = { menu = false; state.openMap() },
                     )
+                    HistoryMenuItem(state) { menu = false; state.openHistory() }
                     DropdownMenuItem(
                         text = { Text(tr("Справка и калькуляторы"), fontSize = 17.sp) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
@@ -183,15 +185,19 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
 
         // Ctrl+F (⌘F) puts the cursor here; Enter opens a new card for the station found, Esc clears the search.
         val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
         LaunchedEffect(state.searchFocus) { if (state.searchFocus > 0) searchFocus.requestFocus() }
         OutlinedTextField(
             value = state.query,
             onValueChange = state::search,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
                 .focusRequester(searchFocus)
+                .onFocusChanged { state.searchFocused = it.isFocused }
                 .onPreviewKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when {
+                        // ↓ from the search to the list: the arrows then walk through the rows.
+                        e.key == Key.DirectionDown -> { focusManager.clearFocus(); state.moveLogCursor(0, to = -1); true }
                         (e.key == Key.Enter || e.key == Key.NumPadEnter) && state.query.isNotBlank() -> { state.addQso(); true }
                         e.key == Key.Escape && state.query.isNotEmpty() -> { state.search(""); true }
                         else -> false
@@ -261,6 +267,18 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
             LaunchedEffect(state.sortBy, state.sortDesc) { listState.scrollToItem(0) }
             // A just-saved contact is shown: with the date sort it is the first row.
             LaunchedEffect(state.newSavedTick) { if (state.newSavedTick > 0) listState.animateScrollToItem(0) }
+            // The keyboard's cursor: the list knows the order of the rows, and keeps the outlined one in view.
+            LaunchedEffect(groups) { state.logOrder = groups.flatMap { g -> g.items.map { it.id } } }
+            LaunchedEffect(state.logCursor) {
+                val id = state.logCursor ?: return@LaunchedEffect
+                var i = 0
+                for (g in groups) {
+                    if (g.title != null) i++
+                    val k = g.items.indexOfFirst { it.id == id }
+                    if (k >= 0) { listState.animateScrollToItem((i + k - 1).coerceAtLeast(0)); break }
+                    i += g.items.size
+                }
+            }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 LazyColumn(
                     Modifier.fillMaxSize().padding(end = 8.dp),
@@ -417,7 +435,7 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
     val selecting = state.selecting
     val picked = qso.id in state.selected
     val open = !selecting && (state.pane == Pane.Edit || state.pane == Pane.Contest) && state.form.id == qso.id
-    val highlighted = picked || open
+    val highlighted = picked || open || qso.id == state.logCursor
     val window = LocalWindowInfo.current
     Row(
         Modifier.fillMaxWidth()
@@ -509,4 +527,13 @@ fun Tip(text: String, content: @Composable () -> Unit) {
     TooltipArea(tooltip = {
         Text(text, Modifier.background(MaterialTheme.colorScheme.inverseSurface, RoundedCornerShape(6.dp)).padding(8.dp), color = MaterialTheme.colorScheme.inverseOnSurface)
     }) { content() }
+}
+
+/** A menu line with its key at the end. */
+@Composable
+private fun MenuText(text: String, key: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(text, fontSize = 17.sp)
+        Text("   $key", fontFamily = Mono, fontSize = 14.sp, color = LocalExtra.current.muted)
+    }
 }

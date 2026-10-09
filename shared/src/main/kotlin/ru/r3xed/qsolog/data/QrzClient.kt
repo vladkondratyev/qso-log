@@ -29,6 +29,8 @@ data class QrzInfo(
     /** CQ and ITU zones: only the QRZ.com page ([QrzCom]) gives them. */
     val cqZone: String = "",
     val ituZone: String = "",
+    /** Which source answered: a [SearchSource.key]; set by the app's lookup chain. */
+    val source: String = "",
 ) {
     val fullName get() = listOf(name, surname).filter { it.isNotBlank() }.joinToString(" ")
     val position: LatLon?

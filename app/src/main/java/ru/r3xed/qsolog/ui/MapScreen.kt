@@ -145,6 +145,65 @@ private fun StationsMap(vm: AppViewModel, stations: List<Station>) {
     })
 }
 
+/** A point of [PointsMap]: a label, its colour (starred entries stand out) and what a tap does. */
+class MapPoint(val pos: ru.r3xed.qsolog.data.LatLon, val label: String, val starred: Boolean, val onClick: () -> Unit)
+
+/** Labelled points (the search history) with my station; the view fits them all. */
+@Composable
+fun PointsMap(points: List<MapPoint>, me: ru.r3xed.qsolog.data.LatLon?, myCall: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val accent = 0xFF0A5C8A.toInt()
+    val star = 0xFFB07000.toInt()
+    val dark = 0xFF14202B.toInt()
+    val map = remember {
+        MapView(context).apply {
+            setTileSource(TileSourceFactory.MAPNIK)
+            setMultiTouchControls(true)
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.SHOW_AND_FADEOUT)
+            isHorizontalMapRepetitionEnabled = false
+            isVerticalMapRepetitionEnabled = false
+            // Not fillViewport(): stations on every continent must fit the width of a phone, even if the world
+            // is then shorter than the view.
+            isTilesScaledToDpi = true
+            val tiles = MapView.getTileSystem()
+            setScrollableAreaLimitLatitude(tiles.maxLatitude, tiles.minLatitude, 0)
+            addOnFirstLayoutListener { _, _, _, _, _ ->
+                minZoomLevel = maxOf(0.0, kotlin.math.ln(width / (256.0 * resources.displayMetrics.density)) / kotlin.math.ln(2.0))
+            }
+            outlineProvider = android.view.ViewOutlineProvider.BOUNDS
+            clipToOutline = true
+        }
+    }
+    DisposableEffect(map) {
+        map.onResume()
+        onDispose { map.onPause(); map.onDetach() }
+    }
+    AndroidView(factory = { map }, modifier = modifier.clipToBounds(), update = { v ->
+        v.overlays.clear()
+        val geo = mutableListOf<GeoPoint>()
+        // Starred last, so they are drawn above the others.
+        points.sortedBy { it.starred }.forEach { pt ->
+            val p = GeoPoint(pt.pos.lat, pt.pos.lon)
+            geo += p
+            v.overlays.add(labelMarker(v, p, if (pt.starred) "★ ${pt.label}" else pt.label, if (pt.starred) star else accent) { pt.onClick(); true })
+        }
+        me?.let {
+            val p = GeoPoint(it.lat, it.lon)
+            geo += p
+            v.overlays.add(labelMarker(v, p, myCall.ifBlank { tr("Я") }, dark, home = true) { true })
+        }
+        if (geo.size == 1) {
+            v.controller.setZoom(6.0)
+            v.controller.setCenter(geo[0])
+        } else if (geo.size > 1) {
+            val box = BoundingBox.fromGeoPointsSafe(geo).increaseByScale(1.3f)
+            v.addOnFirstLayoutListener { _, _, _, _, _ -> v.zoomToBoundingBox(box, false) }
+            if (v.width > 0) v.zoomToBoundingBox(box, false)
+        }
+        v.invalidate()
+    })
+}
+
 private fun labelMarker(map: MapView, p: GeoPoint, label: String, color: Int, home: Boolean = false, onClick: () -> Boolean) =
     Marker(map).apply {
         position = p

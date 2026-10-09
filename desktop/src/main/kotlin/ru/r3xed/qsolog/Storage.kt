@@ -435,6 +435,10 @@ class Settings {
 
     /** Last ЕРМАК / Cabrillo export: format name, CONTEST code, CATEGORY-OPERATOR. */
     /** ADIF export encoding: UTF-8 (most programs and sites) or Windows-1251 (LogHX, UR5EQF). */
+    /** Stations looked up but not logged are kept in the search history (off until switched on). */
+    var searchHistory: Boolean
+        get() = get("search_history", "0") == "1"
+        set(v) = put("search_history", if (v) "1" else "0")
     var adifUtf8: Boolean
         get() = get("adif_utf8", "1") == "1"
         set(v) = put("adif_utf8", if (v) "1" else "0")

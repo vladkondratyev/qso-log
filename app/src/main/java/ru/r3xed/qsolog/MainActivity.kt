@@ -10,6 +10,8 @@ import android.view.KeyEvent
 import android.content.res.Configuration as AndroidConfig
 import androidx.compose.ui.platform.LocalConfiguration
 import ru.r3xed.qsolog.ui.HardwareKeysDialog
+import ru.r3xed.qsolog.ui.HistoryScreen
+import ru.r3xed.qsolog.ui.HistoryOnDialog
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -58,7 +60,7 @@ class MainActivity : ComponentActivity() {
     /**
      * Keys of a physical keyboard that work on every screen, before the focused field sees them: Ctrl+N / F9 a new
      * contact, Ctrl+E the contact just logged, Ctrl+F the search, F1 / Ctrl+/ the list of keys, Ctrl+D / Ctrl+M /
-     * Ctrl+, the dashboard, map and settings. Esc nobody took goes back, as the system Back does.
+     * Ctrl+, / Ctrl+H the dashboard, map, settings and search history. Esc nobody took goes back, as the system Back does.
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val soft = event.flags and KeyEvent.FLAG_SOFT_KEYBOARD != 0
@@ -75,7 +77,7 @@ class MainActivity : ComponentActivity() {
                 if (!inCard) vm.addQso()
                 true
             }
-            ctrl && event.keyCode == KeyEvent.KEYCODE_E -> {
+            ctrl && !event.isShiftPressed && event.keyCode == KeyEvent.KEYCODE_E -> {
                 if (inLog || inCard) vm.editLast()
                 true
             }
@@ -89,6 +91,17 @@ class MainActivity : ComponentActivity() {
             ctrl && event.keyCode == KeyEvent.KEYCODE_D && inLog -> { vm.openDashboard(); true }
             ctrl && event.keyCode == KeyEvent.KEYCODE_M && inLog -> { vm.openMap(); true }
             ctrl && event.keyCode == KeyEvent.KEYCODE_COMMA && inLog -> { vm.openSettings(); true }
+            ctrl && event.keyCode == KeyEvent.KEYCODE_H && inLog -> { vm.openHistory(); true }
+            ctrl && event.keyCode == KeyEvent.KEYCODE_K && !inCard -> { vm.toggleContestMode(); true }
+            ctrl && event.keyCode == KeyEvent.KEYCODE_R && !inCard -> { vm.syncByKey(); true }
+            ctrl && event.isShiftPressed && event.keyCode == KeyEvent.KEYCODE_E && inLog -> { vm.openExport(ExportFormat.ADIF, selectedOnly = false); true }
+            ctrl && event.keyCode == KeyEvent.KEYCODE_A && inLog && !vm.searchFocused -> { vm.selectAllShown(); true }
+            inLog && !vm.searchFocused && !ctrl -> logKey(event)
+            vm.screen == Screen.History && !vm.historyTyping && vm.historyEditCalls == null && vm.historyDeleteAsk == null -> historyKey(event, ctrl)
+            vm.screen == Screen.Dashboard && event.keyCode in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_4 -> {
+                vm.changeDashFilter(vm.dashFilter.copy(period = ru.r3xed.qsolog.data.StatPeriod.entries[event.keyCode - KeyEvent.KEYCODE_1]))
+                true
+            }
             else -> false
         }
         if (handled) return true
@@ -98,6 +111,44 @@ class MainActivity : ComponentActivity() {
             return true
         }
         return false
+    }
+
+    /** The log without a focused field: the arrows walk through the rows, Enter opens, Space picks, Delete deletes. */
+    private fun logKey(e: KeyEvent): Boolean {
+        when (e.keyCode) {
+            KeyEvent.KEYCODE_DPAD_DOWN -> vm.moveLogCursor(1)
+            KeyEvent.KEYCODE_DPAD_UP -> vm.moveLogCursor(-1)
+            KeyEvent.KEYCODE_PAGE_DOWN -> vm.moveLogCursor(10)
+            KeyEvent.KEYCODE_PAGE_UP -> vm.moveLogCursor(-10)
+            KeyEvent.KEYCODE_MOVE_HOME -> vm.moveLogCursor(0, to = -1)
+            KeyEvent.KEYCODE_MOVE_END -> vm.moveLogCursor(0, to = 1)
+            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> vm.openLogCursor()
+            KeyEvent.KEYCODE_SPACE -> vm.toggleLogCursor()
+            KeyEvent.KEYCODE_FORWARD_DEL -> vm.deleteLogCursor()
+            KeyEvent.KEYCODE_ESCAPE -> if (vm.selecting) vm.clearSelection() else if (vm.logCursor != null) vm.logCursor = null else return false
+            else -> return false
+        }
+        return true
+    }
+
+    /** The search history: arrows, Enter, Space, and one letter per action on the row, the picked ones or the open entry. */
+    private fun historyKey(e: KeyEvent, ctrl: Boolean): Boolean {
+        val open = vm.historyOpen != null
+        when {
+            ctrl && e.keyCode == KeyEvent.KEYCODE_A && !open -> vm.selectAllHistory()
+            ctrl -> return false
+            e.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && !open -> vm.moveHistoryCursor(1)
+            e.keyCode == KeyEvent.KEYCODE_DPAD_UP && !open -> vm.moveHistoryCursor(-1)
+            (e.keyCode == KeyEvent.KEYCODE_ENTER || e.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) && !open -> vm.openHistoryCursor()
+            e.keyCode == KeyEvent.KEYCODE_SPACE && !open -> vm.historyCursor?.let(vm::toggleHistorySelected)
+            e.keyCode == KeyEvent.KEYCODE_F -> vm.historyTargets().ifEmpty { null }?.let(vm::toggleFavorite)
+            e.keyCode == KeyEvent.KEYCODE_E -> vm.historyTargets().ifEmpty { null }?.let { vm.historyEditCalls = it }
+            e.keyCode == KeyEvent.KEYCODE_FORWARD_DEL -> vm.historyTargets().ifEmpty { null }?.let { vm.historyDeleteAsk = it }
+            e.keyCode == KeyEvent.KEYCODE_N -> vm.newQsoFromHistoryTarget()
+            e.keyCode == KeyEvent.KEYCODE_M && !open -> vm.historyMap = !vm.historyMap
+            else -> return false
+        }
+        return true
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -191,6 +242,7 @@ class MainActivity : ComponentActivity() {
                             ) }
                             Screen.Contest -> key(vm.editSession) { ContestScreen(vm) }
                             Screen.Dashboard -> DashboardScreen(vm)
+                            Screen.History -> HistoryScreen(vm)
                             Screen.Settings -> SettingsScreen(
                                 vm,
                                 onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
@@ -199,6 +251,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         if (vm.showKeys) HardwareKeysDialog(onClose = { vm.showKeys = false })
+                        if (vm.historyAsk) HistoryOnDialog(onConfirm = { vm.changeHistoryOn(true) }, onDismiss = { vm.historyAsk = false })
                         vm.contestTarget?.let { target ->
                             ContestExportDialog(
                                 defaults = vm.contestDefaults(),

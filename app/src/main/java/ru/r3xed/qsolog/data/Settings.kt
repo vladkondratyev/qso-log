@@ -90,6 +90,10 @@ class Settings(context: Context) {
         set(v) = prefs.edit().putBoolean("hamqth_enabled", v).apply()
     /** Last ЕРМАК / Cabrillo export: format name, CONTEST code, CATEGORY-OPERATOR. */
     /** ADIF export encoding: UTF-8 (most programs and sites) or Windows-1251 (LogHX, UR5EQF). */
+    /** Stations looked up but not logged are kept in the search history (off until switched on). */
+    var searchHistory: Boolean
+        get() = prefs.getBoolean("search_history", false)
+        set(v) = prefs.edit().putBoolean("search_history", v).apply()
     var adifUtf8: Boolean
         get() = prefs.getBoolean("adif_utf8", true)
         set(v) = prefs.edit().putBoolean("adif_utf8", v).apply()

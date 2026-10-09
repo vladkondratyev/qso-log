@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -159,7 +160,7 @@ fun LogScreen(
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(
-                            text = { Text(tr("Настройки"), fontSize = 18.sp) },
+                            text = { MenuText(tr("Настройки"), "Ctrl+,", vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.Settings, null) },
                             onClick = { menu = false; vm.openSettings() },
                         )
@@ -173,22 +174,23 @@ fun LogScreen(
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text(tr("Дашборд"), fontSize = 18.sp) },
+                            text = { MenuText(tr("Дашборд"), "Ctrl+D", vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.BarChart, null) },
                             onClick = { menu = false; vm.openDashboard() },
                         )
                         DropdownMenuItem(
-                            text = { Text(tr("Карта QSO"), fontSize = 18.sp) },
+                            text = { MenuText(tr("Карта QSO"), "Ctrl+M", vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.Map, null) },
                             onClick = { menu = false; vm.openMap() },
                         )
+                        HistoryMenuItem(vm) { menu = false; vm.openHistory() }
                         DropdownMenuItem(
                             text = { Text(tr("Справка и калькуляторы"), fontSize = 18.sp) },
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
                             onClick = { menu = false; vm.openReference() },
                         )
                         DropdownMenuItem(
-                            text = { Text(tr("Внешняя клавиатура"), fontSize = 18.sp) },
+                            text = { MenuText(tr("Внешняя клавиатура"), "F1", vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.Keyboard, null) },
                             onClick = { menu = false; vm.showKeys = true },
                         )
@@ -198,15 +200,20 @@ fun LogScreen(
 
             // Ctrl+F on a physical keyboard puts the cursor here; Enter opens a new card for the station found, Esc clears.
             val searchFocus = remember { FocusRequester() }
+            val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
             LaunchedEffect(vm.searchFocus) { if (vm.searchFocus > 0) searchFocus.requestFocus() }
             OutlinedTextField(
                 value = vm.query,
                 onValueChange = vm::search,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                     .focusRequester(searchFocus)
+                    .onFocusChanged { vm.searchFocused = it.isFocused }
                     .onPreviewKeyEvent { e ->
                         if (e.type != KeyEventType.KeyDown || !e.fromHardware()) return@onPreviewKeyEvent false
                         when {
+                            // ↓ from the search to the list: the arrows then walk through the rows.
+                            e.key == Key.DirectionDown -> { focusManager.clearFocus(); vm.moveLogCursor(0, to = -1); true }
+                            e.key == Key.Escape && vm.query.isEmpty() -> { focusManager.clearFocus(); true }
                             (e.key == Key.Enter || e.key == Key.NumPadEnter) && vm.query.isNotBlank() -> { vm.addQso(); true }
                             e.key == Key.Escape && vm.query.isNotEmpty() -> { vm.search(""); true }
                             else -> false
@@ -250,6 +257,18 @@ fun LogScreen(
                 LaunchedEffect(vm.sortBy, vm.sortDesc) { listState.scrollToItem(0) }
                 // A just-saved contact is shown: with the date sort it is the first row.
                 LaunchedEffect(vm.newSavedTick) { if (vm.newSavedTick > 0) listState.animateScrollToItem(0) }
+                // The keyboard's cursor: the list knows the order of the rows, and keeps the outlined one in view.
+                LaunchedEffect(groups) { vm.logOrder = groups.flatMap { g -> g.items.map { it.id } } }
+                LaunchedEffect(vm.logCursor) {
+                    val id = vm.logCursor ?: return@LaunchedEffect
+                    var i = 0
+                    for (g in groups) {
+                        if (g.title != null) i++
+                        val k = g.items.indexOfFirst { it.id == id }
+                        if (k >= 0) { listState.animateScrollToItem((i + k - 1).coerceAtLeast(0)); break }
+                        i += g.items.size
+                    }
+                }
                 LazyColumn(
                     Modifier.weight(1f).fillMaxWidth(),
                     state = listState,
@@ -259,7 +278,7 @@ fun LogScreen(
                     groups.forEach { g ->
                         if (g.title != null) stickyHeader(key = "h" + g.key) { GroupHeader(g.title, g.items.size) }
                         items(g.items, key = { it.id }) { qso ->
-                            LogRow(qso, vm, showDate = vm.sortBy != SortBy.DATE, modifier = Modifier.animateItem())
+                            LogRow(qso, vm, showDate = vm.sortBy != SortBy.DATE, modifier = Modifier.animateItem(), cursor = qso.id == vm.logCursor)
                         }
                     }
                 }
@@ -396,9 +415,10 @@ private fun GroupHeader(title: String, count: Int) {
 
 /** A log row. Deleting is only possible from the card ("Удалить" there), never from the list. */
 @Composable
-private fun LogRow(qso: Qso, vm: AppViewModel, showDate: Boolean, modifier: Modifier = Modifier) {
+private fun LogRow(qso: Qso, vm: AppViewModel, showDate: Boolean, modifier: Modifier = Modifier, cursor: Boolean = false) {
     QsoRow(
         qso,
+        cursor = cursor,
         modifier = modifier,
         showDate = showDate,
         selecting = vm.selecting,
@@ -448,6 +468,8 @@ private fun SelectionBar(vm: AppViewModel) {
 @Composable
 private fun QsoRow(
     qso: Qso,
+    /** The keyboard's cursor is on this row. */
+    cursor: Boolean = false,
     modifier: Modifier = Modifier,
     showDate: Boolean,
     selecting: Boolean,
@@ -463,7 +485,7 @@ private fun QsoRow(
     Column(
         modifier.fillMaxWidth()
             .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape)
-            .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else x.line, shape)
+            .border(if (selected || cursor) 2.dp else 1.dp, if (selected || cursor) MaterialTheme.colorScheme.primary else x.line, shape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClickLabel = tr("Выбрать запись"),
@@ -560,3 +582,11 @@ private fun OneLineText(text: String, maxSize: TextUnit, minSize: TextUnit, colo
     }
 }
 
+/** A menu line with its key at the end when a keyboard is attached. */
+@Composable
+private fun MenuText(text: String, key: String, keys: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(text, fontSize = 18.sp)
+        if (keys) Text("   $key", fontFamily = Mono, fontSize = 14.sp, color = LocalExtra.current.muted)
+    }
+}

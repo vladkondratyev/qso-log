@@ -92,3 +92,28 @@ class CallHistoryTest {
         assertEquals("CW", h.byBand[1].mode)
     }
 }
+
+class CountryStatsTest {
+    private fun at(date: String, hour: Int = 12) = LocalDate.parse(date).atTime(hour, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
+    private val log = listOf(
+        Qso(call = "R3DEMO", timeUtc = at("2026-10-07", 9), band = "20m", mode = "SSB"),
+        Qso(call = "R3DEMO", timeUtc = at("2026-10-07", 10), band = "40m", mode = "SSB"),
+        Qso(call = "DL0DEMO", timeUtc = at("2026-10-06"), band = "40m", mode = "CW"),
+        Qso(call = "UA9DEMO", timeUtc = at("2026-09-20"), band = "20m", mode = "SSB"),
+    )
+
+    @Test
+    fun countriesWithCallsBandsAndDates() {
+        val c = Stats.countryStats(log)
+        val ru = c.first()
+        assertEquals(Stats.country(log[0]), ru.country)
+        // R3DEMO twice (European Russia); UA9DEMO is another DXCC entity, Asiatic Russia.
+        assertEquals(2, ru.qsos)
+        assertEquals(1, ru.calls)
+        assertEquals(listOf("40m", "20m"), ru.bands)
+        assertEquals(at("2026-10-07", 9), ru.first)
+        assertEquals(at("2026-10-07", 10), ru.last)
+        assertEquals(3, c.size)
+        assertEquals(c.sumOf { it.qsos }, log.count { Stats.country(it) != null })
+    }
+}
