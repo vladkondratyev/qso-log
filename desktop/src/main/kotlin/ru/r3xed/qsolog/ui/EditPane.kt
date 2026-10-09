@@ -178,6 +178,8 @@ fun EditPane(vm: AppState) {
                 (e.key == Key.Enter || e.key == Key.NumPadEnter) && !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed -> {
                     when {
                         callFocused && vm.runCallCommand() -> {}
+                        // In the callsign Enter never logs: typing a call and Enter to look it up must not log a contact.
+                        callFocused -> if (vm.form.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
                         f.isNew -> showSaveError(vm.saveAndNext())
                         else -> showSaveError(vm.trySave())
                     }

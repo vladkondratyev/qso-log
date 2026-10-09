@@ -594,6 +594,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Nothing typed by the user yet: closing this card right away does not ask.
         formOriginal = form
         lookup = Lookup.Found(info)
+        rememberSearch(requireNew = false)
         loadHistory(call)
         query = ""
         reload()
@@ -917,6 +918,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * HamQTH's free prefix search fills country, region, zones and an approximate position, if switched on.
      */
     private suspend fun runLookup(call: String) {
+        lookupOnce(call)
+        // Whatever was found goes to the search history: a cache to look at and to fill a card offline, never a contact.
+        if (form.call == call) rememberSearch(requireNew = false)
+    }
+
+    private suspend fun lookupOnce(call: String) {
         lookup = Lookup.Loading
         if (!hasQrzAccount) {
             lookup = historyFallback(call, problem = null) ?: hamqthFallback(call, qrzProblem = null)
@@ -1121,7 +1128,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.lastPower = f.power
         saveJob = viewModelScope.launch {
             lastSavedId = withContext(Dispatchers.IO) { db.save(finalQso) }
-            forgetSearch(finalQso.call)
             reload()
             if (f.isNew) newSavedTick++
             val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
@@ -1361,11 +1367,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return Lookup.FromHistory(e, problem)
     }
 
-    /** A new card closed or wiped without saving: what was found about the station goes to the history. */
-    private fun rememberSearch() {
+    /**
+     * What was found about the station goes to the search history — a cache, whether or not the contact is then logged;
+     * it never counts as a contact. Called when a lookup answers and, with [requireNew], when a new card closes (then the
+     * corrections typed by hand are kept too).
+     */
+    private fun rememberSearch(requireNew: Boolean = true) {
         if (!historyOn) return
         val f = form
-        if (!f.isNew || f.call.length < 3 || allQsos.any { it.call == f.call }) return
+        if ((requireNew && !f.isNew) || f.call.length < 3) return
         val source = when (val l = lookup) {
             is Lookup.Found -> SearchSource.of(l.info.source.ifBlank { SearchSource.QRZ_RU.key })
             is Lookup.Approx -> SearchSource.HAMQTH
@@ -1378,13 +1388,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
         if (e.isEmpty) return
         searchHistory.put(e)
-        historyEntries = searchHistory.all()
-    }
-
-    /** The station is in the log now: the history no longer needs it. */
-    private fun forgetSearch(call: String) {
-        if (searchHistory.get(call) == null) return
-        searchHistory.delete(listOf(call))
         historyEntries = searchHistory.all()
     }
 

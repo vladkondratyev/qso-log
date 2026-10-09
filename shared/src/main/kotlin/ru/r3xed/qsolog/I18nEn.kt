@@ -942,4 +942,12 @@ internal val EN: Map<String, String> = hashMapOf(
     "все на карте или списком" to "all on the map or as a list",
     "удалить из истории" to "delete from the history",
     "7 дней · 30 дней · год · всё время" to "7 days · 30 days · year · all time",
+    // 0.36.1 / 1.16.1: Enter in the callsign never logs, the history is a cache.
+    "Пока пусто. Найдите позывной в поиске журнала или наберите его в карточке «Новый QSO»: станция появится здесь вместе с найденными данными. Это только кэш поиска, связью она не считается." to "Nothing yet. Look up a callsign in the log search or type it in the “New QSO” card: the station appears here with the data found. This is only a lookup cache, it does not count as a QSO.",
+    "История выключена. Включите её, чтобы программа запоминала все найденные позывные с данными и источником — как кэш поиска, связи из них не появляются. Без интернета карточка заполнится из истории." to "The history is off. Switch it on to keep every station looked up, with its data and source — a lookup cache, no QSOs come from it. Without the internet a card is filled from the history.",
+    "в журнале: %s QSO" to "in the log: %s QSO",
+    "Программа будет сама запоминать все позывные, которые вы искали в журнале или вводили в карточке: имя, QTH, локатор и откуда они взяты (QRZ.ru, QRZ.com, HamQTH). Это только кэш поиска: связи из него не появляются и в подсчёте QSO он не участвует. Когда нет интернета или сервис не отвечает, история будет использована для автозаполнения карточки новой связи. Записи хранятся только на этом устройстве; удалить их можно в любой момент." to "The app will keep every callsign you look up in the log or type in a card: name, QTH, locator and where they came from (QRZ.ru, QRZ.com, HamQTH). It is only a lookup cache: no QSOs come from it and it is not counted. When there is no internet or the service does not answer, the history is used to fill in the new QSO card. The entries stay on this device only; you can delete them at any time.",
+    "из позывного — к частоте или RST (Enter в позывном связь не записывает)" to "from the callsign to the frequency or RST (Enter in the callsign never logs)",
+    "в остальных полях — записать (новая карточка — записать и открыть следующую)" to "in the other fields — log (a new card: log and open the next)",
+    "в коде или RST — записать связь; F12 — из любого поля" to "in the exchange or RST — log the QSO; F12 — from any field",
 )

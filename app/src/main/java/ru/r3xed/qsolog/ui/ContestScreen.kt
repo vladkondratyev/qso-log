@@ -229,7 +229,11 @@ fun ContestScreen(vm: AppViewModel) {
         val plain = !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed
         val form = vm.form
         when {
-            (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> { if (callFocused && vm.runCallCommand()) {} else next(); true }
+            // Enter in the callsign goes on to the received code (never logs); in the other fields it logs.
+            (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
+                if (callFocused) { if (!vm.runCallCommand()) rcvdFocus.requestFocus() } else next()
+                true
+            }
             e.key == Key.Spacebar && callFocused -> { if (!vm.runCallCommand()) rcvdFocus.requestFocus(); true }
             e.key == Key.DirectionUp && callFocused && form.isNew && form.call.isEmpty() -> { prev(); true }
             e.key == Key.PageUp || (e.isAltPressed && e.key == Key.DirectionLeft) -> { prev(); true }

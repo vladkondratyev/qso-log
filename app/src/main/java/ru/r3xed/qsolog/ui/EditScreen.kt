@@ -226,8 +226,8 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
     val saveIt = { showSaveError(vm.save()) }
     val saveNext = { showSaveError(vm.saveAndNext()) }
 
-    // A physical keyboard (Bluetooth, USB OTG) — a whole outing without touching the screen: Space in the callsign goes
-    // on to the frequency or report, Enter logs from any field (a new card: logs and opens the next), "20m", "CW",
+    // A physical keyboard (Bluetooth, USB OTG) — a whole outing without touching the screen: Space or Enter in the callsign
+    // goes on to the frequency or report, Enter in any other field logs (a new card: logs and opens the next), "20m", "CW",
     // "14195" in the callsign switch band, mode or frequency, ↑ in an empty callsign opens the contact just logged,
     // Esc wipes a new card (a second Esc closes it). F2–F6, F8, F12 and Alt+1…9 as on the computer.
     var callFocused by remember { mutableStateOf(false) }
@@ -238,8 +238,12 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
         val form = vm.form
         when {
             (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
+                // The callsign has the cursor: the text field's, or the app keypad's.
+                val inCall = callFocused || (keypad && active == KeyTarget.CALL)
                 when {
-                    callFocused && vm.runCallCommand() -> {}
+                    inCall && vm.runCallCommand() -> {}
+                    // In the callsign Enter never logs: typing a call and Enter to look it up must not log a contact.
+                    inCall -> if (keypad) activate(nextOf(KeyTarget.CALL)) else if (vm.form.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
                     form.isNew -> saveNext()
                     else -> saveIt()
                 }

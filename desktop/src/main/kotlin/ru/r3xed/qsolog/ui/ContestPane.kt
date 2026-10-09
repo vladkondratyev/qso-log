@@ -141,7 +141,8 @@ fun ContestPane(vm: AppState) {
                 // Enter logs from any field ("20m", "CW", "14025" in the callsign switch band, mode or frequency);
                 // Space in the callsign goes on to the received number; ↑ in an empty callsign — the previous contact.
                 (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
-                    if (focused == Target.CALL && vm.runCallCommand()) {} else next()
+                    // In the callsign: on to the received code (never logs); in the other fields: log.
+                    if (focused == Target.CALL) { if (!vm.runCallCommand()) rcvdFocus.requestFocus() } else next()
                     true
                 }
                 e.key == Key.Spacebar && focused == Target.CALL -> {

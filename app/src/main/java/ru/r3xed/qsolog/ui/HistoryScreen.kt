@@ -84,7 +84,8 @@ import ru.r3xed.qsolog.tr
 import ru.r3xed.qsolog.utc
 
 /**
- * "История поиска": stations looked up but not logged, newest first. A tap opens one with the map and the distance,
+ * "История поиска": every station looked up (in the log search or a card), newest first — a cache to look at and to
+ * fill a card offline; it never counts as a contact, a station already in the log only shows how many QSOs it has. A tap opens one with the map and the distance,
  * a long press (or the checklist button) starts picking several to delete or edit together.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -140,12 +141,14 @@ fun HistoryScreen(vm: AppViewModel) {
         }
 
         val me = vm.settings.myPosition
+        // How many QSOs each station has in the log: shown as a note, the history itself is never counted.
+        val inLog = remember(vm.allQsos) { vm.allQsos.groupingBy { it.call }.eachCount() }
         val shown = remember(vm.historyEntries, vm.historyFilter, vm.historySort, me) { vm.historyShown() }
         if (vm.historyEntries.isNotEmpty()) HistoryFilters(vm)
         if (vm.historyEntries.isEmpty()) {
             Text(
-                if (vm.historyOn) tr("Пока пусто. Найдите позывной в поиске журнала или наберите его в карточке «Новый QSO»: если связь не записана, станция появится здесь вместе с найденными данными.")
-                else tr("История выключена. Включите её, чтобы программа запоминала позывные, которые вы искали, но не записали как связь, — с данными и источником. Без интернета карточка заполнится из истории."),
+                if (vm.historyOn) tr("Пока пусто. Найдите позывной в поиске журнала или наберите его в карточке «Новый QSO»: станция появится здесь вместе с найденными данными. Это только кэш поиска, связью она не считается.")
+                else tr("История выключена. Включите её, чтобы программа запоминала все найденные позывные с данными и источником — как кэш поиска, связи из них не появляются. Без интернета карточка заполнится из истории."),
                 style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.padding(24.dp),
             )
             return@Column
@@ -186,7 +189,7 @@ fun HistoryScreen(vm: AppViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (selecting) Checkbox(picked, { vm.toggleHistorySelected(e.call) }, Modifier.padding(end = 6.dp))
-                    HistoryRow(e, me, Modifier.weight(1f))
+                    HistoryRow(e, me, inLog[e.call] ?: 0, Modifier.weight(1f))
                     if (!selecting) IconButton(onClick = { vm.toggleFavorite(listOf(e.call)) }) {
                         Icon(if (e.favorite) Icons.Filled.Star else Icons.Filled.StarBorder, if (e.favorite) tr("Убрать из избранного") else tr("В избранное"), tint = if (e.favorite) STAR else x.muted)
                     }
@@ -291,7 +294,7 @@ private fun <T> Choose(title: String, value: String, options: List<Pair<T, Strin
 
 /** One station in the list: callsign, source and date, who and where, and how far. */
 @Composable
-private fun HistoryRow(e: SearchEntry, me: ru.r3xed.qsolog.data.LatLon?, modifier: Modifier) {
+private fun HistoryRow(e: SearchEntry, me: ru.r3xed.qsolog.data.LatLon?, logged: Int, modifier: Modifier) {
     val x = LocalExtra.current
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -305,6 +308,7 @@ private fun HistoryRow(e: SearchEntry, me: ru.r3xed.qsolog.data.LatLon?, modifie
         Text(
             listOfNotNull(
                 if (me != null && them != null) (if (approx) "≈ " else "") + formatKm(Geo.distanceKm(me, them)) else null,
+                if (logged > 0) tr("в журнале: %s QSO", logged) else null,
                 searchedAt(e.searchedAt),
                 e.note.ifBlank { null },
             ).joinToString(" · "),
@@ -444,7 +448,7 @@ fun HistoryOnDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
         title = { Text(tr("Включить историю поиска?")) },
         text = {
             Text(
-                tr("Программа будет запоминать позывные, которые вы искали, но не записали как связь: имя, QTH, локатор и откуда они взяты (QRZ.ru, QRZ.com, HamQTH). Когда нет интернета или сервис не отвечает, история будет использована для автозаполнения карточки новой связи. Записи хранятся только на этом устройстве; удалить их можно в любой момент."),
+                tr("Программа будет сама запоминать все позывные, которые вы искали в журнале или вводили в карточке: имя, QTH, локатор и откуда они взяты (QRZ.ru, QRZ.com, HamQTH). Это только кэш поиска: связи из него не появляются и в подсчёте QSO он не участвует. Когда нет интернета или сервис не отвечает, история будет использована для автозаполнения карточки новой связи. Записи хранятся только на этом устройстве; удалить их можно в любой момент."),
                 style = MaterialTheme.typography.bodyLarge,
             )
         },
