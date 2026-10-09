@@ -24,8 +24,8 @@ class MorseToneTest {
     }
 
     @Test
-    fun everyCyrillicLetterHasAChantOfMatchingLength() {
-        Reference.MORSE_CYRILLIC.forEach { (ch, code) ->
+    fun everyCyrillicLetterDigitAndSignHasAChantOfMatchingLength() {
+        (Reference.MORSE_CYRILLIC + Reference.MORSE_DIGITS + Reference.MORSE_SIGNS).forEach { (ch, code) ->
             val chant = Reference.MORSE_CHANTS[ch] ?: error("no chant for $ch")
             val syll = chant.split('-')
             assertEquals(code.length, syll.size, "$ch $chant")

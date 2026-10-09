@@ -51,7 +51,7 @@ object Reference {
     )
 
     /**
-     * Russian chants for learning the letters: one syllable per element, long syllables (dashes) in capitals —
+     * Russian chants for learning the letters, digits and signs: one syllable per element, long syllables (dashes) in capitals —
      * А ·− "ай-ДА", Б −··· "БА-ки-те-кут". The classic set taught in Russian radio clubs.
      */
     val MORSE_CHANTS = mapOf(
@@ -62,6 +62,15 @@ object Reference {
         "Ф" to "фи-ли-МОН-чик", "Х" to "хи-ми-чи-те", "Ц" to "ЦА-пли-НА-ши", "Ч" to "ЧА-ША-ТО-нет",
         "Ш" to "ША-РО-ВА-РЫ", "Щ" to "ЩА-ВА-не-НА", "Ъ" to "ТВЁР-ДЫЙ-не-МЯГ-КИЙ", "Ы" to "Ы-не-НА-ДО",
         "Ь" to "ТО-мяг-кий-ЗНАК", "Э" to "э-ле-КТРО-ни-ки", "Ю" to "ю-ли-А-НА", "Я" to "я-МАЛ-я-МАЛ",
+        // Digits: the classic chants.
+        "1" to "и-ТОЛЬ-КО-ОД-НА", "2" to "две-не-ХО-РО-ШО", "3" to "три-те-бе-МА-ЛО", "4" to "чет-ве-ре-ти-КА",
+        "5" to "пя-ти-ле-ти-е", "6" to "ПО-шес-ти-бе-ри", "7" to "ДАЙ-ДАЙ-за-ку-рить", "8" to "МО-ЛО-КО-ки-пит",
+        "9" to "НО-НА-НО-НА-ми", "0" to "НОЛЬ-О-КО-ЛО-НОЛЬ",
+        // Signs: the full stop has its classic chant, the others are mnemonics made by the same rule.
+        "." to "то-ЧЕЧ-ка-ТО-чеч-КА", "," to "КРЮЧ-КИ-ка-ки-КРЮЧ-КИ", "?" to "у-ми-ТЕ-БЯ-спро-сить",
+        "/" to "ДРОБЬ-ли-то-ДРОБЬ-ли", "=" to "РАЗ-де-ли-те-ВСЁ", "-" to "ЧЁР-точ-ку-пи-ши-ТАК",
+        "@" to "со-БА-ЧКА-на-ДОМ-ке", "AR" to "и-ВСЁ-я-КОН-чил", "SK" to "вот-и-всё-ДО-сви-ДАНЬ",
+        "KN" to "ТОЛЬ-ко-ТЫ-ОТ-веть",
     )
 
     /**

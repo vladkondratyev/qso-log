@@ -191,8 +191,8 @@ private fun MorseGrid(items: List<Pair<String, String>>, perRow: Int = 2, chants
                     // The chant under the whole cell: long ones fit.
                     if (chant != null) Text(
                         chant, style = MaterialTheme.typography.bodySmall, color = x.muted, maxLines = 1, softWrap = false,
-                        // The longest (Ъ "ТВЁР-ДЫЙ-не-МЯГ-КИЙ") a little smaller, so it stays on one line on a phone.
-                        fontSize = if (chant.length > 16) 11.sp else MaterialTheme.typography.bodySmall.fontSize,
+                        // In the narrow two-per-row cells the longest (Ъ "ТВЁР-ДЫЙ-не-МЯГ-КИЙ") is a little smaller, so it stays on one line.
+                        fontSize = if (perRow > 1 && chant.length > 16) 11.sp else MaterialTheme.typography.bodySmall.fontSize,
                         modifier = Modifier.padding(top = 2.dp),
                     )
                 }
@@ -212,10 +212,10 @@ private fun MorseTables() {
     RefNote(tr("Перед русской буквой — латинская с тем же сигналом (W/В, Q/Щ). Для Ч, Ш, Ъ, Э, Ю, Я пары в латинице нет, указаны расширенные знаки. Под буквой — напев, по которому её учат: слог на каждый знак, долгие слоги (тире) заглавными. Нажмите на букву, чтобы услышать."))
     RefHeading(tr("Цифры"))
     // Five or six elements: one per row, so a phone shows them whole.
-    MorseGrid(Reference.MORSE_DIGITS, perRow = 1)
+    MorseGrid(Reference.MORSE_DIGITS, perRow = 1, chants = Reference.MORSE_CHANTS)
     RefHeading(tr("Знаки и служебные сигналы"))
-    MorseGrid(Reference.MORSE_SIGNS, perRow = 1)
-    RefNote(tr("AR — конец передачи, SK — конец связи, KN — ответ только вызванной станции, = (BT) — раздел."))
+    MorseGrid(Reference.MORSE_SIGNS, perRow = 1, chants = Reference.MORSE_CHANTS)
+    RefNote(tr("AR — конец передачи, SK — конец связи, KN — ответ только вызванной станции, = (BT) — раздел. Напевы цифр и точки — классические, у остальных знаков — запоминалки по тому же правилу: слог на знак, долгие слоги заглавными."))
 }
 
 @Composable
