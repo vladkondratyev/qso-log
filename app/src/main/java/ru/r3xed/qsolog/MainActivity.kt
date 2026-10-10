@@ -255,6 +255,14 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         if (vm.showKeys) HardwareKeysDialog(onClose = { vm.showKeys = false })
+                        if (vm.showTransfer) ru.r3xed.qsolog.ui.TransferDialog(
+                            total = vm.total,
+                            onExport = { vm.showTransfer = false; vm.openExport(it, selectedOnly = false) },
+                            onImportAdif = { vm.showTransfer = false; importAdif.launch(arrayOf("*/*")) },
+                            onImportCsv = { vm.showTransfer = false; import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
+                            onImportContest = { vm.showTransfer = false; importContest.launch(arrayOf("*/*")) },
+                            onDismiss = { vm.showTransfer = false },
+                        )
                         // Not over the first-start setup: it waits until the log.
                         if (vm.showWhatsNew && vm.screen != Screen.Welcome) ru.r3xed.qsolog.ui.WhatsNewDialog(BuildConfig.VERSION_NAME, desktop = false, onClose = vm::closeWhatsNew)
                         if (vm.historyAsk) HistoryOnDialog(onConfirm = { vm.changeHistoryOn(true) }, onDismiss = { vm.historyAsk = false })

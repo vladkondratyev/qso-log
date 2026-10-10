@@ -27,7 +27,7 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 0.38.0 | [QSO-LOG-0.38.0.apk](../../releases/tag/v0.38.0) |
+| Android 8.0 or newer | 0.39.0 | [QSO-LOG-0.39.0.apk](../../releases/tag/v0.39.0) |
 | macOS 11 or newer, Apple silicon (M1 and newer) | 1.18.0 | [QSO-LOG-1.18.0-macos-arm64.dmg](../../releases/tag/desktop-v1.18.0) |
 | macOS 11 or newer, Intel | 1.18.0 | [QSO-LOG-1.18.0-macos-x64.dmg](../../releases/tag/desktop-v1.18.0) |
 | Windows 10 and 11, 64-bit | 1.18.0 | [QSO-LOG-1.18.0-windows-x64.zip](../../releases/tag/desktop-v1.18.0) |
@@ -119,7 +119,8 @@ normal card and to contest mode.
 
 ## Contest mode
 
-Contests need speed, so there is a separate mode. Switch it on in Settings → "QSO entry" → **CONTEST MODE**.
+Contests need speed, so there is a separate mode. Switch it on with the first row of the ⋮ menu — **CONTEST MODE**
+(also in Settings → "QSO entry", or Ctrl+K on a keyboard).
 It turns off every time the app starts, so you don't keep your everyday log in it by accident.
 
 Under the switch you choose what to send:
@@ -261,8 +262,8 @@ press Enter or Space; the app switches band, mode or frequency and clears the fi
 
 A command can't be mistaken for a callsign: a callsign always has both letters and digits.
 
-On a phone the key list also opens from the ⋮ menu → "External keyboard"; with a keyboard attached the shortcuts are
-shown in the ⋮ menu too. On a Mac press the F keys with fn unless "Use F1, F2, etc. keys as standard function keys" is
+On a phone with a keyboard attached the ⋮ menu gets a "Keys" item with the list, and the shortcuts are shown in the
+menu items. On a Mac press the F keys with fn unless "Use F1, F2, etc. keys as standard function keys" is
 on in the keyboard settings.
 
 <p>
@@ -321,7 +322,7 @@ itself. It is a lookup cache: no QSOs come from it, and it is not counted. If yo
 the row says "in the log: N QSO". Each entry shows where the data came from (QRZ.ru, the QRZ.ru site, QRZ.com or
 HamQTH) and when.
 
-Switch the history on in the ⋮ menu or on its screen; the app explains first what it is for. The main use is working
+Switch the history on on its screen (⋮ menu → "Search history"); the app explains first what it is for. The main use is working
 without internet: when QRZ.ru or QRZ.com don't answer, the new QSO card is filled from the history (marked "From the
 search history"). The entries stay on the device.
 
@@ -377,6 +378,8 @@ worked on OpenStreetMap; a tap on a point opens the last QSO with that station.
 </p>
 
 ## Export and import
+
+All formats are in one window: ⋮ menu → **"Export and import…"** (the same buttons are in Settings → "Logbook").
 
 - **ADIF** (.adi) for LogHX, UR5EQF, HamLog, N1MM, QRZ.com and others, and for moving the log between phone and
   computer. Choose UTF-8 or Windows-1251 when exporting; on import the encoding is detected and all fields are kept.
@@ -473,7 +476,7 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-0.38.0.apk` from the [release page](../../releases/tag/v0.38.0) and open it on the phone; allow
+Download `QSO-LOG-0.39.0.apk` from the [release page](../../releases/tag/v0.39.0) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS

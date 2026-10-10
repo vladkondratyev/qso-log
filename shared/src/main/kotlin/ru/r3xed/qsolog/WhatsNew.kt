@@ -9,11 +9,20 @@ import java.net.URLEncoder
 object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
-    /** Points of this release, the same on the phone and the computer unless [desktop] says otherwise. */
-    fun items(desktop: Boolean): List<String> = listOfNotNull(
+    /**
+     * Points of this release. The phone (0.39.0) is a release ahead of the computer (1.18.0): each has its own list
+     * until the computer catches up.
+     */
+    fun items(desktop: Boolean): List<String> = if (desktop) desktopItems() else listOf(
+        tr("Меню ⋮ разложено по группам: сверху режим CONTEST и справочник контестов, затем дашборд, карта и история поиска, потом файлы, внизу справка и настройки."),
+        tr("CONTEST MODE включается прямо из меню ⋮ — больше не нужно идти в настройки."),
+        tr("«Экспорт и импорт…» в меню: ADIF, CSV и ЕРМАК/Cabrillo в одном окне."),
+        tr("История поиска включается на своём экране, в меню — только переход к ней. Пункт со списком клавиш виден, когда подключена клавиатура."),
+    )
+
+    private fun desktopItems(): List<String> = listOfNotNull(
         tr("Справочник контестов (меню ⋮ в режиме CONTEST): название, код, время и туры для минитестов. Каждая связь помечается соревнованием и туром, в журнале — тур и таймер до его конца, отчёт ЕРМАК/Cabrillo — по выбранному соревнованию."),
         tr("Повторы в соревновании считаются по всему соревнованию, а с флажком «Обнулять повторы» — в каждом туре заново."),
-        if (desktop) null else tr("Программа запускается примерно в три раза быстрее, а файл установки стал в восемь раз меньше."),
         tr("Первый запуск проще: только позывной и локатор, источники данных можно подключить потом."),
         tr("«Что нового» и «Сообщить о проблеме» — в настройках, под номером версии."),
     )

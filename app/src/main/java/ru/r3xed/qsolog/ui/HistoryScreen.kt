@@ -468,7 +468,8 @@ fun HistoryMenuItem(vm: AppViewModel, onOpen: () -> Unit) {
             }
         },
         leadingIcon = { Icon(Icons.Filled.History, null) },
-        trailingIcon = { Switch(checked = vm.historyOn, onCheckedChange = { vm.requestHistoryOn(it) }) },
+        // Only opens the screen: the history is switched on and off there, not by a switch hidden in a menu row.
+        trailingIcon = { if (!vm.historyOn) Text(tr("выкл."), fontSize = 14.sp, color = LocalExtra.current.muted) },
         onClick = onOpen,
     )
 }

@@ -39,6 +39,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Switch
+import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CheckCircle
@@ -161,11 +164,14 @@ fun LogScreen(
                     FilledTonalIconButton(onClick = { menu = true }, modifier = Modifier.size(50.dp)) {
                         Icon(Icons.Filled.MoreVert, contentDescription = tr("Меню"), modifier = Modifier.size(27.dp))
                     }
+                    // Grouped: the operating mode, the log's views, files, then help and the settings — the rarest last.
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        // The whole row switches contest mode; the menu stays open so the contest book shows up under it.
                         DropdownMenuItem(
-                            text = { MenuText(tr("Настройки"), "Ctrl+,", vm.hardKeyboard) },
-                            leadingIcon = { Icon(Icons.Filled.Settings, null) },
-                            onClick = { menu = false; vm.openSettings() },
+                            text = { MenuText("CONTEST MODE", "Ctrl+K", vm.hardKeyboard) },
+                            leadingIcon = { Icon(Icons.Filled.Flag, null) },
+                            trailingIcon = { Switch(checked = vm.contestMode, onCheckedChange = null) },
+                            onClick = { vm.toggleContestMode() },
                         )
                         if (vm.contestMode) {
                             DropdownMenuItem(
@@ -174,15 +180,7 @@ fun LogScreen(
                                 onClick = { menu = false; vm.openContests() },
                             )
                         }
-                        // Shown once the table is set up in the settings; the sync runs only from here or there.
-                        if (SheetSync.isScriptUrl(vm.sheetUrl)) {
-                            DropdownMenuItem(
-                                text = { Text(if (vm.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), fontSize = 18.sp) },
-                                leadingIcon = { Icon(Icons.Filled.Sync, null) },
-                                enabled = !vm.sheetSyncing,
-                                onClick = { menu = false; vm.syncSheet() },
-                            )
-                        }
+                        HorizontalDivider()
                         DropdownMenuItem(
                             text = { MenuText(tr("Дашборд"), "Ctrl+D", vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.BarChart, null) },
@@ -194,15 +192,39 @@ fun LogScreen(
                             onClick = { menu = false; vm.openMap() },
                         )
                         HistoryMenuItem(vm) { menu = false; vm.openHistory() }
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text(tr("Экспорт и импорт…"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.Filled.ImportExport, null) },
+                            onClick = { menu = false; vm.showTransfer = true },
+                        )
+                        // Shown once the table is set up in the settings; the sync runs only from here or there.
+                        if (SheetSync.isScriptUrl(vm.sheetUrl)) {
+                            DropdownMenuItem(
+                                text = { MenuText(if (vm.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), "Ctrl+R", vm.hardKeyboard) },
+                                leadingIcon = { Icon(Icons.Filled.Sync, null) },
+                                enabled = !vm.sheetSyncing,
+                                onClick = { menu = false; vm.syncSheet() },
+                            )
+                        }
+                        HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text(tr("Справка и калькуляторы"), fontSize = 18.sp) },
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
                             onClick = { menu = false; vm.openReference() },
                         )
+                        // The list of keys matters only with a keyboard attached (F1 opens it as well).
+                        if (vm.hardKeyboard) {
+                            DropdownMenuItem(
+                                text = { MenuText(tr("Клавиши"), "F1", true) },
+                                leadingIcon = { Icon(Icons.Filled.Keyboard, null) },
+                                onClick = { menu = false; vm.showKeys = true },
+                            )
+                        }
                         DropdownMenuItem(
-                            text = { MenuText(tr("Внешняя клавиатура"), "F1", vm.hardKeyboard) },
-                            leadingIcon = { Icon(Icons.Filled.Keyboard, null) },
-                            onClick = { menu = false; vm.showKeys = true },
+                            text = { MenuText(tr("Настройки"), "Ctrl+,", vm.hardKeyboard) },
+                            leadingIcon = { Icon(Icons.Filled.Settings, null) },
+                            onClick = { menu = false; vm.openSettings() },
                         )
                     }
                 }

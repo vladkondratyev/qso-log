@@ -16,8 +16,8 @@ class WhatsNewTest {
 
     @Test
     fun itemsDifferForTheComputer() {
-        // The faster start is about the Android build only.
-        assertTrue(WhatsNew.items(desktop = false).size == WhatsNew.items(desktop = true).size + 1)
-        assertTrue(WhatsNew.items(desktop = true).none { "быстрее" in it })
+        // The phone is a release ahead: its list is about the ⋮ menu, the computer's about the contest book.
+        assertTrue(WhatsNew.items(desktop = false).any { "CONTEST MODE" in it })
+        assertTrue(WhatsNew.items(desktop = true).none { "⋮ разложено" in it })
     }
 }

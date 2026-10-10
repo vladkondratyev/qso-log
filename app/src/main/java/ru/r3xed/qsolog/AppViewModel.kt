@@ -557,6 +557,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val hasUnsavedChanges: Boolean
         get() = formOriginal.let { it != null && form != it }
 
+    /** "Экспорт и импорт…" from the ⋮ menu is open. */
+    var showTransfer by mutableStateOf(false)
+
     /** "Что нового" is open: once after an update (not on the first install), or from the settings. */
     var showWhatsNew by mutableStateOf(false)
 
