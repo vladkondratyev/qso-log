@@ -29,29 +29,33 @@ internal val DIGIT_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five
 /** F1 or Ctrl+/: every key of an external keyboard, by screen (the same list as on the computer). */
 @Composable
 fun HardwareKeysDialog(onClose: () -> Unit) {
-    val x = LocalExtra.current
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text(tr("Внешняя клавиатура")) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                KeyHints.sections(mac = false).forEach { sec ->
-                    Text(sec.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
-                    // The key on its own line, what it does under it: long combinations fit on a phone.
-                    sec.keys.forEach { (k, what) ->
-                        Column {
-                            Text(k, fontFamily = Mono, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                            Text(what, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
-                Text(KeyHints.commands, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
-                Text(
-                    tr("Когда подключена клавиатура, своя экранная клавиатура программы прячется, а курсор сразу стоит в позывном."),
-                    style = MaterialTheme.typography.bodyMedium, color = x.muted,
-                )
-            }
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) { KeysList() }
         },
         confirmButton = { TextButton(onClick = onClose) { Text(tr("Закрыть")) } },
+    )
+}
+
+/** The keys by screen, then the callsign commands: in the F1 dialog and on the first tab of the reference. */
+@Composable
+fun KeysList() {
+    val x = LocalExtra.current
+    KeyHints.sections(mac = false).forEach { sec ->
+        Text(sec.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+        // The key on its own line, what it does under it: long combinations fit on a phone.
+        sec.keys.forEach { (k, what) ->
+            Column {
+                Text(k, fontFamily = Mono, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(what, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+    Text(KeyHints.commands, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+    Text(
+        tr("Когда подключена клавиатура, своя экранная клавиатура программы прячется, а курсор сразу стоит в позывном."),
+        style = MaterialTheme.typography.bodyMedium, color = x.muted,
     )
 }

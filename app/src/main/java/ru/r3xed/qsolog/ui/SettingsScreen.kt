@@ -55,6 +55,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -293,6 +294,8 @@ fun SettingsScreen(
                 Text(tr("Клавиатура в карточке"), style = MaterialTheme.typography.titleSmall)
                 KeypadModeRow(vm.keypad, vm::changeKeypad)
                 Note(tr("Своя клавиатура — крупные клавиши с цифрами и латиницей прямо в карточке, системная не открывается. Работает и в обычной карточке «Новый QSO» (позывной, частота, RST), и в режиме соревнований; имя, город и комментарий вводятся системной. Компактная на треть ниже, карточке остаётся больше места. Выбор запоминается. Если подключена внешняя клавиатура, своя прячется сама."))
+                // The same list as F1 and the first tab of the reference: worth reading before a keyboard is attached.
+                ActionButton(tr("Список клавиш"), Icons.Filled.Keyboard) { vm.showKeys = true }
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                         .toggleable(value = vm.timeOnSave, role = Role.Switch, onValueChange = vm::changeTimeOnSave)

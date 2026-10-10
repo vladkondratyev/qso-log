@@ -55,7 +55,8 @@ import ru.r3xed.qsolog.tr
 @Composable
 fun ReferenceScreen(onClose: () -> Unit, myPosition: LatLon? = null) {
     val x = LocalExtra.current
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    // Opens on the band table; the keyboard keys come first in the row but matter only with a keyboard attached.
+    var tab by rememberSaveable { mutableIntStateOf(1) }
     BackHandler(onBack = onClose)
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -64,14 +65,13 @@ fun ReferenceScreen(onClose: () -> Unit, myPosition: LatLon? = null) {
             }
             Text(tr("Справка"), style = MaterialTheme.typography.headlineSmall)
         }
-        // Three tabs as a row of pills; the chosen one is filled.
-        // Ten tabs: a row of pills that scrolls sideways.
+        // Eleven tabs: a row of pills that scrolls sideways; the chosen one is filled.
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             listOf(
-                tr("Частоты РФ"), tr("План и активность"), tr("Морзе"), tr("Позывные"), tr("Коды"),
+                tr("Клавиши"), tr("Частоты РФ"), tr("План и активность"), tr("Морзе"), tr("Позывные"), tr("Коды"),
                 tr("Уровни"), tr("Кабели"), tr("Антенны"), tr("Префиксы"), tr("Прохождение"),
             ).forEachIndexed { i, title ->
                 val on = tab == i
@@ -95,15 +95,19 @@ fun ReferenceScreen(onClose: () -> Unit, myPosition: LatLon? = null) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             when (tab) {
-                0 -> BandsTable()
-                1 -> PlanTab()
-                2 -> MorseTables()
-                3 -> PhoneticTable()
-                4 -> CodesTab()
-                5 -> LevelsTab()
-                6 -> CablesTab()
-                7 -> AntennasTab()
-                8 -> PrefixTab(myPosition)
+                0 -> {
+                    RefNote(tr("Bluetooth- или USB-клавиатура: связи вводятся без касаний экрана. Этот же список открывается клавишей F1 или Ctrl+/."))
+                    KeysList()
+                }
+                1 -> BandsTable()
+                2 -> PlanTab()
+                3 -> MorseTables()
+                4 -> PhoneticTable()
+                5 -> CodesTab()
+                6 -> LevelsTab()
+                7 -> CablesTab()
+                8 -> AntennasTab()
+                9 -> PrefixTab(myPosition)
                 else -> PropagationTab()
             }
             Spacer(Modifier.height(16.dp))

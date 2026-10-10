@@ -164,23 +164,8 @@ fun LogScreen(
                     FilledTonalIconButton(onClick = { menu = true }, modifier = Modifier.size(50.dp)) {
                         Icon(Icons.Filled.MoreVert, contentDescription = tr("Меню"), modifier = Modifier.size(27.dp))
                     }
-                    // Grouped: the operating mode, the log's views, files, then help and the settings — the rarest last.
+                    // Grouped: the log's views, files, help, the contest mode, then the keys and the settings.
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        // The whole row switches contest mode; the menu stays open so the contest book shows up under it.
-                        DropdownMenuItem(
-                            text = { MenuText("CONTEST MODE", "Ctrl+K", vm.hardKeyboard) },
-                            leadingIcon = { Icon(Icons.Filled.Flag, null) },
-                            trailingIcon = { Switch(checked = vm.contestMode, onCheckedChange = null) },
-                            onClick = { vm.toggleContestMode() },
-                        )
-                        if (vm.contestMode) {
-                            DropdownMenuItem(
-                                text = { Text(tr("Справочник контестов"), fontSize = 18.sp) },
-                                leadingIcon = { Icon(Icons.Filled.EmojiEvents, null) },
-                                onClick = { menu = false; vm.openContests() },
-                            )
-                        }
-                        HorizontalDivider()
                         DropdownMenuItem(
                             text = { MenuText(tr("Дашборд"), "Ctrl+D", vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.BarChart, null) },
@@ -213,6 +198,22 @@ fun LogScreen(
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
                             onClick = { menu = false; vm.openReference() },
                         )
+                        HorizontalDivider()
+                        // The whole row switches contest mode; the menu stays open so the contest book shows up under it.
+                        DropdownMenuItem(
+                            text = { MenuText("CONTEST MODE", "Ctrl+K", vm.hardKeyboard) },
+                            leadingIcon = { Icon(Icons.Filled.Flag, null) },
+                            trailingIcon = { Switch(checked = vm.contestMode, onCheckedChange = null) },
+                            onClick = { vm.toggleContestMode() },
+                        )
+                        if (vm.contestMode) {
+                            DropdownMenuItem(
+                                text = { Text(tr("Справочник контестов"), fontSize = 18.sp) },
+                                leadingIcon = { Icon(Icons.Filled.EmojiEvents, null) },
+                                onClick = { menu = false; vm.openContests() },
+                            )
+                        }
+                        HorizontalDivider()
                         // The list of keys matters only with a keyboard attached (F1 opens it as well).
                         if (vm.hardKeyboard) {
                             DropdownMenuItem(

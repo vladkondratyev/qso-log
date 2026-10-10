@@ -10,14 +10,13 @@ object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
     /**
-     * Points of this release. The phone (0.39.0) is a release ahead of the computer (1.18.0): each has its own list
+     * Points of this release. The phone (0.39.1) is a release ahead of the computer (1.18.0): each has its own list
      * until the computer catches up.
      */
     fun items(desktop: Boolean): List<String> = if (desktop) desktopItems() else listOf(
-        tr("Меню ⋮ разложено по группам: сверху режим CONTEST и справочник контестов, затем дашборд, карта и история поиска, потом файлы, внизу справка и настройки."),
-        tr("CONTEST MODE включается прямо из меню ⋮ — больше не нужно идти в настройки."),
-        tr("«Экспорт и импорт…» в меню: ADIF, CSV и ЕРМАК/Cabrillo в одном окне."),
-        tr("История поиска включается на своём экране, в меню — только переход к ней. Пункт со списком клавиш виден, когда подключена клавиатура."),
+        tr("Список горячих клавиш — первая вкладка справки «Клавиши» и кнопка «Список клавиш» в настройках, блок «Ввод связи». Открыть его можно и без подключённой клавиатуры."),
+        tr("В меню ⋮ переключатель CONTEST MODE и справочник контестов теперь под «Справкой и калькуляторами»."),
+        tr("Меню ⋮ разложено по группам: дашборд, карта и история поиска; «Экспорт и импорт…» и синхронизация; справка; режим CONTEST; настройки."),
     )
 
     private fun desktopItems(): List<String> = listOfNotNull(

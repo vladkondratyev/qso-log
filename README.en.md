@@ -27,7 +27,7 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 0.39.0 | [QSO-LOG-0.39.0.apk](../../releases/tag/v0.39.0) |
+| Android 8.0 or newer | 0.39.1 | [QSO-LOG-0.39.1.apk](../../releases/tag/v0.39.1) |
 | macOS 11 or newer, Apple silicon (M1 and newer) | 1.18.0 | [QSO-LOG-1.18.0-macos-arm64.dmg](../../releases/tag/desktop-v1.18.0) |
 | macOS 11 or newer, Intel | 1.18.0 | [QSO-LOG-1.18.0-macos-x64.dmg](../../releases/tag/desktop-v1.18.0) |
 | Windows 10 and 11, 64-bit | 1.18.0 | [QSO-LOG-1.18.0-windows-x64.zip](../../releases/tag/desktop-v1.18.0) |
@@ -119,7 +119,7 @@ normal card and to contest mode.
 
 ## Contest mode
 
-Contests need speed, so there is a separate mode. Switch it on with the first row of the ⋮ menu — **CONTEST MODE**
+Contests need speed, so there is a separate mode. Switch it on in the ⋮ menu (below "Reference and calculators") — **CONTEST MODE**
 (also in Settings → "QSO entry", or Ctrl+K on a keyboard).
 It turns off every time the app starts, so you don't keep your everyday log in it by accident.
 
@@ -262,8 +262,9 @@ press Enter or Space; the app switches band, mode or frequency and clears the fi
 
 A command can't be mistaken for a callsign: a callsign always has both letters and digits.
 
-On a phone with a keyboard attached the ⋮ menu gets a "Keys" item with the list, and the shortcuts are shown in the
-menu items. On a Mac press the F keys with fn unless "Use F1, F2, etc. keys as standard function keys" is
+On a phone the whole list is the first reference tab, **"Keys"**, and the **"Key list"** button in Settings →
+"QSO entry"; both open without a keyboard attached. With a keyboard attached the ⋮ menu also gets a "Keys" item, and
+the shortcuts are shown in the menu items. On a Mac press the F keys with fn unless "Use F1, F2, etc. keys as standard function keys" is
 on in the keyboard settings.
 
 <p>
@@ -476,7 +477,7 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-0.39.0.apk` from the [release page](../../releases/tag/v0.39.0) and open it on the phone; allow
+Download `QSO-LOG-0.39.1.apk` from the [release page](../../releases/tag/v0.39.1) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS

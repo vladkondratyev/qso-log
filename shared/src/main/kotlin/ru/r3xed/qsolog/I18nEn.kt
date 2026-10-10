@@ -1091,4 +1091,10 @@ internal val EN: Map<String, String> = hashMapOf(
     "таблица с разделителем «;»" to "a table separated with “;”",
     "отчёт .txt или .cbr" to "a .txt or .cbr report",
     "Чтобы выгрузить только часть журнала, выберите записи долгим нажатием и нажмите «Экспорт». Повторы при импорте пропускаются." to "To export part of the log, pick QSOs with a long press and tap “Export”. Duplicates are skipped on import.",
+    // 0.39.1
+    "Список горячих клавиш — первая вкладка справки «Клавиши» и кнопка «Список клавиш» в настройках, блок «Ввод связи». Открыть его можно и без подключённой клавиатуры." to "The list of keyboard shortcuts is the first reference tab, “Keys”, and the “Key list” button in Settings → “QSO entry”. It opens without a keyboard attached, too.",
+    "В меню ⋮ переключатель CONTEST MODE и справочник контестов теперь под «Справкой и калькуляторами»." to "In the ⋮ menu the CONTEST MODE switch and the contest book are now below “Reference and calculators”.",
+    "Меню ⋮ разложено по группам: дашборд, карта и история поиска; «Экспорт и импорт…» и синхронизация; справка; режим CONTEST; настройки." to "The ⋮ menu is grouped: dashboard, map and search history; “Export and import…” and sync; reference; CONTEST mode; settings.",
+    "Список клавиш" to "Key list",
+    "Bluetooth- или USB-клавиатура: связи вводятся без касаний экрана. Этот же список открывается клавишей F1 или Ctrl+/." to "A Bluetooth or USB keyboard: QSOs are entered without touching the screen. F1 or Ctrl+/ opens the same list.",
 )
