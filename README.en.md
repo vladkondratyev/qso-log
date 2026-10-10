@@ -27,11 +27,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 0.37.0 | [QSO-LOG-0.37.0.apk](../../releases/tag/v0.37.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 1.17.0 | [QSO-LOG-1.17.0-macos-arm64.dmg](../../releases/tag/desktop-v1.17.0) |
-| macOS 11 or newer, Intel | 1.17.0 | [QSO-LOG-1.17.0-macos-x64.dmg](../../releases/tag/desktop-v1.17.0) |
-| Windows 10 and 11, 64-bit | 1.17.0 | [QSO-LOG-1.17.0-windows-x64.zip](../../releases/tag/desktop-v1.17.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.17.0 | [QSO-LOG-1.17.0-linux-amd64.deb](../../releases/tag/desktop-v1.17.0) |
+| Android 8.0 or newer | 0.37.1 | [QSO-LOG-0.37.1.apk](../../releases/tag/v0.37.1) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 1.17.1 | [QSO-LOG-1.17.1-macos-arm64.dmg](../../releases/tag/desktop-v1.17.1) |
+| macOS 11 or newer, Intel | 1.17.1 | [QSO-LOG-1.17.1-macos-x64.dmg](../../releases/tag/desktop-v1.17.1) |
+| Windows 10 and 11, 64-bit | 1.17.1 | [QSO-LOG-1.17.1-windows-x64.zip](../../releases/tag/desktop-v1.17.1) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.17.1 | [QSO-LOG-1.17.1-linux-amd64.deb](../../releases/tag/desktop-v1.17.1) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -401,7 +401,9 @@ The Morse tab has three modes at the top: Table, Sending and Receiving.
   signal and chant. Characters sound at full speed, the gaps between them can be longer (Farnsworth).
 - Speed, key type, alphabet (Cyrillic or Latin) and the number of learned characters are remembered.
 
-To connect a real key or paddle (for example a Xiegu with a 3.5 mm plug):
+To connect a real key or paddle (for example a Xiegu with a 3.5 mm plug). The Sending mode has a "Connect a key" button
+with the same instructions, the adapters the phone sees, a live check (press the key and see what arrives and how it is
+understood), and assignment: press "Assign" and then the key, so an adapter sending any keys works.
 
 - **A USB or Bluetooth adapter that sends key presses like a keyboard** (ready-made, such as the Vail Adapter, or home-made
   on a Seeed XIAO, Arduino Pro Micro or ESP32): dot — left Ctrl or "[", dash — right Ctrl or "]", a straight key — any of
@@ -413,6 +415,7 @@ To connect a real key or paddle (for example a Xiegu with a 3.5 mm plug):
 <p>
 <img src="docs/screenshots/61-morse-send.png" width="200" alt="Morse trainer: sending">
 <img src="docs/screenshots/62-morse-receive.png" width="200" alt="Morse trainer: receiving by the Koch method">
+<img src="docs/screenshots/63-morse-connect.png" width="200" alt="Connecting a key: ways, check, assigning keys">
 </p>
 
 ## Settings
@@ -447,26 +450,26 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-0.37.0.apk` from the [release page](../../releases/tag/v0.37.0) and open it on the phone; allow
+Download `QSO-LOG-0.37.1.apk` from the [release page](../../releases/tag/v0.37.1) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-1.17.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v1.17.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-1.17.1-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v1.17.1), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-1.17.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v1.17.0), unpack the
+Download `QSO-LOG-1.17.1-windows-x64.zip` from the [release page](../../releases/tag/desktop-v1.17.1), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-1.17.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v1.17.0) and install it:
+Download `QSO-LOG-1.17.1-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v1.17.1) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-1.17.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-1.17.1-linux-amd64.deb
 ```
 
 ## Where the data is kept

@@ -77,6 +77,9 @@ private fun shortcut(key: Key) = KeyShortcut(key, meta = IS_MAC, ctrl = !IS_MAC)
 
 private val DASH_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four)
 
+/** Keys held down now, to tell the computer's auto-repeat from a new press of the Morse key. */
+private val morseHeld = mutableSetOf<String>()
+
 /** The log with no card open: the arrows walk through the rows, Enter opens, Space picks, Delete deletes. */
 private fun logKey(state: AppState, e: androidx.compose.ui.input.key.KeyEvent, mod: Boolean): Boolean {
     when {
@@ -130,17 +133,14 @@ fun main() {
             icon = painterResource("icon.png"),
             state = windowState,
             onPreviewKeyEvent = { e ->
-                // The Morse trainer is open: an external key through an adapter sends these keys.
-                val morse = ru.r3xed.qsolog.morse.MorseKeyBus.session
-                val morseKey = when (e.key) {
-                    Key.CtrlLeft, Key.LeftBracket -> 1
-                    Key.CtrlRight, Key.RightBracket -> 2
-                    Key.Spacebar -> 0
-                    else -> -1
-                }
-                if (morse != null && morseKey >= 0 && (e.type == KeyEventType.KeyDown || e.type == KeyEventType.KeyUp)) {
-                    morse.press(morseKey, e.type == KeyEventType.KeyDown)
-                    return@Window true
+                // The Morse trainer is open: an external key through an adapter sends keys (Ctrl, brackets, Space by default).
+                if (e.type == KeyEventType.KeyDown || e.type == KeyEventType.KeyUp) {
+                    val id = "${e.key.keyCode}"
+                    val down = e.type == KeyEventType.KeyDown
+                    // The computer repeats a held key: only the first press counts.
+                    val repeat = down && id in morseHeld
+                    if (down) morseHeld.add(id) else morseHeld.remove(id)
+                    if (ru.r3xed.qsolog.morse.MorseKeyBus.key(id, down, repeat)) return@Window true
                 }
                 // One key instead of two: F9 opens a new card from anywhere, F1 lists the keys.
                 val mod = if (IS_MAC) e.isMetaPressed else e.isCtrlPressed

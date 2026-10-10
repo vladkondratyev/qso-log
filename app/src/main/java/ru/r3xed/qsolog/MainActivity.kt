@@ -64,19 +64,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // The Morse trainer is open: an external key through an adapter (keys), or wired as a headset button.
-        ru.r3xed.qsolog.morse.MorseKeyBus.session?.let { s ->
-            val which = when (event.keyCode) {
-                KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_LEFT_BRACKET, KeyEvent.KEYCODE_VOLUME_UP -> 1
-                KeyEvent.KEYCODE_CTRL_RIGHT, KeyEvent.KEYCODE_RIGHT_BRACKET, KeyEvent.KEYCODE_VOLUME_DOWN -> 2
-                KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_HEADSETHOOK, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> 0
-                else -> -1
-            }
-            if (which >= 0) {
-                if (event.action == KeyEvent.ACTION_UP) s.press(which, false)
-                else if (event.repeatCount == 0) s.press(which, true)
-                return true
-            }
-        }
+        if (ru.r3xed.qsolog.morse.MorseKeyBus.key(event.keyCode.toString(), event.action == KeyEvent.ACTION_DOWN, event.repeatCount > 0)) return true
         val soft = event.flags and KeyEvent.FLAG_SOFT_KEYBOARD != 0
         val physical = !soft && event.deviceId != KeyCharacterMap.VIRTUAL_KEYBOARD
         // Typing on a keyboard whose attachment the system did not report: switch to the text fields all the same.

@@ -89,3 +89,30 @@ fun rememberMorseStore(): ru.r3xed.qsolog.morse.MorseStore = androidx.compose.ru
         override fun put(key: String, value: String) = p.put(key, value)
     }
 }
+
+/** A computer has no headset buttons for a key. */
+const val MORSE_HEADSET_KEYS = false
+
+/** The keys an adapter usually sends: Ctrl / brackets for the paddles, Space for a straight key. */
+fun defaultMorseKeyMap() = ru.r3xed.qsolog.morse.MorseKeyMap(
+    dot = setOf(androidx.compose.ui.input.key.Key.CtrlLeft, androidx.compose.ui.input.key.Key.LeftBracket).map { "${it.keyCode}" }.toSet(),
+    dah = setOf(androidx.compose.ui.input.key.Key.CtrlRight, androidx.compose.ui.input.key.Key.RightBracket).map { "${it.keyCode}" }.toSet(),
+    straight = setOf(androidx.compose.ui.input.key.Key.Spacebar).map { "${it.keyCode}" }.toSet(),
+)
+
+/** A key id as people call it. */
+fun morseKeyLabel(id: String): String {
+    val k = androidx.compose.ui.input.key.Key
+    return when (id) {
+        "${k.CtrlLeft.keyCode}" -> ru.r3xed.qsolog.tr("левый Ctrl")
+        "${k.CtrlRight.keyCode}" -> ru.r3xed.qsolog.tr("правый Ctrl")
+        "${k.LeftBracket.keyCode}" -> "["
+        "${k.RightBracket.keyCode}" -> "]"
+        "${k.Spacebar.keyCode}" -> ru.r3xed.qsolog.tr("Пробел")
+        else -> id.toLongOrNull()?.let { java.awt.event.KeyEvent.getKeyText((it and 0xFFFFFFFFL).toInt()) } ?: id
+    }
+}
+
+/** The computer does not list keyboards; the check below shows what arrives. */
+fun connectedKeyDevices(): List<String> = emptyList()
+const val MORSE_DEVICE_LIST = false

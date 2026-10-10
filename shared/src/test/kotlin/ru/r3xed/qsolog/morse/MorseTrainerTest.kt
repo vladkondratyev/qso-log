@@ -74,4 +74,38 @@ class MorseTrainerTest {
         val slow = MorseLesson.pcm("EE", 20, 10).size
         assertTrue(slow > fast)
     }
+
+    @Test
+    fun keyMapAssignsOneRolePerKey() {
+        var m = MorseKeyMap(setOf("A"), setOf("B"), setOf("S"))
+        m = m.assign("A", 2)
+        assertEquals(2, m.role("A"))
+        assertEquals(emptySet(), m.dot)
+        assertEquals(-1, m.role("X"))
+        val store = object : MorseStore {
+            val map = mutableMapOf<String, String>()
+            override fun get(key: String) = map[key]
+            override fun put(key: String, value: String) { map[key] = value }
+        }
+        m.save(store)
+        assertEquals(m, MorseKeyMap.load(store, MorseKeyMap(emptySet(), emptySet(), emptySet())))
+    }
+
+    @Test
+    fun busRoutesMappedKeysAndLearns() {
+        val s = MorseKeySession(20, KeyType.IAMBIC_A, cyrillic = false)
+        MorseKeyBus.session = s
+        MorseKeyBus.keyMap = MorseKeyMap(setOf("D"), setOf("H"), setOf())
+        try {
+            assertTrue(MorseKeyBus.key("D", down = true, repeat = false))
+            assertTrue(s.dit)
+            assertTrue(!MorseKeyBus.key("Z", down = true, repeat = false))
+            var learned = ""
+            MorseKeyBus.learn = { learned = it }
+            assertTrue(MorseKeyBus.key("Z", down = true, repeat = false))
+            assertEquals("Z", learned)
+        } finally {
+            MorseKeyBus.session = null; MorseKeyBus.keyMap = null; MorseKeyBus.learn = null
+        }
+    }
 }

@@ -107,3 +107,40 @@ fun rememberMorseStore(): ru.r3xed.qsolog.morse.MorseStore {
         }
     }
 }
+
+/** On a phone a key can also be wired as a headset button. */
+const val MORSE_HEADSET_KEYS = true
+
+/** The keys an adapter usually sends: Ctrl / brackets for the paddles, Space or a headset button for a straight key. */
+fun defaultMorseKeyMap() = ru.r3xed.qsolog.morse.MorseKeyMap(
+    dot = setOf(android.view.KeyEvent.KEYCODE_CTRL_LEFT, android.view.KeyEvent.KEYCODE_LEFT_BRACKET, android.view.KeyEvent.KEYCODE_VOLUME_UP).map { "$it" }.toSet(),
+    dah = setOf(android.view.KeyEvent.KEYCODE_CTRL_RIGHT, android.view.KeyEvent.KEYCODE_RIGHT_BRACKET, android.view.KeyEvent.KEYCODE_VOLUME_DOWN).map { "$it" }.toSet(),
+    straight = setOf(android.view.KeyEvent.KEYCODE_SPACE, android.view.KeyEvent.KEYCODE_HEADSETHOOK, android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE).map { "$it" }.toSet(),
+)
+
+/** A key id as people call it. */
+fun morseKeyLabel(id: String): String {
+    val code = id.toIntOrNull() ?: return id
+    return when (code) {
+        android.view.KeyEvent.KEYCODE_CTRL_LEFT -> ru.r3xed.qsolog.tr("левый Ctrl")
+        android.view.KeyEvent.KEYCODE_CTRL_RIGHT -> ru.r3xed.qsolog.tr("правый Ctrl")
+        android.view.KeyEvent.KEYCODE_LEFT_BRACKET -> "["
+        android.view.KeyEvent.KEYCODE_RIGHT_BRACKET -> "]"
+        android.view.KeyEvent.KEYCODE_VOLUME_UP -> ru.r3xed.qsolog.tr("громкость +")
+        android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> ru.r3xed.qsolog.tr("громкость −")
+        android.view.KeyEvent.KEYCODE_SPACE -> ru.r3xed.qsolog.tr("Пробел")
+        android.view.KeyEvent.KEYCODE_HEADSETHOOK -> ru.r3xed.qsolog.tr("кнопка гарнитуры")
+        android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> ru.r3xed.qsolog.tr("кнопка гарнитуры (play/pause)")
+        else -> android.view.KeyEvent.keyCodeToString(code).removePrefix("KEYCODE_")
+    }
+}
+
+/** External keyboards (adapters) the phone sees now, by name. */
+fun connectedKeyDevices(): List<String> = android.view.InputDevice.getDeviceIds().toList()
+    .mapNotNull { android.view.InputDevice.getDevice(it) }
+    .filter { d ->
+        !d.isVirtual && (d.sources and android.view.InputDevice.SOURCE_KEYBOARD) == android.view.InputDevice.SOURCE_KEYBOARD &&
+            (if (android.os.Build.VERSION.SDK_INT >= 29) d.isExternal else d.keyboardType == android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC)
+    }
+    .map { it.name }.distinct()
+const val MORSE_DEVICE_LIST = true

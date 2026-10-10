@@ -2,6 +2,15 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.compose.foundation.background
+import ru.r3xed.qsolog.morse.MorseKeyMap
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -108,6 +117,9 @@ fun MorseSendTrainer(store: MorseStore) {
     var heard by remember { mutableStateOf("") }
     var pending by remember { mutableStateOf("") }
     var speed by remember { mutableIntStateOf(0) }
+    // Which keys of an external key's adapter mean dot, dash and straight key; kept between starts.
+    var map by remember { mutableStateOf(MorseKeyMap.load(store, defaultMorseKeyMap())) }
+    var connect by remember { mutableStateOf(false) }
     DisposableEffect(session) {
         val tone = MorseSidetone(session).also { it.start() }
         MorseKeyBus.session = session
@@ -115,6 +127,10 @@ fun MorseSendTrainer(store: MorseStore) {
             tone.stop()
             if (MorseKeyBus.session === session) MorseKeyBus.session = null
         }
+    }
+    DisposableEffect(map) {
+        MorseKeyBus.keyMap = map
+        onDispose { MorseKeyBus.keyMap = null }
     }
     LaunchedEffect(session, task) {
         session.clear()
@@ -155,13 +171,119 @@ fun MorseSendTrainer(store: MorseStore) {
         )
         IconButton(onClick = { task = MorseLesson.group(s.cyrillic, s.level) }) { Icon(Icons.Filled.Refresh, tr("Другое задание")) }
     }
+    if (connect) MorseKeyConnect(map, onMap = { m -> map = m; m.save(store) }, onClose = { connect = false })
+    else OutlinedButton(onClick = { connect = true }, shape = RoundedCornerShape(14.dp)) {
+        Icon(Icons.Filled.Cable, null)
+        Spacer(Modifier.width(8.dp))
+        Text(tr("Подключить ключ"))
+    }
     // The key on the screen: one pad, or a dot pad and a dash pad side by side.
     if (s.type == KeyType.STRAIGHT) KeyPad(tr("Ключ"), Modifier.fillMaxWidth()) { session.press(0, it) }
     else Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         KeyPad("·", Modifier.weight(1f)) { session.press(1, it) }
         KeyPad("−", Modifier.weight(1f)) { session.press(2, it) }
     }
-    TrainerNote(tr("Внешний ключ подключается через USB- или Bluetooth-переходник, который передаёт нажатия как клавиатура: точка — левый Ctrl или «[», тире — правый Ctrl или «]», прямой ключ — любая из них или Пробел. На телефоне ключ можно подключить и как кнопку гарнитуры: прямой ключ — кнопка, манипулятор — громкость + и −."))
+}
+
+/**
+ * Connecting a real key: how (USB or Bluetooth adapter, or a headset button on a phone), what the device sees, a live
+ * check of what arrives and how it is understood, and assigning any key of the adapter to dot, dash or straight key.
+ */
+@Composable
+private fun MorseKeyConnect(map: MorseKeyMap, onMap: (MorseKeyMap) -> Unit, onClose: () -> Unit) {
+    val x = LocalExtra.current
+    val c = MaterialTheme.colorScheme
+    var last by remember { mutableStateOf<String?>(null) }
+    var held by remember { mutableStateOf(setOf<String>()) }
+    var learning by remember { mutableStateOf<Int?>(null) }
+    var devices by remember { mutableStateOf(connectedKeyDevices()) }
+    val currentMap by rememberUpdatedState(map)
+    val currentOnMap by rememberUpdatedState(onMap)
+    DisposableEffect(Unit) {
+        MorseKeyBus.seen = { id, down -> last = id; held = if (down) held + id else held - id }
+        onDispose { MorseKeyBus.seen = null; MorseKeyBus.learn = null }
+    }
+    LaunchedEffect(learning) {
+        val role = learning
+        MorseKeyBus.learn = if (role == null) null else { id -> currentOnMap(currentMap.assign(id, role)); learning = null }
+    }
+    if (MORSE_DEVICE_LIST) LaunchedEffect(Unit) { while (true) { devices = connectedKeyDevices(); delay(2000) } }
+    val roleName = { r: Int -> when (r) { 1 -> tr("точка"); 2 -> tr("тире"); 0 -> tr("прямой ключ"); else -> tr("не назначена") } }
+
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(x.field).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tr("Подключение ключа"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, tr("Закрыть")) }
+        }
+        Text(tr("1. Как подключить"), fontWeight = FontWeight.Bold)
+        ConnectWay(
+            tr("USB-переходник"),
+            tr("Плата с гнездом 3,5 мм, которая передаёт нажатия ключа как клавиатура: готовая (например, Vail Adapter) или самодельная на Seeed XIAO, Arduino Pro Micro. Вставьте штекер ключа в переходник, а переходник — в компьютер или в телефон через переходник OTG (USB-C ↔ USB-A)."),
+        )
+        ConnectWay(
+            tr("Bluetooth-переходник"),
+            tr("Плата на ESP32, которая показывается как Bluetooth-клавиатура. Включите её и соедините в настройках Bluetooth, как обычную клавиатуру. Задержка немного больше, чем по проводу."),
+        )
+        if (MORSE_HEADSET_KEYS) ConnectWay(
+            tr("Кнопки гарнитуры"),
+            tr("Без электроники, только пайка: штекер 3,5 мм с четырьмя контактами (TRRS, стандарт CTIA: гильза — микрофон, второе кольцо — земля) или переходник USB-C → 3,5 мм с микрофоном. Прямой ключ — между микрофоном и землёй (кнопка гарнитуры). Манипулятор: точка — через резистор 240 Ом (громкость +), тире — через 470 Ом (громкость −). Не на всех телефонах эти кнопки доходят до программы — проверьте ниже."),
+        )
+        if (MORSE_DEVICE_LIST) Text(
+            if (devices.isEmpty()) tr("Внешних клавиатур не видно. Подключите переходник — он появится здесь.")
+            else tr("Подключено: %s", devices.joinToString(", ")),
+            style = MaterialTheme.typography.bodyMedium, color = if (devices.isEmpty()) x.muted else x.ok,
+        )
+
+        Text(tr("2. Проверка: нажмите ключ"), fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(1 to tr("Точка"), 2 to tr("Тире"), 0 to tr("Прямой ключ")).forEach { (r, label) ->
+                val on = held.any { map.role(it) == r }
+                Text(
+                    label, fontWeight = FontWeight.Bold, color = if (on) c.onPrimary else c.onSurface,
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(if (on) c.primary else c.surface)
+                        .border(1.dp, x.line, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+        }
+        Text(
+            last?.let { id ->
+                val r = map.role(id)
+                tr("Пришло: %s — %s", morseKeyLabel(id), roleName(r)) + if (r < 0) tr(". Назначьте её ниже.") else ""
+            } ?: tr("Пока ничего не пришло. Если нажатия не видны, проверьте переходник."),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+
+        Text(tr("3. Назначение клавиш"), fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+        Text(tr("Переходник может передавать любые клавиши: нажмите «Назначить» и затем ключ."), style = MaterialTheme.typography.bodyMedium, color = x.muted)
+        listOf(1 to (tr("Точка") to map.dot), 2 to (tr("Тире") to map.dah), 0 to (tr("Прямой ключ") to map.straight)).forEach { (r, p) ->
+            val (label, keys) = p
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(label, fontWeight = FontWeight.Bold)
+                    Text(keys.joinToString(", ") { morseKeyLabel(it) }.ifEmpty { "—" }, style = MaterialTheme.typography.bodyMedium, color = x.muted)
+                }
+                if (learning == r) Button(onClick = { learning = null }, shape = RoundedCornerShape(12.dp)) { Text(tr("Нажмите ключ…")) }
+                else OutlinedButton(onClick = { learning = r }, shape = RoundedCornerShape(12.dp)) { Text(tr("Назначить")) }
+            }
+        }
+        TextButton(onClick = { learning = null; onMap(defaultMorseKeyMap()) }) { Text(tr("Сбросить по умолчанию")) }
+    }
+}
+
+/** One way to connect a key: a title and how, opened with a tap. */
+@Composable
+private fun ConnectWay(title: String, how: String) {
+    var open by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).clickable { open = !open }.padding(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
+        }
+        if (open) Text(how, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
+    }
 }
 
 /** A pad that is a key: down while pressed. Touch events are taken before the scrolling column sees them. */
