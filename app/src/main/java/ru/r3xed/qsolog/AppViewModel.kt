@@ -11,6 +11,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -39,7 +40,10 @@ import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
 import ru.r3xed.qsolog.data.QrzCom
+import ru.r3xed.qsolog.data.Contest
+import ru.r3xed.qsolog.data.ContestBook
 import ru.r3xed.qsolog.data.ContestMode
+import ru.r3xed.qsolog.data.Dupes
 import ru.r3xed.qsolog.data.KeypadMode
 import ru.r3xed.qsolog.data.SyncState
 import ru.r3xed.qsolog.data.SheetSync
@@ -128,6 +132,8 @@ sealed interface Screen {
     data object Dashboard : Screen
     /** Stations looked up but not logged. */
     data object History : Screen
+    /** The contest book: contests with their time and tours; shown in the menu while contest mode is on. */
+    data object Contests : Screen
 }
 
 /** User-Agent for the online logbooks: they ask programs to name themselves. */
@@ -146,7 +152,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     val voice = VoiceNotes(app)
 
-    var settings by mutableStateOf(prefs.load()); private set
+    var settings by mutableStateOf(prefs.loadPublic()); private set
+
+    /**
+     * The passwords, read in the background: the encrypted file takes a noticeable part of a second to open and the
+     * log should not wait for it. Until they arrive the settings have empty passwords; [withSecrets] fills them in.
+     */
+    private val secrets = viewModelScope.async(Dispatchers.IO) { prefs.loadSecrets(StationSettings()) }
+    private var secretsReady = false
+
+    /** The stored passwords; waits only if they are still being read. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private fun storedSecrets(): StationSettings = if (secrets.isCompleted) secrets.getCompleted() else kotlinx.coroutines.runBlocking { secrets.await() }
+
+    /** [s] with the stored passwords where it has none. */
+    private fun withSecrets(s: StationSettings, p: StationSettings = storedSecrets()) = s.copy(
+        qrzPassword = s.qrzPassword.ifEmpty { p.qrzPassword },
+        qrzSitePassword = s.qrzSitePassword.ifEmpty { p.qrzSitePassword },
+        qrzComPassword = s.qrzComPassword.ifEmpty { p.qrzComPassword },
+    )
+
+    private fun applySecrets() {
+        if (secretsReady) return
+        secretsReady = true
+        settings = withSecrets(settings)
+    }
     private val qrz = QrzClient { settings.qrzLogin to settings.qrzPassword }
     private val qrzSite = QrzSite { settings.qrzSiteEmail to settings.qrzSitePassword }
     private val qrzCom = QrzCom { settings.qrzComLogin to settings.qrzComPassword }
@@ -160,6 +190,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * the QRZ.com page (also when QRZ.ru does not know the callsign: foreign stations). Null: known to none of them.
      */
     private suspend fun qrzLookup(call: String, stillWanted: () -> Boolean = { true }): QrzInfo? {
+        if (!secretsReady) { secrets.await(); applySecrets() }
         var problem: Exception? = null
         // Some source answered that it does not know the callsign.
         var notFound = false
@@ -288,7 +319,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Values the dialog starts with: last format and contest, RDA from "Мой район", operator from the station. */
     fun contestDefaults(): Cabrillo.Header = Cabrillo.Header(
         format = runCatching { Cabrillo.Format.valueOf(prefs.contestFormat) }.getOrDefault(Cabrillo.Format.ERMAK),
-        contest = prefs.contestCode,
+        contest = activeContest?.code?.ifBlank { null } ?: prefs.contestCode,
         callsign = settings.myCall,
         categoryOperator = prefs.contestOperator,
         location = settings.station["MY_CNTY"].orEmpty().replace("-", "").uppercase(),
@@ -299,12 +330,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Contacts entered in contest mode among [only] (or the whole log): the report dialog then offers to take only them. */
     fun hasContestQsos(only: Set<Long>?): Boolean = allQsos.any { (only == null || it.id in only) && ContestMode.isContest(it.adif) }
 
+    /** Contests of the book with contacts among [only] (or the whole log), and how many: the report can take one of them. */
+    fun contestsInLog(only: Set<Long>?): List<kotlin.Pair<Contest, Int>> = contestBook.all().map { c ->
+        c to allQsos.count { (only == null || it.id in only) && it.adif[Contest.REF] == c.id }
+    }.filter { it.second > 0 }
+
+    /** The contest the report dialog starts with: the active one when it has contacts. */
+    fun contestReportDefault(only: Set<Long>?): String? = activeContest?.id?.takeIf { id -> contestsInLog(only).any { it.first.id == id } }
+
     /** Remembers the dialog's choice and returns the file name to offer. */
-    fun prepareContest(h: Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean): String {
+    fun prepareContest(h: Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean, contestRef: String? = null): String {
         prefs.contestFormat = h.format.name
         prefs.contestCode = h.contest
         prefs.contestOperator = h.categoryOperator
-        pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark, contestOnly)
+        pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark, contestOnly, contestRef.takeIf { contestOnly })
         contestTarget = null
         val code = h.contest.uppercase().ifBlank { "LOG" }.replace('/', '-')
         return "${h.callsign.ifBlank { "log" }.replace('/', '-')}_$code.${h.format.extension}"
@@ -322,7 +361,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var exportTarget by mutableStateOf<ExportTarget?>(null); private set
 
     /** Choices of an export dialog, waiting for the file picker. */
-    class PendingExport(val format: ExportFormat, val only: Set<Long>?, val onlyNew: Boolean, val mark: Boolean, val contestOnly: Boolean = false)
+    class PendingExport(
+        val format: ExportFormat, val only: Set<Long>?, val onlyNew: Boolean, val mark: Boolean, val contestOnly: Boolean = false,
+        /** Only the contacts of this contest from the book. */
+        val contestRef: String? = null,
+    )
 
     private var pendingExport: PendingExport? = null
 
@@ -347,11 +390,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * The contacts an export takes: the picked ones or the whole log, without those already exported to [format] when
      * [onlyNew], and only those entered in contest mode when [contestOnly].
      */
-    fun exportCandidates(format: ExportFormat, only: Set<Long>?, onlyNew: Boolean, contestOnly: Boolean = false): List<Qso> =
-        allQsos.filter { takes(it, only, onlyNew, format, contestOnly) }
+    fun exportCandidates(format: ExportFormat, only: Set<Long>?, onlyNew: Boolean, contestOnly: Boolean = false, contestRef: String? = null): List<Qso> =
+        allQsos.filter { takes(it, only, onlyNew, format, contestOnly, contestRef.takeIf { contestOnly }) }
 
-    private fun takes(q: Qso, only: Set<Long>?, onlyNew: Boolean, format: ExportFormat, contestOnly: Boolean) =
-        (only == null || q.id in only) && (!onlyNew || !format.isExported(q.adif)) && (!contestOnly || ContestMode.isContest(q.adif))
+    private fun takes(q: Qso, only: Set<Long>?, onlyNew: Boolean, format: ExportFormat, contestOnly: Boolean, contestRef: String? = null) =
+        (only == null || q.id in only) && (!onlyNew || !format.isExported(q.adif)) && (!contestOnly || ContestMode.isContest(q.adif)) &&
+            (contestRef == null || q.adif[Contest.REF] == contestRef)
 
     /** Remembers the dialog's choice and returns the file name to offer. */
     fun prepareExport(onlyNew: Boolean, mark: Boolean): String {
@@ -382,7 +426,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val msg = try {
                 val count = withContext(Dispatchers.IO) {
-                    val list = db.all().filter { takes(it, p.only, p.onlyNew, p.format, p.contestOnly) }
+                    val list = db.all().filter { takes(it, p.only, p.onlyNew, p.format, p.contestOnly, p.contestRef) }
                     getApplication<Application>().contentResolver.openOutputStream(uri)!!.use { write(list, it) }
                     if (p.mark) list.forEach { db.save(p.format.mark(it)) }
                     list.size
@@ -513,12 +557,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val hasUnsavedChanges: Boolean
         get() = formOriginal.let { it != null && form != it }
 
+    /** "Что нового" is open: once after an update (not on the first install), or from the settings. */
+    var showWhatsNew by mutableStateOf(false)
+
+    fun closeWhatsNew() {
+        showWhatsNew = false
+        prefs.whatsNewSeen = BuildConfig.VERSION_NAME
+    }
+
     init {
+        // A first install has nothing new to tell: the version counts as seen.
+        val firstInstall = settings.myCall.isBlank() && !prefs.welcomeDone
+        if (prefs.whatsNewSeen != BuildConfig.VERSION_NAME) {
+            if (firstInstall) prefs.whatsNewSeen = BuildConfig.VERSION_NAME else showWhatsNew = true
+        }
         prefs.launchCount = prefs.launchCount + 1
         showRecordHint = prefs.launchCount <= 5
         reload()
         // First start: a short three-step setup; later, without a callsign, the settings as before.
         if (settings.myCall.isBlank()) screen = if (prefs.welcomeDone) Screen.Settings else Screen.Welcome
+        viewModelScope.launch { secrets.await(); applySecrets() }
         viewModelScope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
         // Keys and passwords of the online logbooks the app no longer uploads to.
         viewModelScope.launch(Dispatchers.IO) { prefs.forgetOnlineLogAccounts() }
@@ -1241,7 +1299,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Stations looked up but not logged: the "История поиска" screen, and a card filled without the internet. */
     private val searchHistory = SearchHistory(java.io.File(app.filesDir, "search_history.json"))
     var historyOn by mutableStateOf(prefs.searchHistory); private set
-    var historyEntries by mutableStateOf(searchHistory.all()); private set
+    var historyEntries by mutableStateOf<List<SearchEntry>>(emptyList()); private set
+
+    init {
+        // The file grows with every lookup: read off the main thread, so the log opens without waiting for it.
+        viewModelScope.launch { historyEntries = withContext(Dispatchers.IO) { searchHistory.all() } }
+    }
     /** Callsigns picked with a long press (a click with ⌘/Ctrl on the computer): delete or edit them together. */
     var historySelected by mutableStateOf<Set<String>>(emptySet()); private set
     /** The entry shown with its map; null — the list. */
@@ -1486,13 +1549,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             .filter { it.startsWith(typed) && it != typed }.take(3).toList()
     }
 
-    /** Same station, band and mode on the card's UTC day: a repeat (a dupe in a contest). */
+    /**
+     * Same station, band and mode: a repeat (a dupe in a contest). In a contest from the book — anywhere in it, or in
+     * the same tour when its dupes reset with each tour; otherwise on the card's UTC day.
+     */
     fun dupeOf(f: Form): Qso? {
-        if (f.call.length < 3) return null
-        return allQsos.filter {
-            it.id != f.id && it.call == f.call && it.band.equals(f.band, ignoreCase = true) &&
-                it.mode.equals(f.mode, ignoreCase = true) && DATE_FMT.format(utc(it.timeUtc)) == f.date.trim()
-        }.maxByOrNull { it.timeUtc }
+        val ref = f.adif[Contest.REF]
+        val c = contestBook.get(ref)
+        // A new card gets its tour when it is logged, that is now.
+        val tour = if (c?.dupesPerTour == true) f.adif[Contest.TOUR]?.toIntOrNull().takeIf { !f.isNew } ?: c.tourAt(System.currentTimeMillis()) else null
+        return Dupes.of(f.call, f.band, f.mode, ref, tour, f.date.trim(), f.id, allQsos) { DATE_FMT.format(utc(it.timeUtc)) }
     }
 
     fun deleteCurrent() {
@@ -1573,6 +1639,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun changeContestMode(on: Boolean) {
         contestMode = on
+        // The book is read only when it is needed: a small file, nothing to slow the start down.
+        if (on) contestBookChanged()
         contestWork = null
         contestLastSaved = null
     }
@@ -1637,8 +1705,54 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var contestDraft: Form? = null
 
     /** Contest contacts in the order they were made: the swipes go through them. */
-    private fun contestQsos(): List<Qso> =
-        allQsos.filter { ContestMode.isContest(it.adif) }.sortedWith(compareBy({ it.timeUtc }, { it.createdAt }, { it.id }))
+    private fun contestQsos(): List<Qso> {
+        // With a contest chosen in the book, only its contacts: the count, the rate and the swipes are about it.
+        val ref = activeContest?.id
+        return allQsos.filter { ContestMode.isContest(it.adif) && (ref == null || it.adif[Contest.REF] == ref) }
+            .sortedWith(compareBy({ it.timeUtc }, { it.createdAt }, { it.id }))
+    }
+
+    // ---------- contest book ----------
+
+    private val contestBook = ContestBook(java.io.File(app.filesDir, "contests.json"))
+    var contests by mutableStateOf<List<Contest>>(emptyList()); private set
+    /** The contest new contest-mode contacts are logged in; null — none chosen. */
+    var activeContest by mutableStateOf<Contest?>(null); private set
+
+    private fun contestBookChanged() {
+        contests = contestBook.all()
+        activeContest = contestBook.active()
+    }
+
+    fun openContests() {
+        screen = Screen.Contests
+    }
+
+    fun closeContests() {
+        screen = Screen.Log
+    }
+
+    /** Adds or changes [c]; a new one becomes the active contest at once. */
+    fun saveContest(c: Contest) {
+        val isNew = contestBook.get(c.id) == null
+        contestBook.put(c)
+        if (isNew) contestBook.activate(c.id)
+        contestBookChanged()
+    }
+
+    fun deleteContest(id: String) {
+        contestBook.delete(id)
+        contestBookChanged()
+    }
+
+    fun activateContest(id: String?) {
+        contestBook.activate(id)
+        contestBookChanged()
+        contestWork = null
+    }
+
+    /** Contacts logged in [c]: the number in the book's list. */
+    fun contestCount(c: Contest): Int = allQsos.count { it.adif[Contest.REF] == c.id }
 
     /** Position of the open contest card: "№ in the contest / of how many"; null for a new one. */
     fun contestPosition(): kotlin.Pair<Int, Int>? {
@@ -1659,7 +1773,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val f = if (w == null) form else form.copy(band = w.band, mode = w.mode, freq = normalizeFreq(w.freq))
         form = f.copy(
             rstSent = defaultRst(f.mode), rstRcvd = defaultRst(f.mode),
-            adif = f.adif + (ContestMode.FIELD to "Y") + (ContestMode.SENT to contestSentNext()),
+            adif = f.adif + (ContestMode.FIELD to "Y") + (ContestMode.SENT to contestSentNext()) +
+                listOfNotNull(activeContest?.let { Contest.REF to it.id }),
         )
         formOriginal = form
         screen = Screen.Contest
@@ -1673,8 +1788,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val f = form
         if (!f.isNew) return contestNext()
         contestError(f)?.let { return it }
-        val now = LocalDateTime.now(ZoneOffset.UTC)
-        form = f.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now))
+        val ms = System.currentTimeMillis()
+        val now = utc(ms)
+        // The contest it was logged in, with its code and the tour of this moment: the report finds it by them.
+        val stamp = contestBook.get(f.adif[Contest.REF])?.let { Contest.stamp(it, ms) }.orEmpty()
+        form = f.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now), adif = f.adif - Contest.TOUR + stamp)
         val err = save(quiet = true)
         if (err != null) {
             screen = Screen.Contest
@@ -1753,6 +1871,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------- settings ----------
 
     fun updateSettings(s: StationSettings) {
+        // Changed before the passwords were read (the first moments after start): the stored ones are kept.
+        @Suppress("NAME_SHADOWING") val s = if (secretsReady) s else withSecrets(s).also { applySecrets() }
         val credentialsChanged = s.qrzLogin != settings.qrzLogin || s.qrzPassword != settings.qrzPassword
         val siteChanged = s.qrzSiteEmail != settings.qrzSiteEmail || s.qrzSitePassword != settings.qrzSitePassword
         val comChanged = s.qrzComLogin != settings.qrzComLogin || s.qrzComPassword != settings.qrzComPassword

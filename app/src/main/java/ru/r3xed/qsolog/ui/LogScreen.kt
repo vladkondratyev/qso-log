@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CheckCircle
@@ -147,6 +148,8 @@ fun LogScreen(
                                 "CONTEST · " + if (vm.contestSentFixed) tr("передаю %s", vm.contestSentText.ifBlank { "—" }) else tr("следующий № %s", ContestMode.serial(vm.contestSerial)),
                                 maxSize = 16.sp, minSize = 11.sp, color = MaterialTheme.colorScheme.primary,
                             )
+                            // The contest from the book: its name, the tour and the time left, ticking.
+                            vm.activeContest?.let { ContestPhaseText(it, x.muted, prefix = it.title, short = true) }
                         } else {
                             OneLineText((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", vm.total), maxSize = 16.sp, minSize = 11.sp, color = x.muted)
                         }
@@ -164,6 +167,13 @@ fun LogScreen(
                             leadingIcon = { Icon(Icons.Filled.Settings, null) },
                             onClick = { menu = false; vm.openSettings() },
                         )
+                        if (vm.contestMode) {
+                            DropdownMenuItem(
+                                text = { Text(tr("Справочник контестов"), fontSize = 18.sp) },
+                                leadingIcon = { Icon(Icons.Filled.EmojiEvents, null) },
+                                onClick = { menu = false; vm.openContests() },
+                            )
+                        }
                         // Shown once the table is set up in the settings; the sync runs only from here or there.
                         if (SheetSync.isScriptUrl(vm.sheetUrl)) {
                             DropdownMenuItem(

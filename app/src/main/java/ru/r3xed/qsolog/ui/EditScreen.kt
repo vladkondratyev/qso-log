@@ -668,7 +668,7 @@ private fun StationCard(vm: AppViewModel) {
                 Text(tr("≈ Страна и область по позывному (HamQTH)"), fontSize = 16.sp, color = ink.copy(alpha = 0.8f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        lookup.qrzProblem ?: if (!vm.hasQrzAccount) tr("Имя и точный QTH — с учётной записью QRZ.ru") else tr("На QRZ.ru такого позывного нет"),
+                        lookup.qrzProblem ?: if (!vm.hasQrzAccount) tr("Имя и точный QTH — с учётной записью QRZ.ru или бесплатной QRZ.com (настройки)") else tr("На QRZ.ru такого позывного нет"),
                         fontSize = 16.sp, color = ink.copy(alpha = 0.8f), modifier = Modifier.weight(1f),
                     )
                     when {

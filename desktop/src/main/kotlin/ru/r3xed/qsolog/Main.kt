@@ -47,6 +47,7 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import ru.r3xed.qsolog.ui.ContestExportDialog
+import ru.r3xed.qsolog.ui.ContestsPane
 import ru.r3xed.qsolog.ui.ExportDialog
 import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.ui.EditPane
@@ -204,8 +205,8 @@ fun main() {
             }
             val exportSelected = { state.openExport(ExportFormat.ADIF, selectedOnly = true) }
             // Contest reports: the dialog picks the header, then the save dialog; .txt (ЕРМАК) or .cbr (Cabrillo).
-            val exportContest = { h: ru.r3xed.qsolog.data.Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean ->
-                val file = chooseFile(window, tr("Экспорт в %s", h.format.title), save = true, suggested = state.prepareContest(h, onlyNew, mark, contestOnly), ext = h.format.extension)
+            val exportContest = { h: ru.r3xed.qsolog.data.Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean, ref: String? ->
+                val file = chooseFile(window, tr("Экспорт в %s", h.format.title), save = true, suggested = state.prepareContest(h, onlyNew, mark, contestOnly, ref), ext = h.format.extension)
                 if (file != null) state.exportContest(file) else state.cancelContest()
             }
             val importContest = {
@@ -265,7 +266,7 @@ class Exports(
     val exportAdif: () -> Unit,
     val importAdif: () -> Unit,
     val exportSelected: () -> Unit,
-    val exportContest: (ru.r3xed.qsolog.data.Cabrillo.Header, Boolean, Boolean, Boolean) -> Unit,
+    val exportContest: (ru.r3xed.qsolog.data.Cabrillo.Header, Boolean, Boolean, Boolean, String?) -> Unit,
     val importContest: () -> Unit,
     /** Saves the ADIF / CSV export chosen in its dialog: only new or all, with or without the export mark. */
     val saveExport: (onlyNew: Boolean, mark: Boolean) -> Unit,
@@ -298,6 +299,7 @@ fun App(state: AppState, files: Exports) {
                         Pane.Contest -> key(state.editSession) { ContestPane(state) }
                         Pane.Dashboard -> DashboardPane(state)
                         Pane.History -> HistoryPane(state)
+                        Pane.Contests -> ContestsPane(state)
                         Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif, files.importContest)
                         Pane.Map -> MapPane(state)
                         Pane.Welcome -> WelcomePane(state)
@@ -310,7 +312,9 @@ fun App(state: AppState, files: Exports) {
                     defaults = state.contestDefaults(),
                     selected = target.only?.size,
                     hasContest = state.hasContestQsos(target.only),
-                    count = { onlyNew, contestOnly -> state.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew, contestOnly).size },
+                    contests = state.contestsInLog(target.only),
+                    initialContest = state.contestReportDefault(target.only),
+                    count = { onlyNew, contestOnly, ref -> state.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew, contestOnly, ref).size },
                     onDismiss = state::closeContestExport,
                     onConfirm = files.exportContest,
                 )
@@ -327,6 +331,8 @@ fun App(state: AppState, files: Exports) {
                 )
             }
             if (state.showKeys) KeysDialog(onClose = { state.showKeys = false })
+            // Not over the first-start setup: it waits until the log.
+            if (state.showWhatsNew && state.pane != Pane.Welcome) ru.r3xed.qsolog.ui.WhatsNewDialog(APP_VERSION, desktop = true, onClose = state::closeWhatsNew)
             if (state.historyAsk) HistoryOnDialog(onConfirm = { state.changeHistoryOn(true) }, onDismiss = { state.historyAsk = false })
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).widthIn(max = 640.dp))
         }

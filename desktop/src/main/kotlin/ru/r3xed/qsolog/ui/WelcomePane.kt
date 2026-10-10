@@ -38,7 +38,8 @@ import ru.r3xed.qsolog.AppState
 import ru.r3xed.qsolog.data.Geo
 
 /**
- * First start: callsign, where the station is, QRZ.ru — three short steps instead of the long settings page.
+ * First start: callsign and where the station is — two short steps, then the log. Station data sources (QRZ.ru,
+ * QRZ.com) are offered later, where they help: the card says so when a station is found by prefix only.
  * Everything is saved as it is typed; "Настроить позже" leaves at any step, the settings have the same fields.
  */
 @Composable
@@ -52,14 +53,14 @@ fun WelcomePane(vm: AppState) {
     ) {
         Column(Modifier.widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             QsoLogo(fontSize = 34.sp)
-            Text(tr("Шаг %s из 3", step + 1), style = MaterialTheme.typography.titleSmall, color = x.muted)
+            Text(tr("Шаг %s из 2", step + 1), style = MaterialTheme.typography.titleSmall, color = x.muted)
             when (step) {
                 0 -> {
                     Text(tr("Ваш позывной"), style = MaterialTheme.typography.headlineSmall)
                     Text(tr("Он попадёт в каждую связь и в файлы ADIF."), style = MaterialTheme.typography.bodyLarge, color = x.muted)
                     SettingField(tr("Мой позывной"), s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
                 }
-                1 -> {
+                else -> {
                     Text(tr("Где вы находитесь"), style = MaterialTheme.typography.headlineSmall)
                     Text(
                         tr("От QTH-локатора считаются расстояние и азимут до абонента. Не знаете локатор — впишите город и нажмите «Определить по городу»."),
@@ -72,24 +73,9 @@ fun WelcomePane(vm: AppState) {
                     )
                     SettingField(tr("Город / адрес QTH"), s.myQth, { vm.updateSettings(s.copy(myQth = it)) })
                     OutlinedButton(onClick = vm::findMyLocator, shape = RoundedCornerShape(12.dp)) { Text(tr("Определить по городу"), fontSize = 17.sp) }
-                }
-                else -> {
-                    Text(tr("QRZ.ru: имя и QTH абонента"), style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        tr("Лучше всего — доступ к XML API QRZ.ru: логин и пароль для программ выдаёт сайт qrz.ru (как получить — в настройках, блок «Источники данных об абоненте»). Можно пропустить: страна и область придут с HamQTH, а учётную запись — или запасной вход по e-mail сайта — можно указать позже в настройках."),
-                        style = MaterialTheme.typography.bodyLarge, color = x.muted,
-                    )
-                    SettingField(tr("Логин XML API"), s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)
-                    OutlinedTextField(
-                        value = s.qrzPassword,
-                        onValueChange = { vm.updateSettings(s.copy(qrzPassword = it)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(tr("Пароль XML API")) },
-                        singleLine = true,
-                        textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        shape = RoundedCornerShape(12.dp),
+                        tr("Имя и город корреспондента программа может брать с QRZ.ru или бесплатного QRZ.com — подключите их потом, карточка связи подскажет. Пока страну и область даст HamQTH, без регистрации."),
+                        style = MaterialTheme.typography.bodyMedium, color = x.muted,
                     )
                 }
             }
@@ -97,7 +83,7 @@ fun WelcomePane(vm: AppState) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (step > 0) TextButton(onClick = { step-- }) { Text(tr("Назад"), fontSize = 17.sp) }
                 Spacer(Modifier.weight(1f))
-                if (step < 2) {
+                if (step < 1) {
                     Button(
                         onClick = { step++ },
                         enabled = step != 0 || s.myCall.length >= 3,

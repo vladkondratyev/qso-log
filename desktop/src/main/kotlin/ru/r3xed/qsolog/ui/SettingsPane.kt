@@ -425,6 +425,13 @@ fun SettingsPane(
                     textDecoration = TextDecoration.Underline,
                 )
             }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                AboutActions(onWhatsNew = { vm.showWhatsNew = true }) {
+                    ru.r3xed.qsolog.ProblemReport.url(
+                        APP_VERSION, System.getProperty("os.name") + " " + System.getProperty("os.version"), System.getProperty("os.arch"),
+                    )
+                }
+            }
             UpdateCheck(vm)
             Spacer(Modifier.height(24.dp))
         }

@@ -421,6 +421,14 @@ fun SettingsScreen(
                     textDecoration = TextDecoration.Underline,
                 )
             }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                AboutActions(onWhatsNew = { vm.showWhatsNew = true }) {
+                    ru.r3xed.qsolog.ProblemReport.url(
+                        BuildConfig.VERSION_NAME, "Android " + android.os.Build.VERSION.RELEASE,
+                        "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+                    )
+                }
+            }
             UpdateCheck(vm)
             Spacer(Modifier.height(24.dp))
         }

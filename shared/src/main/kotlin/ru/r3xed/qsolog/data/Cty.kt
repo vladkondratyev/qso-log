@@ -21,6 +21,10 @@ object Cty {
 
     val entities = mutableListOf<Entity>()
 
+    private val CQ = Regex("\\((\\d+)\\)")
+    private val ITU = Regex("\\[(\\d+)\\]")
+    private val OVERRIDES = Regex("\\(\\d+\\)|\\[\\d+\\]|<[^>]*>|\\{[^}]*\\}|~[^~]*~")
+
     /** Reads the file from [text] (tests) or the bundled resource. */
     @Synchronized
     fun load(text: String? = null) {
@@ -42,9 +46,10 @@ object Cty {
             for (alias in parts.drop(8).joinToString(":").split(',')) {
                 var a = alias.trim()
                 if (a.isEmpty()) continue
-                val cq = Regex("\\((\\d+)\\)").find(a)?.groupValues?.get(1)?.toIntOrNull()
-                val itu = Regex("\\[(\\d+)\\]").find(a)?.groupValues?.get(1)?.toIntOrNull()
-                a = a.replace(Regex("\\(\\d+\\)|\\[\\d+\\]|<[^>]*>|\\{[^}]*\\}|~[^~]*~"), "").trim()
+                // Most aliases are a bare prefix: the patterns run only on the ones with overrides.
+                val cq = if ('(' in a) CQ.find(a)?.groupValues?.get(1)?.toIntOrNull() else null
+                val itu = if ('[' in a) ITU.find(a)?.groupValues?.get(1)?.toIntOrNull() else null
+                if (a.any { it in "([<{~" }) a = a.replace(OVERRIDES, "").trim()
                 val rule = Rule(e, cq, itu)
                 if (a.startsWith("=")) exact[a.substring(1)] = rule else prefixes.putIfAbsent(a, rule)
             }

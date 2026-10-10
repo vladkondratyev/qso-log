@@ -45,7 +45,9 @@ fun main(args: Array<String>) {
             val state = AppState()
             // Russian shots first (the README is in Russian), a few English ones at the end.
             state.changeLanguage(Lang.RU)
-            val files = Exports({}, {}, {}, {}, {}, { _, _, _, _ -> }, {}, { _, _ -> })
+            // "Что нового" opens on the first start of a new version: its own shot below, not over every one.
+            state.closeWhatsNew()
+            val files = Exports({}, {}, {}, {}, {}, { _, _, _, _, _ -> }, {}, { _, _ -> })
             var dark by mutableStateOf(false)
             // Sized in pixels: the default 1024×700 window at 2× (Retina) scale.
             val big = ImageComposeScene(2048, 1400, Density(2f)) { QsoTheme(dark) { key(state.language) { App(state, files) } } }
@@ -116,11 +118,18 @@ fun main(args: Array<String>) {
 
             // Contest mode: the simplified card, a callsign typed, the received number waiting.
             state.changeContestMode(true)
+            // A minitest from the contest book, in its third tour: the card shows the tour and the time left.
+            val start = System.currentTimeMillis() / 60_000 * 60_000 - 23 * 60_000
+            state.saveContest(ru.r3xed.qsolog.data.Contest(name = "Минитест DEMO", code = "MINI-DEMO", start = start, tourMinutes = 10, tourCount = 12, dupesPerTour = true))
+            state.saveContest(ru.r3xed.qsolog.data.Contest(name = "Кубок DEMO", code = "CUP-DEMO", start = start + 7 * 86_400_000L, end = start + 7 * 86_400_000L + 4 * 3_600_000L))
+            state.activateContest(state.contests.first().id)
             state.addQso()
             state.setCall("SP3DEMO")
             state.setAdif(ru.r3xed.qsolog.data.ContestMode.RCVD, "MO69")
             shot("15-contest", 2000)
             state.closeEditor()
+            state.openContests()
+            shot("22-contests", 1000)
             state.changeContestMode(false)
 
             state.openDashboard()
@@ -144,6 +153,9 @@ fun main(args: Array<String>) {
             // Scroll the settings column to the bottom: version and project link.
             scrollRight(700)
             shot("09-about")
+            state.showWhatsNew = true
+            shot("23-whats-new", 1000)
+            state.closeWhatsNew()
 
             dark = true
             state.edit(log().first { it.call == "R9DEMO" })

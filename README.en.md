@@ -27,11 +27,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 0.37.1 | [QSO-LOG-0.37.1.apk](../../releases/tag/v0.37.1) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 1.17.1 | [QSO-LOG-1.17.1-macos-arm64.dmg](../../releases/tag/desktop-v1.17.1) |
-| macOS 11 or newer, Intel | 1.17.1 | [QSO-LOG-1.17.1-macos-x64.dmg](../../releases/tag/desktop-v1.17.1) |
-| Windows 10 and 11, 64-bit | 1.17.1 | [QSO-LOG-1.17.1-windows-x64.zip](../../releases/tag/desktop-v1.17.1) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.17.1 | [QSO-LOG-1.17.1-linux-amd64.deb](../../releases/tag/desktop-v1.17.1) |
+| Android 8.0 or newer | 0.38.0 | [QSO-LOG-0.38.0.apk](../../releases/tag/v0.38.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 1.18.0 | [QSO-LOG-1.18.0-macos-arm64.dmg](../../releases/tag/desktop-v1.18.0) |
+| macOS 11 or newer, Intel | 1.18.0 | [QSO-LOG-1.18.0-macos-x64.dmg](../../releases/tag/desktop-v1.18.0) |
+| Windows 10 and 11, 64-bit | 1.18.0 | [QSO-LOG-1.18.0-windows-x64.zip](../../releases/tag/desktop-v1.18.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.18.0 | [QSO-LOG-1.18.0-linux-amd64.deb](../../releases/tag/desktop-v1.18.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -63,8 +63,11 @@ is switched in Settings and changes at once.
 
 ## First start
 
-The app asks three things: your callsign, where you are, and access to QRZ.ru. Instead of a QTH locator you can type
-a city, and the locator is found for you. Every step can be skipped and filled in later in Settings.
+The app asks two things: your callsign and where you are. Instead of a QTH locator you can type
+a city, and the locator is found for you. Every step can be skipped and filled in later in Settings. QRZ.ru and QRZ.com
+accounts (for the other station's name and town) are added later in Settings — the QSO card reminds you.
+
+After an update the app shows once what is new in that version.
 
 After that the "Add QSO" button appears at the bottom of the screen. Every QSO starts there.
 
@@ -147,6 +150,24 @@ standard ADIF fields `STX_STRING` and `SRX_STRING`, which the Cabrillo and ЕР�
 <img src="docs/screenshots/46-contest-card.png" width="200" alt="Contest card">
 <img src="docs/screenshots/53-contest-keypad.png" width="200" alt="Contest card with the built-in keyboard, dark theme">
 <img src="docs/screenshots/47-contest-log.png" width="200" alt="Contest QSOs in the log">
+</p>
+
+### Contest book
+
+While CONTEST MODE is on, the ⋮ menu has **"Contest book"**. Add each contest you work there: its **name** and
+CONTEST **code** (goes into the ЕРМАК/Cabrillo header), **start and end** in UTC, and **tours** for minitests — tour
+length in minutes and how many (e.g. 12 tours of 10 minutes; the end then follows from the last tour). With **"Reset
+dupes with each new tour"** the same station can be worked again in every tour.
+
+Every QSO from the contest card gets the chosen contest, its code (ADIF `CONTEST_ID`) and the tour number. The log
+header and the card show the contest, the current tour and the time left; the QSO count and rate are for that contest
+only. Dupes count over the whole contest, or within the current tour when they reset. The ЕРМАК/Cabrillo export with
+"Contest-mode QSOs only" lets you pick the contest: only its QSOs go into the file, with its CONTEST code.
+
+<p>
+<img src="docs/screenshots/64-contests.png" width="200" alt="Contest book">
+<img src="docs/screenshots/65-contest-edit.png" width="200" alt="New contest: minitest tours">
+<img src="docs/screenshots/66-contest-tour.png" width="200" alt="Tour and timer in the log header">
 </p>
 
 ## Keyboard only
@@ -422,7 +443,9 @@ understood), and assignment: press "Assign" and then the key, so an adapter send
 
 Settings are grouped in blocks; each header says briefly what is chosen. My station; station data sources; QSO entry
 (time, keyboard, CONTEST MODE); bands and modes shown in the card; language (system, Russian, English — changes at once);
-theme; logbook (export, import, sync, delete all). At the bottom: version and "Check for updates".
+theme; logbook (export, import, sync, delete all). At the bottom: version, "What's new", "Report a problem" and
+"Check for updates". "Report a problem" opens a new GitHub issue in the browser with a template, the app version and
+the device model — no log, callsign or passwords; you send it yourself (a GitHub account is needed).
 
 <p>
 <img src="docs/screenshots/en-03-language.png" width="200" alt="Language">
@@ -450,26 +473,26 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-0.37.1.apk` from the [release page](../../releases/tag/v0.37.1) and open it on the phone; allow
+Download `QSO-LOG-0.38.0.apk` from the [release page](../../releases/tag/v0.38.0) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-1.17.1-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v1.17.1), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-1.18.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v1.18.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-1.17.1-windows-x64.zip` from the [release page](../../releases/tag/desktop-v1.17.1), unpack the
+Download `QSO-LOG-1.18.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v1.18.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-1.17.1-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v1.17.1) and install it:
+Download `QSO-LOG-1.18.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v1.18.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-1.17.1-linux-amd64.deb
+sudo apt install ./QSO-LOG-1.18.0-linux-amd64.deb
 ```
 
 ## Where the data is kept
@@ -501,7 +524,7 @@ all systems; Android uses Jetpack Compose, the desktop Compose Multiplatform. `s
 `desktop/` — macOS, Windows, Linux. Needs JDK 17 (Temurin) and Android SDK 34.
 
 ```bash
-./gradlew :app:assembleDebug           # Android APK
+./gradlew :app:assembleRelease         # Android APK (R8, signed with the debug key)
 ./gradlew :shared:test :desktop:test   # tests
 ./gradlew :desktop:run                 # run the desktop version
 ./gradlew :desktop:packageReleaseDmg   # DMG for your Mac

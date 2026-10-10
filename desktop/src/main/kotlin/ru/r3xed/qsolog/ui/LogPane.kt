@@ -2,6 +2,7 @@ package ru.r3xed.qsolog.ui
 
 import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
@@ -136,6 +137,8 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                         "CONTEST · " + if (state.contestSentFixed) tr("передаю %s", state.contestSentText.ifBlank { "—" }) else tr("следующий № %s", ContestMode.serial(state.contestSerial)),
                         style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, maxLines = 1,
                     )
+                    // The contest from the book: its name, the tour and the time left, ticking.
+                    state.activeContest?.let { ContestPhaseText(it, x.muted, prefix = it.title, short = true) }
                 } else {
                     Text((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", state.total), style = MaterialTheme.typography.bodyMedium, color = x.muted)
                 }
@@ -154,6 +157,13 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                         leadingIcon = { Icon(Icons.Filled.Settings, null) },
                         onClick = { menu = false; state.openSettings() },
                     )
+                    if (state.contestMode) {
+                        DropdownMenuItem(
+                            text = { Text(tr("Справочник контестов"), fontSize = 17.sp) },
+                            leadingIcon = { Icon(Icons.Filled.EmojiEvents, null) },
+                            onClick = { menu = false; state.openContests() },
+                        )
+                    }
                     // Shown once the table is set up in the settings; the sync runs only from here or there.
                     if (SheetSync.isScriptUrl(state.sheetUrl)) {
                         DropdownMenuItem(

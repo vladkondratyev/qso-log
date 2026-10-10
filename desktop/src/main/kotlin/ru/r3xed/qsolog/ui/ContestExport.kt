@@ -38,6 +38,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.r3xed.qsolog.data.Cabrillo
+import ru.r3xed.qsolog.data.Contest
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.RadioButton
 import ru.r3xed.qsolog.data.ExportFormat
 
 /**
@@ -51,9 +54,12 @@ fun ContestExportDialog(
     selected: Int?,
     /** Some of the contacts were entered in contest mode: offer to take only them (on by default). */
     hasContest: Boolean,
-    count: (onlyNew: Boolean, contestOnly: Boolean) -> Int,
+    /** Contests of the book with contacts here, and how many: the report takes one of them or all contest contacts. */
+    contests: List<Pair<Contest, Int>> = emptyList(),
+    initialContest: String? = null,
+    count: (onlyNew: Boolean, contestOnly: Boolean, contestRef: String?) -> Int,
     onDismiss: () -> Unit,
-    onConfirm: (Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean) -> Unit,
+    onConfirm: (Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean, contestRef: String?) -> Unit,
 ) {
     var format by remember { mutableStateOf(defaults.format) }
     var contest by remember { mutableStateOf(defaults.contest) }
@@ -62,7 +68,8 @@ fun ContestExportDialog(
     var onlyNew by remember { mutableStateOf(true) }
     var mark by remember { mutableStateOf(true) }
     var contestOnly by remember { mutableStateOf(hasContest) }
-    val n = { onlyNew: Boolean -> count(onlyNew, contestOnly) }
+    var ref by remember { mutableStateOf(initialContest) }
+    val n = { onlyNew: Boolean -> count(onlyNew, contestOnly, ref.takeIf { contestOnly }) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(tr("Отчёт для соревнований")) },
@@ -110,18 +117,41 @@ fun ContestExportDialog(
                         Spacer(Modifier.width(8.dp))
                         Text(tr("Только связи контест-режима (с флажком)"), style = MaterialTheme.typography.bodyLarge)
                     }
+                    // The contests from the book: the report of one of them, its CONTEST code filled in.
+                    if (contestOnly && contests.isNotEmpty()) {
+                        Text(tr("Соревнование"), style = MaterialTheme.typography.titleSmall)
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            ContestChoice(tr("Все контест-связи"), ref == null) { ref = null }
+                            contests.forEach { (c, k) ->
+                                ContestChoice("${c.title} ($k)", ref == c.id) {
+                                    ref = c.id
+                                    if (c.code.isNotBlank()) contest = c.code.uppercase()
+                                }
+                            }
+                        }
+                    }
                 }
                 ExportChoices(ExportFormat.CONTEST, selected, n, onlyNew, { onlyNew = it }, mark, { mark = it })
             }
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(defaults.copy(format = format, contest = contest.trim(), categoryOperator = operator, location = location.trim()), onlyNew, mark, contestOnly) },
+                onClick = { onConfirm(defaults.copy(format = format, contest = contest.trim(), categoryOperator = operator, location = location.trim()), onlyNew, mark, contestOnly, ref.takeIf { contestOnly }) },
                 enabled = n(onlyNew) > 0,
             ) { Text(tr("Сохранить файл (%s)", n(onlyNew))) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Отмена")) } },
     )
+}
+
+/** One line of a single choice: a radio button and the text. */
+@Composable
+private fun ContestChoice(text: String, on: Boolean, onPick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().selectable(on, role = Role.RadioButton, onClick = onPick).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+        RadioButton(on, null)
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.bodyLarge)
+    }
 }
 
 /** A row of equal buttons, the chosen one filled. */

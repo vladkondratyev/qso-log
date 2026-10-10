@@ -8,8 +8,11 @@ import androidx.security.crypto.MasterKey
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
-    // The QRZ.ru password lives in a separate, encrypted file.
-    private val secret: SharedPreferences = try {
+    // The QRZ.ru password lives in a separate, encrypted file. Opening it (Android Keystore, Tink) takes a noticeable
+    // part of a second, so it is opened on first use — off the main thread at start (see [loadSecrets]).
+    private val secret: SharedPreferences by lazy { openSecret(context) }
+
+    private fun openSecret(context: Context): SharedPreferences = try {
         val key = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
         EncryptedSharedPreferences.create(
             context, "secret", key,
@@ -20,18 +23,23 @@ class Settings(context: Context) {
         context.getSharedPreferences("secret_fallback", Context.MODE_PRIVATE)
     }
 
-    fun load() = StationSettings(
+    /** The settings without the passwords: quick, from the plain file. The passwords come from [loadSecrets]. */
+    fun loadPublic() = StationSettings(
         myCall = prefs.getString("my_call", "") ?: "",
         myLocator = prefs.getString("my_locator", "") ?: "",
         myQth = prefs.getString("my_qth", "") ?: "",
         qrzLogin = prefs.getString("qrz_login", "") ?: "",
-        qrzPassword = secret.getString("qrz_password", "") ?: "",
         qrzSiteEmail = prefs.getString("qrz_site_email", "") ?: "",
-        qrzSitePassword = secret.getString("qrz_site_password", "") ?: "",
         qrzComLogin = prefs.getString("qrzcom_login", "") ?: "",
-        qrzComPassword = secret.getString("qrzcom_password", "") ?: "",
         power = prefs.getString("my_power", "") ?: "",
         station = AdifLabels.MINE.keys.associateWith { prefs.getString("station_$it", "") ?: "" }.filterValues { it.isNotEmpty() },
+    )
+
+    /** [s] with the passwords from the encrypted file; slow the first time — call it off the main thread. */
+    fun loadSecrets(s: StationSettings) = s.copy(
+        qrzPassword = secret.getString("qrz_password", "") ?: "",
+        qrzSitePassword = secret.getString("qrz_site_password", "") ?: "",
+        qrzComPassword = secret.getString("qrzcom_password", "") ?: "",
     )
 
     fun save(s: StationSettings) {
@@ -115,6 +123,10 @@ class Settings(context: Context) {
     var welcomeDone: Boolean
         get() = prefs.getBoolean("welcome_done", false)
         set(v) = prefs.edit().putBoolean("welcome_done", v).apply()
+    /** The version whose "Что нового" has been shown; empty — none yet. */
+    var whatsNewSeen: String
+        get() = prefs.getString("whats_new_seen", "") ?: ""
+        set(v) = prefs.edit().putString("whats_new_seen", v).apply()
     var launchCount: Int
         get() = prefs.getInt("launch_count", 0)
         set(v) = prefs.edit().putInt("launch_count", v).apply()

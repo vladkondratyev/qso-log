@@ -429,6 +429,11 @@ class Settings {
         get() = get("welcome_done", "false") == "true"
         set(v) = put("welcome_done", v.toString())
 
+    /** The version whose "Что нового" has been shown; empty — none yet. */
+    var whatsNewSeen: String
+        get() = get("whats_new_seen", "")
+        set(v) = put("whats_new_seen", v)
+
     var hamqthEnabled: Boolean
         get() = get("hamqth_enabled", "true") == "true"
         set(v) = put("hamqth_enabled", v.toString())

@@ -11,13 +11,19 @@ android {
         applicationId = "ru.r3xed.qsolog"
         minSdk = 26
         targetSdk = 34
-        versionCode = 51
-        versionName = "0.37.1"
+        versionCode = 52
+        versionName = "0.38.0"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrinks and optimises the code (Compose, the icons) and the APK; non-debuggable code is compiled
+            // ahead of time by Android with the Compose baseline profiles — a much faster start than the debug build.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Signed with the same key as the earlier (debug) APKs: installs over them, the log and settings stay.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {

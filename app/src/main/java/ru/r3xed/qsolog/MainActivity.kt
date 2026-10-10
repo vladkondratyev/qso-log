@@ -42,6 +42,7 @@ import androidx.core.content.ContextCompat
 import org.osmdroid.config.Configuration
 import ru.r3xed.qsolog.ui.EditScreen
 import ru.r3xed.qsolog.ui.ContestScreen
+import ru.r3xed.qsolog.ui.ContestsScreen
 import ru.r3xed.qsolog.ui.DashboardScreen
 import ru.r3xed.qsolog.ui.LogScreen
 import ru.r3xed.qsolog.ui.MapScreen
@@ -245,6 +246,7 @@ class MainActivity : ComponentActivity() {
                             Screen.Contest -> key(vm.editSession) { ContestScreen(vm) }
                             Screen.Dashboard -> DashboardScreen(vm)
                             Screen.History -> HistoryScreen(vm)
+                            Screen.Contests -> ContestsScreen(vm)
                             Screen.Settings -> SettingsScreen(
                                 vm,
                                 onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
@@ -253,15 +255,19 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         if (vm.showKeys) HardwareKeysDialog(onClose = { vm.showKeys = false })
+                        // Not over the first-start setup: it waits until the log.
+                        if (vm.showWhatsNew && vm.screen != Screen.Welcome) ru.r3xed.qsolog.ui.WhatsNewDialog(BuildConfig.VERSION_NAME, desktop = false, onClose = vm::closeWhatsNew)
                         if (vm.historyAsk) HistoryOnDialog(onConfirm = { vm.changeHistoryOn(true) }, onDismiss = { vm.historyAsk = false })
                         vm.contestTarget?.let { target ->
                             ContestExportDialog(
                                 defaults = vm.contestDefaults(),
                                 selected = target.only?.size,
                                 hasContest = vm.hasContestQsos(target.only),
-                                count = { onlyNew, contestOnly -> vm.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew, contestOnly).size },
+                                contests = vm.contestsInLog(target.only),
+                                initialContest = vm.contestReportDefault(target.only),
+                                count = { onlyNew, contestOnly, ref -> vm.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew, contestOnly, ref).size },
                                 onDismiss = vm::closeContestExport,
-                                onConfirm = { h, onlyNew, mark, contestOnly -> exportContest.launch(vm.prepareContest(h, onlyNew, mark, contestOnly)) },
+                                onConfirm = { h, onlyNew, mark, contestOnly, ref -> exportContest.launch(vm.prepareContest(h, onlyNew, mark, contestOnly, ref)) },
                             )
                         }
                         vm.exportTarget?.let { target ->

@@ -38,7 +38,10 @@ import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
 import ru.r3xed.qsolog.data.QrzCom
+import ru.r3xed.qsolog.data.Contest
+import ru.r3xed.qsolog.data.ContestBook
 import ru.r3xed.qsolog.data.ContestMode
+import ru.r3xed.qsolog.data.Dupes
 import ru.r3xed.qsolog.data.SheetSync
 import ru.r3xed.qsolog.data.StatBucket
 import ru.r3xed.qsolog.data.StatFilter
@@ -69,6 +72,8 @@ enum class Pane {
     Dashboard,
     /** Stations looked up but not logged. */
     History,
+    /** The contest book: contests with their time and tours; in the ⋮ menu while contest mode is on. */
+    Contests,
 }
 
 /** The contest card's message when the received number is missing; the card then puts the cursor in that field. */
@@ -368,7 +373,20 @@ class AppState {
     private var lookupJob: Job? = null
     private var saveSettingsJob: Job? = null
 
+    /** "Что нового" is open: once after an update (not on the first install), or from the settings. */
+    var showWhatsNew by mutableStateOf(false)
+
+    fun closeWhatsNew() {
+        showWhatsNew = false
+        prefs.whatsNewSeen = APP_VERSION
+    }
+
     init {
+        // A first install has nothing new to tell: the version counts as seen.
+        val firstInstall = settings.myCall.isBlank() && !prefs.welcomeDone
+        if (prefs.whatsNewSeen != APP_VERSION) {
+            if (firstInstall) prefs.whatsNewSeen = APP_VERSION else showWhatsNew = true
+        }
         reload()
         // First start: a short three-step setup; later, without a callsign, the settings as before.
         if (settings.myCall.isBlank()) pane = if (prefs.welcomeDone) Pane.Settings else Pane.Welcome
@@ -573,7 +591,7 @@ class AppState {
     /** Values the dialog starts with: last format and contest, RDA from "Мой район", operator from the station. */
     fun contestDefaults(): Cabrillo.Header = Cabrillo.Header(
         format = runCatching { Cabrillo.Format.valueOf(prefs.contestFormat) }.getOrDefault(Cabrillo.Format.ERMAK),
-        contest = prefs.contestCode,
+        contest = activeContest?.code?.ifBlank { null } ?: prefs.contestCode,
         callsign = settings.myCall,
         categoryOperator = prefs.contestOperator,
         location = settings.station["MY_CNTY"].orEmpty().replace("-", "").uppercase(),
@@ -582,15 +600,23 @@ class AppState {
     )
 
     /** Remembers the dialog's choice and returns the file name to offer. */
+    /** Contests of the book with contacts among [only] (or the whole log), and how many: the report can take one of them. */
+    fun contestsInLog(only: Set<Long>?): List<Pair<Contest, Int>> = contestBook.all().map { c ->
+        c to allQsos.count { (only == null || it.id in only) && it.adif[Contest.REF] == c.id }
+    }.filter { it.second > 0 }
+
+    /** The contest the report dialog starts with: the active one when it has contacts. */
+    fun contestReportDefault(only: Set<Long>?): String? = activeContest?.id?.takeIf { id -> contestsInLog(only).any { it.first.id == id } }
+
     /** Contacts entered in contest mode among [only] (or the whole log): the report dialog then offers to take only them. */
     fun hasContestQsos(only: Set<Long>?): Boolean = allQsos.any { (only == null || it.id in only) && ContestMode.isContest(it.adif) }
 
     /** Remembers the dialog's choice and returns the file name to offer. */
-    fun prepareContest(h: Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean): String {
+    fun prepareContest(h: Cabrillo.Header, onlyNew: Boolean, mark: Boolean, contestOnly: Boolean, contestRef: String? = null): String {
         prefs.contestFormat = h.format.name
         prefs.contestCode = h.contest
         prefs.contestOperator = h.categoryOperator
-        pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark, contestOnly)
+        pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark, contestOnly, contestRef.takeIf { contestOnly })
         contestTarget = null
         val code = h.contest.uppercase().ifBlank { "LOG" }.replace('/', '-')
         return "${h.callsign.ifBlank { "log" }.replace('/', '-')}_$code.${h.format.extension}"
@@ -613,7 +639,11 @@ class AppState {
     var exportTarget by mutableStateOf<ExportTarget?>(null); private set
 
     /** Choices of an export dialog, waiting for the file picker. */
-    class PendingExport(val format: ExportFormat, val only: Set<Long>?, val onlyNew: Boolean, val mark: Boolean, val contestOnly: Boolean = false)
+    class PendingExport(
+        val format: ExportFormat, val only: Set<Long>?, val onlyNew: Boolean, val mark: Boolean, val contestOnly: Boolean = false,
+        /** Only the contacts of this contest from the book. */
+        val contestRef: String? = null,
+    )
 
     private var pendingExport: PendingExport? = null
 
@@ -638,11 +668,12 @@ class AppState {
      * The contacts an export takes: the picked ones or the whole log, without those already exported to [format] when
      * [onlyNew], and only those entered in contest mode when [contestOnly].
      */
-    fun exportCandidates(format: ExportFormat, only: Set<Long>?, onlyNew: Boolean, contestOnly: Boolean = false): List<Qso> =
-        allQsos.filter { takes(it, only, onlyNew, format, contestOnly) }
+    fun exportCandidates(format: ExportFormat, only: Set<Long>?, onlyNew: Boolean, contestOnly: Boolean = false, contestRef: String? = null): List<Qso> =
+        allQsos.filter { takes(it, only, onlyNew, format, contestOnly, contestRef.takeIf { contestOnly }) }
 
-    private fun takes(q: Qso, only: Set<Long>?, onlyNew: Boolean, format: ExportFormat, contestOnly: Boolean) =
-        (only == null || q.id in only) && (!onlyNew || !format.isExported(q.adif)) && (!contestOnly || ContestMode.isContest(q.adif))
+    private fun takes(q: Qso, only: Set<Long>?, onlyNew: Boolean, format: ExportFormat, contestOnly: Boolean, contestRef: String? = null) =
+        (only == null || q.id in only) && (!onlyNew || !format.isExported(q.adif)) && (!contestOnly || ContestMode.isContest(q.adif)) &&
+            (contestRef == null || q.adif[Contest.REF] == contestRef)
 
     /** Remembers the dialog's choice and returns the format and the file name to offer in the save dialog. */
     fun prepareExport(onlyNew: Boolean, mark: Boolean): Pair<ExportFormat, String>? {
@@ -674,7 +705,7 @@ class AppState {
         scope.launch {
             val msg = try {
                 val count = withContext(Dispatchers.IO) {
-                    val list = db.all().filter { takes(it, p.only, p.onlyNew, p.format, p.contestOnly) }
+                    val list = db.all().filter { takes(it, p.only, p.onlyNew, p.format, p.contestOnly, p.contestRef) }
                     file.outputStream().use { write(list, it) }
                     if (p.mark) list.forEach { db.save(p.format.mark(it)) }
                     list.size
@@ -1495,13 +1526,16 @@ class AppState {
             .filter { it.startsWith(typed) && it != typed }.take(3).toList()
     }
 
-    /** Same station, band and mode on the card's UTC day: a repeat (a dupe in a contest). */
+    /**
+     * Same station, band and mode: a repeat (a dupe in a contest). In a contest from the book — anywhere in it, or in
+     * the same tour when its dupes reset with each tour; otherwise on the card's UTC day.
+     */
     fun dupeOf(f: Form): Qso? {
-        if (f.call.length < 3) return null
-        return allQsos.filter {
-            it.id != f.id && it.call == f.call && it.band.equals(f.band, ignoreCase = true) &&
-                it.mode.equals(f.mode, ignoreCase = true) && DATE_FMT.format(utc(it.timeUtc)) == f.date.trim()
-        }.maxByOrNull { it.timeUtc }
+        val ref = f.adif[Contest.REF]
+        val c = contestBook.get(ref)
+        // A new card gets its tour when it is logged, that is now.
+        val tour = if (c?.dupesPerTour == true) f.adif[Contest.TOUR]?.toIntOrNull().takeIf { !f.isNew } ?: c.tourAt(System.currentTimeMillis()) else null
+        return Dupes.of(f.call, f.band, f.mode, ref, tour, f.date.trim(), f.id, allQsos) { DATE_FMT.format(utc(it.timeUtc)) }
     }
 
     fun deleteCurrent() {
@@ -1582,6 +1616,8 @@ class AppState {
 
     fun changeContestMode(on: Boolean) {
         contestMode = on
+        // The book is read only when it is needed.
+        if (on) contestBookChanged()
         contestWork = null
         contestLastSaved = null
     }
@@ -1638,8 +1674,55 @@ class AppState {
     private var contestDraft: Form? = null
 
     /** Contest contacts in the order they were made: "назад / вперёд" go through them. */
-    private fun contestQsos(): List<Qso> =
-        allQsos.filter { ContestMode.isContest(it.adif) }.sortedWith(compareBy({ it.timeUtc }, { it.createdAt }, { it.id }))
+    private fun contestQsos(): List<Qso> {
+        // With a contest chosen in the book, only its contacts: the count, the rate and "назад / вперёд" are about it.
+        val ref = activeContest?.id
+        return allQsos.filter { ContestMode.isContest(it.adif) && (ref == null || it.adif[Contest.REF] == ref) }
+            .sortedWith(compareBy({ it.timeUtc }, { it.createdAt }, { it.id }))
+    }
+
+    // ---------- contest book ----------
+
+    private val contestBook = ContestBook(File(AppDirs.data, "contests.json"))
+    var contests by mutableStateOf<List<Contest>>(emptyList()); private set
+    /** The contest new contest-mode contacts are logged in; null — none chosen. */
+    var activeContest by mutableStateOf<Contest?>(null); private set
+
+    private fun contestBookChanged() {
+        contests = contestBook.all()
+        activeContest = contestBook.active()
+    }
+
+    fun openContests() {
+        clearSelection()
+        pane = Pane.Contests
+    }
+
+    fun closeContests() {
+        pane = Pane.Empty
+    }
+
+    /** Adds or changes [c]; a new one becomes the active contest at once. */
+    fun saveContest(c: Contest) {
+        val isNew = contestBook.get(c.id) == null
+        contestBook.put(c)
+        if (isNew) contestBook.activate(c.id)
+        contestBookChanged()
+    }
+
+    fun deleteContest(id: String) {
+        contestBook.delete(id)
+        contestBookChanged()
+    }
+
+    fun activateContest(id: String?) {
+        contestBook.activate(id)
+        contestBookChanged()
+        contestWork = null
+    }
+
+    /** Contacts logged in [c]: the number in the book's list. */
+    fun contestCount(c: Contest): Int = allQsos.count { it.adif[Contest.REF] == c.id }
 
     /** Position of the open contest card: "№ in the contest / of how many"; null for a new one. */
     fun contestPosition(): Pair<Int, Int>? {
@@ -1660,7 +1743,8 @@ class AppState {
         val f = if (w == null) form else form.copy(band = w.band, mode = w.mode, freq = normalizeFreq(w.freq))
         form = f.copy(
             rstSent = defaultRst(f.mode), rstRcvd = defaultRst(f.mode),
-            adif = f.adif + (ContestMode.FIELD to "Y") + (ContestMode.SENT to contestSentNext()),
+            adif = f.adif + (ContestMode.FIELD to "Y") + (ContestMode.SENT to contestSentNext()) +
+                listOfNotNull(activeContest?.let { Contest.REF to it.id }),
         )
         formOriginal = form
         pane = Pane.Contest
@@ -1674,8 +1758,11 @@ class AppState {
         val f = form
         if (!f.isNew) return contestNext()
         contestError(f)?.let { return it }
-        val now = LocalDateTime.now(ZoneOffset.UTC)
-        form = f.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now))
+        val ms = System.currentTimeMillis()
+        val now = utc(ms)
+        // The contest it was logged in, with its code and the tour of this moment: the report finds it by them.
+        val stamp = contestBook.get(f.adif[Contest.REF])?.let { Contest.stamp(it, ms) }.orEmpty()
+        form = f.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now), adif = f.adif - Contest.TOUR + stamp)
         val err = save(quiet = true)
         if (err != null) {
             pane = Pane.Contest

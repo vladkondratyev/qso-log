@@ -369,6 +369,8 @@ internal fun AntennasTab() {
 @Composable
 internal fun PrefixTab(myPosition: LatLon?) {
     var q by rememberSaveable { mutableStateOf("") }
+    // The country file is read while the callsign is being typed, not on the first letter on the main thread.
+    LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Cty.load() } }
     OutlinedTextField(
         value = q, onValueChange = { q = it.uppercase().filter { c -> c.isLetterOrDigit() || c == '/' } },
         modifier = Modifier.fillMaxWidth(), label = { Text(tr("Позывной или префикс")) }, singleLine = true,

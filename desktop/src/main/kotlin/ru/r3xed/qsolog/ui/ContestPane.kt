@@ -120,7 +120,9 @@ fun ContestPane(vm: AppState) {
         }
     }
     // A repeat on this band and mode is logged only on a second press: the first one turns the button red.
-    val dupe = remember(f.call, f.band, f.mode, f.date, f.id, vm.allQsos) { if (f.isNew) vm.dupeOf(f) else null }
+    // A new tour may clear the dupe: the check runs again when it starts.
+    val tour = rememberTour(vm.activeContest)
+    val dupe = remember(f.call, f.band, f.mode, f.date, f.id, vm.allQsos, tour) { if (f.isNew) vm.dupeOf(f) else null }
     var dupeArmed by remember(f.call, f.band, f.mode) { mutableStateOf(false) }
     val next = {
         if (dupe != null && !dupeArmed && rcvd.isNotBlank()) {
@@ -319,6 +321,11 @@ fun ContestPane(vm: AppState) {
                 }
             }
             TimeLine(f.isNew, "${f.time} UTC · ${f.date}", f.freq.ifBlank { null }?.let { tr("%s МГц", it) })
+            // The contest from the book: the tour and the time left; a saved contact shows the tour it was logged in.
+            vm.activeContest?.let { c ->
+                if (f.isNew) ContestPhaseText(c, x.muted, prefix = c.title)
+                else Text(listOfNotNull(c.title, f.adif[ru.r3xed.qsolog.data.Contest.TOUR]?.let { tr("тур %s", it) }).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = x.muted)
+            }
             Text(
                 tr("Enter — из позывного в принятый код, там — записать. PgUp / PgDn — предыдущая и следующая связь контеста. Esc — закрыть."),
                 style = MaterialTheme.typography.bodyMedium, color = x.muted,
@@ -464,7 +471,8 @@ private fun StationLine(vm: AppState) {
     val f = vm.form
     val x = LocalExtra.current
     if (f.call.length < 3) return
-    val dupe = remember(f.call, f.band, f.mode, f.date, f.id, vm.allQsos) { vm.dupeOf(f) }
+    val tour = rememberTour(vm.activeContest)
+    val dupe = remember(f.call, f.band, f.mode, f.date, f.id, vm.allQsos, tour) { vm.dupeOf(f) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         val who = listOf(f.name, f.qth.ifBlank { f.country }).filter { it.isNotBlank() }.joinToString(", ")
         Box(Modifier.weight(1f)) {
