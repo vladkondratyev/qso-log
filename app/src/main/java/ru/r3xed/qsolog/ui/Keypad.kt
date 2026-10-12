@@ -163,7 +163,7 @@ internal fun keypadButtonHeight(compact: Boolean) = if (compact) 40.dp else 54.d
 /**
  * The app's keyboard, in the spirit of contest loggers: digits on top, Latin letters, "/" for portable calls, "-" for
  * dB reports, "." for the frequency. Holding ⌫ keeps deleting, as on a phone keyboard. [compact] makes it 30% lower.
- * A swipe left or right across it wipes the field ([onClear]); a finger held still for [holdMs] turns it into a
+ * A swipe to the left and, without lifting the finger, back to the right wipes the field ([onClear]); a finger held still for [holdMs] turns it into a
  * trackpad: sliding sideways moves the cursor ([onCaret], characters), as holding the space bar does on an iPhone.
  */
 @Composable
@@ -199,6 +199,9 @@ internal fun Keypad(
             var mode = 0 // 0 — not decided, 1 — swiped, 2 — trackpad
             var still = !backBounds.contains(down.position)
             var anchor = down.position.x
+            // The wipe: first far enough to the left, then from the leftmost point far enough back to the right.
+            var leftmost = down.position.x
+            var wentLeft = false
             try {
                 while (true) {
                     val event = if (mode == 0 && still) {
@@ -217,7 +220,15 @@ internal fun Keypad(
                     when (mode) {
                         0 -> {
                             if (abs(dx) > slop || abs(dy) > slop) still = false
-                            if (abs(dx) > swipe && abs(dx) > 2 * abs(dy)) {
+                            val x = change.position.x
+                            if (x < leftmost) leftmost = x
+                            if (!wentLeft && -dx > swipe && -dx > 2 * abs(dy)) {
+                                wentLeft = true
+                                tap()
+                            }
+                            // Once it went left, the keys must not type: the touch belongs to the gesture.
+                            if (wentLeft) change.consume()
+                            if (wentLeft && x - leftmost > swipe) {
                                 mode = 1
                                 view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                                 clear()

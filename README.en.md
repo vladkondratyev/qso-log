@@ -27,7 +27,7 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 0.40.0 | [QSO-LOG-0.40.0.apk](../../releases/tag/v0.40.0) |
+| Android 8.0 or newer | 0.40.1 | [QSO-LOG-0.40.1.apk](../../releases/tag/v0.40.1) |
 | macOS 11 or newer, Apple silicon (M1 and newer) | 1.18.0 | [QSO-LOG-1.18.0-macos-arm64.dmg](../../releases/tag/desktop-v1.18.0) |
 | macOS 11 or newer, Intel | 1.18.0 | [QSO-LOG-1.18.0-macos-x64.dmg](../../releases/tag/desktop-v1.18.0) |
 | Windows 10 and 11, 64-bit | 1.18.0 | [QSO-LOG-1.18.0-windows-x64.zip](../../releases/tag/desktop-v1.18.0) |
@@ -120,7 +120,7 @@ There is a normal and a compact version; the compact one is a third lower and le
 Choose in Settings → "QSO entry": System, Built-in, Built-in, compact. The choice is remembered and applies to the
 normal card and to contest mode.
 
-Gestures: swipe left or right across the keypad to clear the field with the cursor. Press and hold — the keys fade and
+Gestures: swipe left across the keypad and, without lifting the finger, back right to clear the field with the cursor. Press and hold — the keys fade and
 the keypad becomes a trackpad: slide sideways to move the cursor between the letters, as when holding the space bar on
 an iPhone; the next key inserts there. The hold time (0.2–1.5 s) is set in "QSO entry" too.
 
@@ -496,7 +496,7 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-0.40.0.apk` from the [release page](../../releases/tag/v0.40.0) and open it on the phone; allow
+Download `QSO-LOG-0.40.1.apk` from the [release page](../../releases/tag/v0.40.1) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS
