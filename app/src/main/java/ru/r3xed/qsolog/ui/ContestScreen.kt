@@ -146,6 +146,8 @@ fun ContestScreen(vm: AppViewModel) {
     // The keypad's field. A tap on a filled number or report selects it: the next key replaces it, as on a keyboard.
     var active by remember { mutableStateOf(if (f.isNew) Target.CALL else Target.RCVD) }
     var replace by remember { mutableStateOf(!f.isNew) }
+    // The keypad's cursor in the active field (null — at the end); the trackpad gesture moves it.
+    var caret by remember { mutableStateOf<Int?>(null) }
     fun valueOf(t: Target) = when (t) {
         Target.CALL -> vm.form.call
         Target.SENT -> vm.form.adif[ContestMode.SENT].orEmpty()
@@ -167,6 +169,7 @@ fun ContestScreen(vm: AppViewModel) {
     fun activate(t: Target) {
         replace = if (t == active) !replace && valueOf(t).isNotBlank() else t != Target.CALL && valueOf(t).isNotBlank()
         active = t
+        caret = null
     }
 
     // A new card with something typed, or changes to a saved one: closing asks first.
@@ -179,7 +182,7 @@ fun ContestScreen(vm: AppViewModel) {
         error = e
         when {
             e == null -> {}
-            keypad -> { active = if (e == CONTEST_RCVD_ERROR) Target.RCVD else Target.CALL; replace = false }
+            keypad -> { active = if (e == CONTEST_RCVD_ERROR) Target.RCVD else Target.CALL; replace = false; caret = null }
             e == CONTEST_RCVD_ERROR -> rcvdFocus.requestFocus()
             else -> callFocus.requestFocus()
         }
@@ -222,29 +225,36 @@ fun ContestScreen(vm: AppViewModel) {
         }
     }
 
-    // A physical keyboard: Space in the callsign goes on to the received code, Enter logs from any field ("20m", "CW",
-    // "14025" in the callsign switch band, mode or frequency), ↑ in an empty callsign or PgUp — the previous contact,
-    // PgDn — the next one, Esc wipes the new card (a second Esc closes it), F12 logs.
+    // A physical keyboard: Space goes between the callsign and the received code (the reports are skipped), Enter logs
+    // from any field ("20m", "CW", "14025" in the callsign switch band, mode or frequency), ↑ in an empty callsign or
+    // PgUp — the previous contact, PgDn — the next one, Alt+W or Ctrl+Esc wipes the new card, Esc closes the card,
+    // Ctrl+D deletes a saved contact (Enter confirms), F12 logs.
     var callFocused by remember { mutableStateOf(false) }
+    var rcvdFocused by remember { mutableStateOf(false) }
+    // The code sent or a report has the cursor (which one: the label).
+    var otherFocused by remember { mutableStateOf<String?>(null) }
+    fun Modifier.other(name: String) = onFocusChanged { if (it.isFocused) otherFocused = name else if (otherFocused == name) otherFocused = null }
     val hardKeys = Modifier.onPreviewKeyEvent { e ->
         if (e.type != KeyEventType.KeyDown || !e.fromHardware()) return@onPreviewKeyEvent false
         val plain = !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed
         val form = vm.form
         when {
-            // Enter in the callsign goes on to the received code (never logs); in the other fields it logs.
             (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
-                if (callFocused) { if (!vm.runCallCommand()) rcvdFocus.requestFocus() } else next()
+                if (!(callFocused && vm.runCallCommand())) next()
                 true
             }
-            e.key == Key.Spacebar && callFocused -> { if (!vm.runCallCommand()) rcvdFocus.requestFocus(); true }
+            e.key == Key.Spacebar && plain && callFocused -> { if (!vm.runCallCommand()) rcvdFocus.requestFocus(); true }
+            e.key == Key.Spacebar && plain && (rcvdFocused || otherFocused != null) -> { callFocus.requestFocus(); true }
             e.key == Key.DirectionUp && callFocused && form.isNew && form.call.isEmpty() -> { prev(); true }
             e.key == Key.PageUp || (e.isAltPressed && e.key == Key.DirectionLeft) -> { prev(); true }
             e.key == Key.PageDown || (e.isAltPressed && e.key == Key.DirectionRight) -> { next(); true }
             e.key == Key.F12 -> { next(); true }
-            e.key == Key.Escape -> {
-                if (form.isNew && (form.call.isNotBlank() || !form.adif[ContestMode.RCVD].isNullOrBlank())) vm.clearCard() else close()
+            (e.key == Key.W && e.isAltPressed && !e.isCtrlPressed) || (e.key == Key.Escape && e.isCtrlPressed) -> {
+                if (form.isNew) { vm.clearCard(); error = null; dupeArmed = false; callFocus.requestFocus() }
                 true
             }
+            e.key == Key.Escape -> { close(); true }
+            e.key == Key.D && e.isCtrlPressed && !form.isNew -> { confirmDelete = true; true }
             else -> false
         }
     }
@@ -298,7 +308,10 @@ fun ContestScreen(vm: AppViewModel) {
         ) {
             val callError = error != null && error != CONTEST_RCVD_ERROR
             if (keypad) {
-                KeyField(tr("Позывной"), f.call, active == Target.CALL, false, callError, Modifier.fillMaxWidth(), big = true) { activate(Target.CALL) }
+                KeyField(
+                    tr("Позывной"), f.call, active == Target.CALL, false, callError, Modifier.fillMaxWidth(), big = true,
+                    caret = caret, onClear = { setValue(Target.CALL, ""); caret = null; replace = false; active = Target.CALL },
+                ) { activate(Target.CALL) }
             } else {
                 OutlinedTextField(
                     value = f.call,
@@ -306,6 +319,8 @@ fun ContestScreen(vm: AppViewModel) {
                     modifier = Modifier.fillMaxWidth().focusRequester(callFocus).onFocusChanged { callFocused = it.isFocused },
                     label = { Text(tr("Позывной"), fontSize = 16.sp) },
                     isError = callError,
+                    // ⌫ wipes the whole callsign, the cursor stays in the field.
+                    trailingIcon = if (f.call.isNotEmpty()) { { ClearButton { error = null; vm.setCall(""); callFocus.requestFocus() } } } else null,
                     textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 36.sp, letterSpacing = 1.sp),
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
@@ -341,13 +356,13 @@ fun ContestScreen(vm: AppViewModel) {
             // The numbers first: they change with every contact. Any letters and digits: 015, MO69, EU, 16.
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (keypad) {
-                    KeyField(tr("Код передан"), sent, active == Target.SENT, replace, false, Modifier.weight(1f)) { activate(Target.SENT) }
-                    KeyField(tr("Код принят"), rcvd, active == Target.RCVD, replace, error == CONTEST_RCVD_ERROR, Modifier.weight(1f)) { activate(Target.RCVD) }
+                    KeyField(tr("Код передан"), sent, active == Target.SENT, replace, false, Modifier.weight(1f), caret = caret) { activate(Target.SENT) }
+                    KeyField(tr("Код принят"), rcvd, active == Target.RCVD, replace, error == CONTEST_RCVD_ERROR, Modifier.weight(1f), caret = caret) { activate(Target.RCVD) }
                 } else {
-                    BigField(tr("Код передан"), sent, { vm.setContestField(ContestMode.SENT, it) }, Modifier.weight(1f), KeyboardType.Ascii)
+                    BigField(tr("Код передан"), sent, { vm.setContestField(ContestMode.SENT, it) }, Modifier.weight(1f).other("sent"), KeyboardType.Ascii)
                     BigField(
                         tr("Код принят"), rcvd, { error = null; vm.setContestField(ContestMode.RCVD, it) },
-                        Modifier.weight(1f).focusRequester(rcvdFocus), KeyboardType.Ascii, onDone = next,
+                        Modifier.weight(1f).focusRequester(rcvdFocus).onFocusChanged { rcvdFocused = it.isFocused }, KeyboardType.Ascii, onDone = next,
                         isError = error == CONTEST_RCVD_ERROR,
                     )
                 }
@@ -366,11 +381,11 @@ fun ContestScreen(vm: AppViewModel) {
                 val rstKeyboard = if (dbReports) KeyboardType.Text else KeyboardType.Number
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (keypad) {
-                        KeyField(tr("RST передан"), f.rstSent, active == Target.RST_SENT, replace, false, Modifier.weight(1f)) { activate(Target.RST_SENT) }
-                        KeyField(tr("RST принят"), f.rstRcvd, active == Target.RST_RCVD, replace, false, Modifier.weight(1f)) { activate(Target.RST_RCVD) }
+                        KeyField(tr("RST передан"), f.rstSent, active == Target.RST_SENT, replace, false, Modifier.weight(1f), caret = caret) { activate(Target.RST_SENT) }
+                        KeyField(tr("RST принят"), f.rstRcvd, active == Target.RST_RCVD, replace, false, Modifier.weight(1f), caret = caret) { activate(Target.RST_RCVD) }
                     } else {
-                        BigField(tr("RST передан"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.weight(1f), rstKeyboard)
-                        BigField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.weight(1f), rstKeyboard)
+                        BigField(tr("RST передан"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.weight(1f).other("rsts"), rstKeyboard)
+                        BigField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.weight(1f).other("rstr"), rstKeyboard)
                     }
                     IconButton(onClick = {
                         vm.changeContestRstShown(false)
@@ -411,11 +426,20 @@ fun ContestScreen(vm: AppViewModel) {
                 Keypad(
                     compact = compact,
                     onKey = { c ->
-                        val v = if (replace) c else valueOf(active) + c
+                        val (v, at) = if (replace) c to null else typeAt(valueOf(active), caret, c, if (active == Target.CALL) 15 else 12)
                         replace = false
-                        setValue(active, v.take(if (active == Target.CALL) 15 else 12))
+                        caret = at
+                        setValue(active, v)
                     },
-                    onBackspace = { setValue(active, if (replace) "" else valueOf(active).dropLast(1)); replace = false },
+                    onBackspace = {
+                        val (v, at) = if (replace) "" to null else backspaceAt(valueOf(active), caret)
+                        replace = false
+                        caret = at
+                        setValue(active, v)
+                    },
+                    onClear = { setValue(active, ""); caret = null; replace = false },
+                    onCaret = { steps -> replace = false; caret = moveCaret(valueOf(active), caret, steps) },
+                    holdMs = vm.keypadHoldMs,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (!f.isNew) deleteButton(keypadButtonHeight(compact).value.toInt())
@@ -462,7 +486,7 @@ fun ContestScreen(vm: AppViewModel) {
         AlertDialog(
             onDismissRequest = { confirmClose = false },
             title = { Text(tr("Закрыть без сохранения?")) },
-            text = { Text(tr("Введённые изменения не сохранятся."), style = MaterialTheme.typography.bodyLarge) },
+            text = { Text(tr("Введённые изменения не сохранятся."), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.enterKey { confirmClose = false; vm.closeEditor() }) },
             confirmButton = {
                 TextButton(onClick = { confirmClose = false; vm.closeEditor() }) { Text(tr("Закрыть"), color = MaterialTheme.colorScheme.error) }
             },
@@ -474,7 +498,13 @@ fun ContestScreen(vm: AppViewModel) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(tr("Удалить связь с %s?", f.call)) },
-            text = { Text(tr("%s, %s %s. Запись пропадёт из лога.", "${f.date}, ${f.time} UTC", f.band, f.mode), style = MaterialTheme.typography.bodyLarge) },
+            text = {
+                Text(
+                    tr("%s, %s %s. Запись пропадёт из лога.", "${f.date}, ${f.time} UTC", f.band, f.mode) + if (vm.hardKeyboard || vm.keysUsed) "\n\n" + tr("Enter — удалить, Esc — отмена") else "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.enterKey { confirmDelete = false; vm.deleteCurrent() },
+                )
+            },
             confirmButton = {
                 Button(
                     onClick = { confirmDelete = false; vm.deleteCurrent() },
@@ -492,7 +522,7 @@ private fun dupeColors() = ButtonDefaults.buttonColors(containerColor = Material
 
 /** The current UTC time, ticking every second. */
 @Composable
-private fun utcNow(): Long {
+internal fun utcNow(): Long {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -523,7 +553,7 @@ private fun TimeLine(isNew: Boolean, logged: String, freq: String?, modifier: Mo
     Text(listOfNotNull(time, freq).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = x.muted, fontFamily = if (isNew) Mono else null, modifier = modifier)
 }
 
-private val TIME_SEC_FMT: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+internal val TIME_SEC_FMT: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
 
 /** The last contest contacts under the card: proof they were logged, and a tap opens one to correct it. */
 @Composable

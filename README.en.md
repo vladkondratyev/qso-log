@@ -27,7 +27,7 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 0.39.1 | [QSO-LOG-0.39.1.apk](../../releases/tag/v0.39.1) |
+| Android 8.0 or newer | 0.40.0 | [QSO-LOG-0.40.0.apk](../../releases/tag/v0.40.0) |
 | macOS 11 or newer, Apple silicon (M1 and newer) | 1.18.0 | [QSO-LOG-1.18.0-macos-arm64.dmg](../../releases/tag/desktop-v1.18.0) |
 | macOS 11 or newer, Intel | 1.18.0 | [QSO-LOG-1.18.0-macos-x64.dmg](../../releases/tag/desktop-v1.18.0) |
 | Windows 10 and 11, 64-bit | 1.18.0 | [QSO-LOG-1.18.0-windows-x64.zip](../../releases/tag/desktop-v1.18.0) |
@@ -94,7 +94,10 @@ What helps while typing:
 - "+ Next" saves the QSO and opens a new card on the same frequency. Useful in a pile-up.
 
 The other ADIF fields are in collapsible groups: station worked, QSO, my station, propagation. The QSO time can be
-taken when the card opens or when it is saved; this is a setting.
+taken when the card opens or when it is saved; this is a setting. On the phone, with "Take the QSO time when the card
+is saved" on, a clock with seconds runs in the new card, so the time does not freeze while a station is called in a
+pile-up; a saved QSO always keeps its time from the log. ⌫ at the right of the callsign field (and of the log search)
+clears it whole.
 
 A saved QSO has three buttons at the bottom: delete, share (as text, with the voice note, to a messenger or e-mail)
 and save.
@@ -116,6 +119,10 @@ system keyboard; the built-in one hides meanwhile.
 There is a normal and a compact version; the compact one is a third lower and leaves more room for the card.
 Choose in Settings → "QSO entry": System, Built-in, Built-in, compact. The choice is remembered and applies to the
 normal card and to contest mode.
+
+Gestures: swipe left or right across the keypad to clear the field with the cursor. Press and hold — the keys fade and
+the keypad becomes a trackpad: slide sideways to move the cursor between the letters, as when holding the space bar on
+an iPhone; the next key inserts there. The hold time (0.2–1.5 s) is set in "QSO entry" too.
 
 ## Contest mode
 
@@ -177,9 +184,17 @@ A whole outing or contest can be done without touching the screen: on the comput
 tablet with an external one (Bluetooth or USB OTG). Handy in the field: phone on a stand, small keyboard on your lap.
 With an external keyboard attached, the built-in on-screen keyboard hides and the cursor is in the callsign.
 
-The usual flow: type the callsign, press **Space** or **Enter** — the cursor moves to the frequency or RST (in a
-contest, to the received exchange); press **Enter** again — the QSO is logged and a new card opens. Enter in the
-callsign field never logs, so typing a call and pressing Enter just to see who it is is safe. Made a typo? **↑** in an
+On the phone (since 0.40.0) it works as in classic loggers: **Space** goes round the fields: callsign → RST sent →
+RST received → callsign again (in a contest RST is skipped: callsign ↔ received exchange). **Enter** in any field,
+the callsign included, logs the QSO and opens a new card. **Alt+W** or **Ctrl+Esc** wipes the card when the station
+fades into QSB: callsign, data and reports are cleared, the cursor is in the callsign. **Esc** closes the card (if
+something is typed it asks; Enter closes). **Ctrl+D** on a saved QSO or a log record deletes it, Enter confirms. With
+a keyboard attached, the "Add QSO" button shows "Ctrl+N · F9".
+
+On the computer it is still the old way: type the callsign, press **Space** or **Enter** — the cursor moves to the
+frequency or RST (in a contest, to the received exchange); press **Enter** again — the QSO is logged and a new card
+opens; Enter in the callsign field does not log. The tables below are for the computer; the phone's exact list is
+under F1. Made a typo? **↑** in an
 empty callsign opens the QSO you just logged; Enter saves it and brings you back to a new card.
 
 Keys by screen. On macOS use ⌘ instead of Ctrl.
@@ -415,7 +430,11 @@ for Russia), propagation indices and Russian time zones.
 
 ### Morse trainer
 
-The Morse tab has three modes at the top: Table, Sending and Receiving.
+The Morse tab has modes at the top: Table, Text (on the phone), Sending and Receiving.
+
+- **Text.** Paste or type any text — Latin, Cyrillic or mixed — and press Play: it sounds in Morse at 5–40 words per
+  minute (the speed can change on the fly). The sounding character is highlighted, the text scrolls along, and a tape
+  below shows each character with its code. Tap a character on the tape to play from it.
 
 - **Sending.** The app shows a group of characters, you key it, and what the app "heard" appears below: right
   characters in green, mistakes in red. The key is on the screen (one pad for a straight key, two — "·" and "−" — for
@@ -446,8 +465,8 @@ understood), and assignment: press "Assign" and then the key, so an adapter send
 ## Settings
 
 Settings are grouped in blocks; each header says briefly what is chosen. My station; station data sources; QSO entry
-(time, keyboard, CONTEST MODE); bands and modes shown in the card; language (system, Russian, English — changes at once);
-theme; logbook (export, import, sync, delete all). At the bottom: version, "What's new", "Report a problem" and
+(time, keyboard and its hold time, keep the screen on, CONTEST MODE); bands and modes shown in the card; language (system, Russian, English — changes at once);
+theme; logbook (export, import, sync — its header says whether Google sync is on, delete all). At the bottom: version, "What's new", "Report a problem" and
 "Check for updates". "Report a problem" opens a new GitHub issue in the browser with a template, the app version and
 the device model — no log, callsign or passwords; you send it yourself (a GitHub account is needed).
 
@@ -477,7 +496,7 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-0.39.1.apk` from the [release page](../../releases/tag/v0.39.1) and open it on the phone; allow
+Download `QSO-LOG-0.40.0.apk` from the [release page](../../releases/tag/v0.40.0) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS

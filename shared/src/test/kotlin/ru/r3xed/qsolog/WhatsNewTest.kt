@@ -16,13 +16,13 @@ class WhatsNewTest {
 
     @Test
     fun itemsDifferForTheComputer() {
-        // The phone is a release ahead: its list is about the ⋮ menu, the computer's about the contest book.
+        // The phone is releases ahead: its list is about the keyboard and the Morse text, the computer's about the contest book.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = false).any { "Список клавиш" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "Alt+W" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }
-        assertTrue(WhatsNew.items(desktop = true).none { "⋮ разложено" in it })
+        assertTrue(WhatsNew.items(desktop = true).none { "Alt+W" in it })
     }
 }

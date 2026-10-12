@@ -50,6 +50,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.material3.Slider
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -65,7 +74,8 @@ internal fun KeypadMode.label() = when (this) {
 
 /**
  * A field typed on the app's keypad: looks like a text field but never opens the system keyboard. The active one has a
- * thick border and a blinking cursor; a [selected] value (the next key replaces it) is shaded.
+ * thick border and a blinking cursor at [caret] (null — at the end); a [selected] value (the next key replaces it) is
+ * shaded. [onClear]: a ⌫ at the right end that wipes the whole value.
  */
 @Composable
 internal fun KeyField(
@@ -76,6 +86,8 @@ internal fun KeyField(
     isError: Boolean,
     modifier: Modifier,
     big: Boolean = false,
+    caret: Int? = null,
+    onClear: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val x = LocalExtra.current
@@ -85,30 +97,64 @@ internal fun KeyField(
         active -> c.primary
         else -> x.line
     }
-    Column(
+    Row(
         modifier.clip(RoundedCornerShape(if (big) 16.dp else 12.dp))
             .border(if (active || isError) 2.dp else 1.dp, border, RoundedCornerShape(if (big) 16.dp else 12.dp))
-            .clickable(onClickLabel = label, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = if (big) 6.dp else 4.dp),
+            .clickable(onClickLabel = label, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = if (isError) c.error else if (active) c.primary else x.muted, maxLines = 1)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(if (big) 50.dp else 38.dp)) {
-            Text(
-                value,
-                fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = if (big) 36.sp else 26.sp, letterSpacing = if (big) 1.sp else 0.sp,
-                maxLines = 1, softWrap = false,
-                modifier = if (active && selected && value.isNotEmpty()) Modifier.clip(RoundedCornerShape(4.dp)).background(c.primaryContainer) else Modifier,
-            )
-            if (active && !(selected && value.isNotEmpty())) {
-                // On for half a second, off for half a second.
-                val phase by rememberInfiniteTransition(label = "cursor").animateFloat(
-                    0f, 1f, infiniteRepeatable(tween(1060, easing = LinearEasing)), label = "cursor",
+        Column(Modifier.weight(1f).padding(start = 14.dp, end = if (onClear != null) 0.dp else 14.dp, top = if (big) 6.dp else 4.dp, bottom = if (big) 6.dp else 4.dp)) {
+            Text(label, style = MaterialTheme.typography.bodySmall, color = if (isError) c.error else if (active) c.primary else x.muted, maxLines = 1)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(if (big) 50.dp else 38.dp)) {
+                val shaded = active && selected && value.isNotEmpty()
+                val at = caretIn(value, caret)
+                @Composable
+                fun part(text: String) = Text(
+                    text,
+                    fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = if (big) 36.sp else 26.sp, letterSpacing = if (big) 1.sp else 0.sp,
+                    maxLines = 1, softWrap = false,
+                    modifier = if (shaded) Modifier.clip(RoundedCornerShape(4.dp)).background(c.primaryContainer) else Modifier,
                 )
-                Box(Modifier.padding(start = 2.dp).width(3.dp).height(if (big) 38.dp else 28.dp).graphicsLayer { alpha = if (phase < 0.5f) 1f else 0f }.background(c.primary))
+                if (active && !shaded) {
+                    if (at > 0) part(value.substring(0, at))
+                    // On for half a second, off for half a second.
+                    val phase by rememberInfiniteTransition(label = "cursor").animateFloat(
+                        0f, 1f, infiniteRepeatable(tween(1060, easing = LinearEasing)), label = "cursor",
+                    )
+                    Box(Modifier.padding(horizontal = 1.dp).width(3.dp).height(if (big) 38.dp else 28.dp).graphicsLayer { alpha = if (phase < 0.5f) 1f else 0f }.background(c.primary))
+                    if (at < value.length) part(value.substring(at))
+                } else part(value)
+            }
+        }
+        if (onClear != null && value.isNotEmpty()) {
+            IconButton(onClick = onClear, modifier = Modifier.padding(end = 4.dp).size(if (big) 52.dp else 44.dp)) {
+                Icon(Icons.AutoMirrored.Filled.Backspace, tr("Стереть всё"), Modifier.size(if (big) 28.dp else 24.dp), tint = x.muted)
             }
         }
     }
 }
+
+/** Where the keypad's cursor stands in [value]: [caret], or the end when it is null or beyond it. */
+internal fun caretIn(value: String, caret: Int?): Int = caret?.coerceIn(0, value.length) ?: value.length
+
+/** [value] with [key] typed at the cursor, if it stays within [max]; the cursor moves past it (null stays at the end). */
+internal fun typeAt(value: String, caret: Int?, key: String, max: Int): Pair<String, Int?> {
+    val at = caretIn(value, caret)
+    val v = value.substring(0, at) + key + value.substring(at)
+    if (v.length > max) return value to caret
+    return v to caret?.let { at + key.length }?.takeIf { it < v.length }
+}
+
+/** [value] with the character before the cursor deleted. */
+internal fun backspaceAt(value: String, caret: Int?): Pair<String, Int?> {
+    val at = caretIn(value, caret)
+    if (at == 0) return value to caret
+    return value.removeRange(at - 1, at) to caret?.let { at - 1 }
+}
+
+/** The cursor moved [steps] characters; at the end it becomes null again (typing appends). */
+internal fun moveCaret(value: String, caret: Int?, steps: Int): Int? =
+    (caretIn(value, caret) + steps).coerceIn(0, value.length).takeIf { it < value.length }
 
 /** Height of the keypad's keys and of the buttons right under it: the compact one is 30% lower. */
 internal fun keyHeight(compact: Boolean) = if (compact) 35.dp else 50.dp
@@ -117,18 +163,84 @@ internal fun keypadButtonHeight(compact: Boolean) = if (compact) 40.dp else 54.d
 /**
  * The app's keyboard, in the spirit of contest loggers: digits on top, Latin letters, "/" for portable calls, "-" for
  * dB reports, "." for the frequency. Holding ⌫ keeps deleting, as on a phone keyboard. [compact] makes it 30% lower.
+ * A swipe left or right across it wipes the field ([onClear]); a finger held still for [holdMs] turns it into a
+ * trackpad: sliding sideways moves the cursor ([onCaret], characters), as holding the space bar does on an iPhone.
  */
 @Composable
-internal fun Keypad(compact: Boolean, onKey: (String) -> Unit, onBackspace: () -> Unit) {
+internal fun Keypad(
+    compact: Boolean,
+    onKey: (String) -> Unit,
+    onBackspace: () -> Unit,
+    onClear: () -> Unit = {},
+    onCaret: (Int) -> Unit = {},
+    holdMs: Int = 400,
+) {
     val x = LocalExtra.current
     val c = MaterialTheme.colorScheme
     val view = LocalView.current
     val tap = { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
     val back by rememberUpdatedState(onBackspace)
+    val clear by rememberUpdatedState(onClear)
+    val caret by rememberUpdatedState(onCaret)
     var backDown by remember { mutableStateOf(false) }
+    // The finger rests on the keypad and drives the cursor: the keys fade, as on an iPhone.
+    var trackpad by remember { mutableStateOf(false) }
+    // Where ⌫ is: holding it repeats deleting, so it never turns into the trackpad.
+    var backBounds by remember { mutableStateOf(Rect.Zero) }
     val rows = listOf("1234567890", "QWERTYUIOP", "ASDFGHJKL/", "ZXCVBNM-.")
     val h = keyHeight(compact)
-    Column(verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp)) {
+    val gestures = Modifier.pointerInput(holdMs) {
+        val swipe = 70.dp.toPx()
+        val step = 16.dp.toPx()
+        val slop = viewConfiguration.touchSlop
+        awaitEachGesture {
+            // Watched before the keys see it: a swipe or the trackpad takes the touch away from them (no key is typed).
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            var mode = 0 // 0 — not decided, 1 — swiped, 2 — trackpad
+            var still = !backBounds.contains(down.position)
+            var anchor = down.position.x
+            try {
+                while (true) {
+                    val event = if (mode == 0 && still) {
+                        val left = holdMs - (android.os.SystemClock.uptimeMillis() - down.uptimeMillis)
+                        withTimeoutOrNull(left.coerceAtLeast(1)) { awaitPointerEvent(PointerEventPass.Initial) }
+                    } else awaitPointerEvent(PointerEventPass.Initial)
+                    if (event == null) {
+                        mode = 2
+                        trackpad = true
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        continue
+                    }
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    val dx = change.position.x - down.position.x
+                    val dy = change.position.y - down.position.y
+                    when (mode) {
+                        0 -> {
+                            if (abs(dx) > slop || abs(dy) > slop) still = false
+                            if (abs(dx) > swipe && abs(dx) > 2 * abs(dy)) {
+                                mode = 1
+                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                clear()
+                            }
+                        }
+                        2 -> {
+                            val steps = ((change.position.x - anchor) / step).toInt()
+                            if (steps != 0) {
+                                caret(steps)
+                                anchor += steps * step
+                                tap()
+                            }
+                        }
+                    }
+                    if (mode != 0) change.consume()
+                    if (!change.pressed) break
+                }
+            } finally {
+                trackpad = false
+            }
+        }
+    }
+    Column(gestures.graphicsLayer { alpha = if (trackpad) 0.45f else 1f }, verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp)) {
         rows.forEachIndexed { i, keys ->
             Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)) {
                 keys.forEach { k ->
@@ -147,7 +259,8 @@ internal fun Keypad(compact: Boolean, onKey: (String) -> Unit, onBackspace: () -
                 }
                 if (i == rows.lastIndex) {
                     Box(
-                        Modifier.weight(1f).height(h).clip(RoundedCornerShape(if (compact) 6.dp else 8.dp))
+                        Modifier.weight(1f).height(h).onGloballyPositioned { backBounds = it.boundsInParentOf() }
+                            .clip(RoundedCornerShape(if (compact) 6.dp else 8.dp))
                             .background(if (backDown) c.primary.copy(alpha = 0.35f) else c.primaryContainer)
                             .semantics { contentDescription = tr("Стереть"); role = Role.Button }
                             .pointerInput(Unit) {
@@ -177,6 +290,12 @@ internal fun Keypad(compact: Boolean, onKey: (String) -> Unit, onBackspace: () -
     }
 }
 
+/** Bounds of ⌫ in the keypad's coordinates: its row's position plus its own. */
+private fun LayoutCoordinates.boundsInParentOf(): Rect {
+    val keypad = parentLayoutCoordinates?.parentLayoutCoordinates ?: return Rect.Zero
+    return keypad.localBoundingBoxOf(this, clipBounds = false)
+}
+
 /** The three keyboard choices in the settings, as one row of buttons like the theme. */
 @Composable
 internal fun KeypadModeRow(mode: KeypadMode, onChange: (KeypadMode) -> Unit) {
@@ -197,5 +316,20 @@ internal fun KeypadModeRow(mode: KeypadMode, onChange: (KeypadMode) -> Unit) {
                 )
             }
         }
+    }
+}
+
+/** Settings: how long a finger rests on the keypad before it moves the cursor, 0.2–1.5 s. */
+@Composable
+internal fun KeypadHoldRow(ms: Int, onChange: (Int) -> Unit) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tr("Удержание для курсора"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Text(tr("%s с", "%.1f".format(ms / 1000.0)), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        }
+        Slider(
+            value = ms.toFloat(), onValueChange = { onChange((it / 100).roundToInt() * 100) },
+            valueRange = 200f..1500f, steps = 12,
+        )
     }
 }

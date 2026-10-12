@@ -98,6 +98,7 @@ import ru.r3xed.qsolog.data.ContestMode
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.MODES
+import ru.r3xed.qsolog.data.KeypadMode
 
 @Composable
 fun SettingsScreen(
@@ -289,11 +290,16 @@ fun SettingsScreen(
             SettingsBlock(
                 tr("Ввод связи"),
                 (if (vm.contestMode) "CONTEST MODE · " else "") + tr("клавиатура: %s", vm.keypad.label().lowercase()) + " · " +
-                    if (vm.timeOnSave) tr("время — при сохранении") else tr("время — при открытии карточки"),
+                    (if (vm.timeOnSave) tr("время — при сохранении") else tr("время — при открытии карточки")) +
+                    if (vm.keepScreenOn) " · " + tr("экран не гаснет") else "",
             ) {
                 Text(tr("Клавиатура в карточке"), style = MaterialTheme.typography.titleSmall)
                 KeypadModeRow(vm.keypad, vm::changeKeypad)
                 Note(tr("Своя клавиатура — крупные клавиши с цифрами и латиницей прямо в карточке, системная не открывается. Работает и в обычной карточке «Новый QSO» (позывной, частота, RST), и в режиме соревнований; имя, город и комментарий вводятся системной. Компактная на треть ниже, карточке остаётся больше места. Выбор запоминается. Если подключена внешняя клавиатура, своя прячется сама."))
+                if (vm.keypad != KeypadMode.OFF) {
+                    KeypadHoldRow(vm.keypadHoldMs, vm::changeKeypadHoldMs)
+                    Note(tr("Жесты своей клавиатуры: провести пальцем влево или вправо — стереть поле; нажать и удержать палец — клавиши бледнеют, ведите пальцем в сторону, чтобы передвинуть курсор между буквами (как удержание пробела на iPhone)."))
+                }
                 // The same list as F1 and the first tab of the reference: worth reading before a keyboard is attached.
                 ActionButton(tr("Список клавиш"), Icons.Filled.Keyboard) { vm.showKeys = true }
                 Row(
@@ -302,10 +308,20 @@ fun SettingsScreen(
                         .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(tr("Время — при сохранении"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
+                    Text(tr("Фиксировать время сохранения карточки QSO"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
                     Switch(checked = vm.timeOnSave, onCheckedChange = null)
                 }
-                Note(tr("Выключено: время связи — момент, когда открыта карточка «Новый QSO». Включено: время ставится при нажатии «Сохранить» (если вы не меняли его вручную) — удобно для долгих связей."))
+                Note(tr("Выключено: время связи — момент, когда открыта карточка «Новый QSO». Включено: в новой карточке идут часы, а время связи ставится в момент сохранения (если вы не меняли его вручную) — удобно, когда станцию долго зовут в пайл-апе. У сохранённой связи время берётся из журнала."))
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
+                        .toggleable(value = vm.keepScreenOn, role = Role.Switch, onValueChange = vm::changeKeepScreenOn)
+                        .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(tr("Не выключать экран во время работы приложения"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
+                    Switch(checked = vm.keepScreenOn, onCheckedChange = null)
+                }
+                Note(tr("Пока QSO-LOG на экране, телефон не гасит экран и не блокируется. Батарея расходуется быстрее."))
                 ContestModeSettings(vm)
             }
 
@@ -360,7 +376,11 @@ fun SettingsScreen(
                 }
                 Note(tr("«Как в системе» переключается вместе с тёмной темой Android."))
             }
-            SettingsBlock(tr("Журнал связей"), tr("записей: %s · ADIF, CSV, ЕРМАК", vm.total)) {
+            SettingsBlock(
+                tr("Журнал связей"),
+                // Sync first: the line is cut on narrow phones, and it is the part that changes.
+                (if (vm.sheetUrl.isNotBlank()) tr("синхронизация Google: вкл.") else tr("синхронизация Google: выкл.")) + " · " + tr("записей: %s", vm.total),
+            ) {
                 ActionButton(tr("Экспорт в ADIF"), Icons.Filled.FileUpload) { vm.openExport(ExportFormat.ADIF, selectedOnly = false) }
                 ActionButton(tr("Импорт из ADIF"), Icons.Filled.FileDownload, onImportAdif)
                 Note(tr("ADIF (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com. При экспорте можно выбрать кодировку: UTF-8 для большинства программ или Windows-1251 для LogHX и UR5EQF. При импорте кодировка определяется сама. Все поля файла сохраняются в карточке."))

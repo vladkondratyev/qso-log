@@ -159,6 +159,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
     val freqFocus = remember { FocusRequester() }
     val rstFocus = remember { FocusRequester() }
     val rstRcvdFocus = remember { FocusRequester() }
+    val contestRcvdFocus = remember { FocusRequester() }
 
     // The app's keypad (settings → "Ввод связи"): callsign, frequency and reports are
     // typed on it, the rest of the card on the system keyboard. No active field — the keypad is hidden.
@@ -166,6 +167,8 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
     val compact = vm.keypad == KeypadMode.COMPACT
     var active by remember(f.id, f.createdAt) { mutableStateOf(if (f.isNew) KeyTarget.CALL else null) }
     var replace by remember { mutableStateOf(false) }
+    // The keypad's cursor in the active field (null — at the end); the trackpad gesture moves it.
+    var caret by remember { mutableStateOf<Int?>(null) }
     val focusManager = LocalFocusManager.current
     // A system text field took the focus: while its keyboard is open ours steps aside, then comes back.
     // (It is not switched off here: on a phone the closing system keyboard still counts as open for a moment.)
@@ -191,6 +194,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
         focusManager.clearFocus()
         replace = t != null && if (t == active) !replace && valueOf(t).isNotBlank() else t != KeyTarget.CALL && valueOf(t).isNotBlank()
         active = t
+        caret = null
     }
     // What is usually typed next: the frequency (if empty), the reports, then the keypad folds away.
     fun nextOf(t: KeyTarget) = when (t) {
@@ -226,11 +230,26 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
     val saveIt = { showSaveError(vm.save()) }
     val saveNext = { showSaveError(vm.saveAndNext()) }
 
-    // A physical keyboard (Bluetooth, USB OTG) — a whole outing without touching the screen: Space or Enter in the callsign
-    // goes on to the frequency or report, Enter in any other field logs (a new card: logs and opens the next), "20m", "CW",
-    // "14195" in the callsign switch band, mode or frequency, ↑ in an empty callsign opens the contact just logged,
-    // Esc wipes a new card (a second Esc closes it). F2–F6, F8, F12 and Alt+1…9 as on the computer.
+    // A physical keyboard (Bluetooth, USB OTG) — a whole outing without touching the screen: Space goes round the fields
+    // callsign → RST sent → RST received (a contest contact: callsign → received code), Enter logs from any field (a new
+    // card: logs and opens the next), "20m", "CW", "14195" in the callsign switch band, mode or frequency, ↑ in an empty
+    // callsign opens the contact just logged, Alt+W or Ctrl+Esc wipes a new card, Esc closes the card, Ctrl+D deletes a
+    // saved one (Enter confirms). F2–F6, F8, F12 and Alt+1…9 as on the computer.
     var callFocused by remember { mutableStateOf(false) }
+    var rstSentFocused by remember { mutableStateOf(false) }
+    var rstRcvdFocused by remember { mutableStateOf(false) }
+    var contestRcvdFocused by remember { mutableStateOf(false) }
+    fun spaceNext(): Boolean {
+        val contest = ContestMode.isContest(vm.form.adif)
+        when {
+            callFocused -> if (!vm.runCallCommand()) (if (contest) contestRcvdFocus else rstFocus).requestFocus()
+            rstSentFocused -> rstRcvdFocus.requestFocus()
+            rstRcvdFocused -> (if (contest) contestRcvdFocus else callFocus).requestFocus()
+            contestRcvdFocused -> callFocus.requestFocus()
+            else -> return false
+        }
+        return true
+    }
     val hardKeys = Modifier.onPreviewKeyEvent { e ->
         if (e.type != KeyEventType.KeyDown || !e.fromHardware()) return@onPreviewKeyEvent false
         val plain = !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed
@@ -238,23 +257,24 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
         val form = vm.form
         when {
             (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
-                // The callsign has the cursor: the text field's, or the app keypad's.
+                // The callsign has the cursor: the text field's, or the app keypad's. A command there is not a contact.
                 val inCall = callFocused || (keypad && active == KeyTarget.CALL)
                 when {
                     inCall && vm.runCallCommand() -> {}
-                    // In the callsign Enter never logs: typing a call and Enter to look it up must not log a contact.
-                    inCall -> if (keypad) activate(nextOf(KeyTarget.CALL)) else if (vm.form.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
                     form.isNew -> saveNext()
                     else -> saveIt()
                 }
                 true
             }
-            e.key == Key.Spacebar && callFocused -> {
-                if (!vm.runCallCommand()) { if (vm.form.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus() }
+            e.key == Key.Spacebar && plain -> spaceNext()
+            e.key == Key.DirectionUp && callFocused && form.isNew && form.call.isEmpty() -> { vm.editLast(); true }
+            // Wipe: the contact fell into QSB — a clean card on the same band, mode and frequency, the cursor in the callsign.
+            (e.key == Key.W && e.isAltPressed && !e.isCtrlPressed) || (e.key == Key.Escape && e.isCtrlPressed) -> {
+                if (form.isNew) vm.clearCard()
                 true
             }
-            e.key == Key.DirectionUp && callFocused && form.isNew && form.call.isEmpty() -> { vm.editLast(); true }
-            e.key == Key.Escape -> { if (form.isNew && form.call.isNotBlank()) vm.clearCard() else close(); true }
+            e.key == Key.Escape -> { close(); true }
+            e.key == Key.D && e.isCtrlPressed && !form.isNew -> { confirmDelete = true; true }
             e.key == Key.F2 -> { callFocus.requestFocus(); true }
             e.key == Key.F3 -> { freqFocus.requestFocus(); true }
             e.key == Key.F4 -> { rstFocus.requestFocus(); true }
@@ -300,7 +320,8 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (keypad) KeyField(
                     tr("Позывной корреспондента"), f.call, active == KeyTarget.CALL, replace && active == KeyTarget.CALL,
-                    error == CALL_ERROR, Modifier.weight(1f), big = true,
+                    error == CALL_ERROR, Modifier.weight(1f), big = true, caret = caret,
+                    onClear = { setValue(KeyTarget.CALL, ""); caret = null; replace = false; active = KeyTarget.CALL },
                 ) { activate(KeyTarget.CALL) }
                 else OutlinedTextField(
                     value = f.call,
@@ -309,6 +330,8 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                     label = { Text(tr("Позывной корреспондента"), fontSize = 16.sp) },
                     isError = error == CALL_ERROR,
                     supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
+                    // ⌫ wipes the whole callsign, the cursor stays in the field.
+                    trailingIcon = if (f.call.isNotEmpty()) { { ClearButton { error = null; vm.setCall(""); callFocus.requestFocus() } } } else null,
                     textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 1.sp),
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
@@ -366,11 +389,15 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                     Icon(Icons.Filled.Schedule, null, Modifier.size(22.dp), tint = x.muted)
                     Spacer(Modifier.width(10.dp))
                     // Time first (what changes), then the date; wraps to a second line with a large system font.
+                    // "Фиксировать время сохранения": the clock runs until the contact is saved.
+                    val live = vm.timeLive
+                    val now = if (live) utc(utcNow()) else null
                     Text(
                         buildAnnotatedString {
-                            withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp)) { append(f.time) }
+                            withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp)) { append(now?.let(TIME_SEC_FMT::format) ?: f.time) }
                             withStyle(SpanStyle(fontSize = 14.sp, color = x.muted)) { append(" UTC   ") }
-                            withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp)) { append(f.date) }
+                            withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp)) { append(now?.let(DATE_FMT::format) ?: f.date) }
+                            if (live) withStyle(SpanStyle(fontSize = 14.sp, color = x.muted)) { append("\n" + tr("время запишется при сохранении")) }
                         },
                         modifier = Modifier.weight(1f),
                     )
@@ -382,7 +409,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             // Frequency first: typing it picks the band below by itself.
             if (keypad) KeyField(
                 tr("Частота, МГц"), f.freq, active == KeyTarget.FREQ, replace && active == KeyTarget.FREQ, false,
-                Modifier.fillMaxWidth().bringIntoViewRequester(freqView),
+                Modifier.fillMaxWidth().bringIntoViewRequester(freqView), caret = caret,
             ) { activate(KeyTarget.FREQ) }
             else Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
 
@@ -400,13 +427,13 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
             Row(Modifier.bringIntoViewRequester(rstView), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (keypad) KeyField(tr("RST отправлен"), f.rstSent, active == KeyTarget.RST_SENT, replace && active == KeyTarget.RST_SENT, false, Modifier.fillMaxWidth()) { activate(KeyTarget.RST_SENT) }
-                    else RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                    if (keypad) KeyField(tr("RST отправлен"), f.rstSent, active == KeyTarget.RST_SENT, replace && active == KeyTarget.RST_SENT, false, Modifier.fillMaxWidth(), caret = caret) { activate(KeyTarget.RST_SENT) }
+                    else RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus).onFocusChanged { rstSentFocused = it.isFocused }, rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
                     QuickValues(quick, f.rstSent) { vm.update(vm.form.copy(rstSent = it)) }
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (keypad) KeyField(tr("RST принят"), f.rstRcvd, active == KeyTarget.RST_RCVD, replace && active == KeyTarget.RST_RCVD, false, Modifier.fillMaxWidth()) { activate(KeyTarget.RST_RCVD) }
-                    else RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus), rstKeyboard, onNext = null)
+                    if (keypad) KeyField(tr("RST принят"), f.rstRcvd, active == KeyTarget.RST_RCVD, replace && active == KeyTarget.RST_RCVD, false, Modifier.fillMaxWidth(), caret = caret) { activate(KeyTarget.RST_RCVD) }
+                    else RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
                     QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
                 }
             }
@@ -414,7 +441,11 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             val contest = ContestMode.isContest(f.adif)
             if (contest) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Field(tr("Код передан"), f.adif[ContestMode.SENT].orEmpty(), { vm.setAdif(ContestMode.SENT, it) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
-                Field(tr("Код принят"), f.adif[ContestMode.RCVD].orEmpty(), { vm.setAdif(ContestMode.RCVD, it) }, Modifier.weight(1f), KeyboardType.Number, mono = true, last = true)
+                Field(
+                    tr("Код принят"), f.adif[ContestMode.RCVD].orEmpty(), { vm.setAdif(ContestMode.RCVD, it) },
+                    Modifier.weight(1f).focusRequester(contestRcvdFocus).onFocusChanged { contestRcvdFocused = it.isFocused },
+                    KeyboardType.Number, mono = true, last = true,
+                )
             }
 
             // --- distance & map ---
@@ -470,11 +501,21 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                 Keypad(
                     compact = compact,
                     onKey = { c ->
-                        val v = if (replace) c else valueOf(target) + c
+                        val max = if (target == KeyTarget.CALL) 15 else if (target == KeyTarget.FREQ) 12 else 6
+                        val (v, at) = if (replace) c to null else typeAt(valueOf(target), caret, c, max)
                         replace = false
-                        setValue(target, v.take(if (target == KeyTarget.CALL) 15 else if (target == KeyTarget.FREQ) 12 else 6))
+                        caret = at
+                        setValue(target, v)
                     },
-                    onBackspace = { setValue(target, if (replace) "" else valueOf(target).dropLast(1)); replace = false },
+                    onBackspace = {
+                        val (v, at) = if (replace) "" to null else backspaceAt(valueOf(target), caret)
+                        replace = false
+                        caret = at
+                        setValue(target, v)
+                    },
+                    onClear = { setValue(target, ""); caret = null; replace = false },
+                    onCaret = { steps -> replace = false; caret = moveCaret(valueOf(target), caret, steps) },
+                    holdMs = vm.keypadHoldMs,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     OutlinedIconButton(
@@ -559,6 +600,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                 Text(
                     if (f.isNew && f.audio.isNotBlank()) tr("Введённые данные и голосовая заметка будут потеряны.") else tr("Введённые изменения не сохранятся."),
                     style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.enterKey { confirmClose = false; vm.closeEditor() },
                 )
             },
             confirmButton = {
@@ -573,7 +615,13 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(tr("Удалить связь с %s?", f.call)) },
-            text = { Text(tr("%s, %s %s. Запись пропадёт из лога.", when_, f.band, f.mode), style = MaterialTheme.typography.bodyLarge) },
+            text = {
+                Text(
+                    tr("%s, %s %s. Запись пропадёт из лога.", when_, f.band, f.mode) + if (vm.hardKeyboard || vm.keysUsed) "\n\n" + tr("Enter — удалить, Esc — отмена") else "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.enterKey { confirmDelete = false; vm.deleteCurrent() },
+                )
+            },
             confirmButton = {
                 Button(
                     onClick = { confirmDelete = false; vm.deleteCurrent() },

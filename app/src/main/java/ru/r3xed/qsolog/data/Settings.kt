@@ -93,6 +93,14 @@ class Settings(context: Context) {
     var timeOnSave: Boolean
         get() = prefs.getBoolean("time_on_save", false)
         set(v) = prefs.edit().putBoolean("time_on_save", v).apply()
+    /** The screen stays on while the app is open. */
+    var keepScreenOn: Boolean
+        get() = prefs.getBoolean("keep_screen_on", false)
+        set(v) = prefs.edit().putBoolean("keep_screen_on", v).apply()
+    /** How long a finger rests on the app's keypad before it moves the cursor, ms. */
+    var keypadHoldMs: Int
+        get() = prefs.getInt("keypad_hold_ms", 400)
+        set(v) = prefs.edit().putInt("keypad_hold_ms", v).apply()
     var hamqthEnabled: Boolean
         get() = prefs.getBoolean("hamqth_enabled", true)
         set(v) = prefs.edit().putBoolean("hamqth_enabled", v).apply()

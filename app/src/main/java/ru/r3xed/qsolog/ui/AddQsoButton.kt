@@ -168,7 +168,11 @@ fun AddQsoButton(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Add, null, Modifier.size(32.dp), tint = onBg)
                     Spacer(Modifier.width(10.dp))
-                    Text(tr("Добавить QSO"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = onBg)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(tr("Добавить QSO"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = onBg)
+                        // With a keyboard attached: the keys that do the same, so they are found without F1.
+                        if (vm.hardKeyboard || vm.keysUsed) Text("Ctrl+N · F9", fontSize = 13.sp, fontFamily = Mono, color = onBg.copy(alpha = 0.8f))
+                    }
                 }
                 MicSpot(onBg, Modifier.align(Alignment.CenterEnd))
             }

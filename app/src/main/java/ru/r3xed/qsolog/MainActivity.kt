@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
         if (physical && event.action == KeyEvent.ACTION_DOWN && vm.keypadShown && event.isPrintingKey &&
             (vm.screen == Screen.Edit || vm.screen == Screen.Contest)) vm.hardKeyboard = true
         if (soft || event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
+        if (physical && !vm.keysUsed) vm.keysUsed = true
         val inCard = vm.screen == Screen.Edit || vm.screen == Screen.Contest
         val inLog = vm.screen == Screen.Log
         val ctrl = event.isCtrlPressed || event.isMetaPressed
@@ -91,7 +92,8 @@ class MainActivity : ComponentActivity() {
                 true
             }
             event.keyCode == KeyEvent.KEYCODE_F1 || (ctrl && event.keyCode == KeyEvent.KEYCODE_SLASH) -> { vm.showKeys = !vm.showKeys; true }
-            ctrl && event.keyCode == KeyEvent.KEYCODE_D && inLog -> { vm.openDashboard(); true }
+            // Ctrl+D on a picked record or the cursor's row deletes it (a dialog asks, Enter confirms); otherwise the dashboard.
+            ctrl && event.keyCode == KeyEvent.KEYCODE_D && inLog -> { if (vm.logDeleteAsk == null && !vm.askDeleteLog()) vm.openDashboard(); true }
             ctrl && event.keyCode == KeyEvent.KEYCODE_M && inLog -> { vm.openMap(); true }
             ctrl && event.keyCode == KeyEvent.KEYCODE_COMMA && inLog -> { vm.openSettings(); true }
             ctrl && event.keyCode == KeyEvent.KEYCODE_H && inLog -> { vm.openHistory(); true }
@@ -99,7 +101,7 @@ class MainActivity : ComponentActivity() {
             ctrl && event.keyCode == KeyEvent.KEYCODE_R && !inCard -> { vm.syncByKey(); true }
             ctrl && event.isShiftPressed && event.keyCode == KeyEvent.KEYCODE_E && inLog -> { vm.openExport(ExportFormat.ADIF, selectedOnly = false); true }
             ctrl && event.keyCode == KeyEvent.KEYCODE_A && inLog && !vm.searchFocused -> { vm.selectAllShown(); true }
-            inLog && !vm.searchFocused && !ctrl -> logKey(event)
+            inLog && !vm.searchFocused && !ctrl && vm.logDeleteAsk == null -> logKey(event)
             vm.screen == Screen.History && !vm.historyTyping && vm.historyEditCalls == null && vm.historyDeleteAsk == null -> historyKey(event, ctrl)
             vm.screen == Screen.Dashboard && event.keyCode in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_4 -> {
                 vm.changeDashFilter(vm.dashFilter.copy(period = ru.r3xed.qsolog.data.StatPeriod.entries[event.keyCode - KeyEvent.KEYCODE_1]))
@@ -127,7 +129,8 @@ class MainActivity : ComponentActivity() {
             KeyEvent.KEYCODE_MOVE_END -> vm.moveLogCursor(0, to = 1)
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> vm.openLogCursor()
             KeyEvent.KEYCODE_SPACE -> vm.toggleLogCursor()
-            KeyEvent.KEYCODE_FORWARD_DEL -> vm.deleteLogCursor()
+            // Delete, and Backspace that many keyboards label "Delete": asks first, Enter confirms.
+            KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_DEL -> if (vm.logDeleteAsk == null && !vm.askDeleteLog()) return false
             KeyEvent.KEYCODE_ESCAPE -> if (vm.selecting) vm.clearSelection() else if (vm.logCursor != null) vm.logCursor = null else return false
             else -> return false
         }
@@ -173,6 +176,12 @@ class MainActivity : ComponentActivity() {
                 val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 onDispose {}
+            }
+            // "Не выключать экран" in the settings: the window keeps the screen on while the app is in front.
+            val view = androidx.compose.ui.platform.LocalView.current
+            DisposableEffect(vm.keepScreenOn) {
+                view.keepScreenOn = vm.keepScreenOn
+                onDispose { view.keepScreenOn = false }
             }
             // A Bluetooth or USB keyboard attached: the app's on-screen keypad gives way to the text fields.
             val cfg = LocalConfiguration.current

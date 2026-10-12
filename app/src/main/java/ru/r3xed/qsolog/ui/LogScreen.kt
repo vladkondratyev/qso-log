@@ -70,6 +70,8 @@ import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import ru.r3xed.qsolog.data.ContestMode
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
@@ -256,7 +258,8 @@ fun LogScreen(
                 placeholder = { OneLineText(tr("Поиск: позывной, имя, город"), maxSize = 16.sp, minSize = 11.sp) },
                 leadingIcon = { Icon(Icons.Filled.Search, null) },
                 trailingIcon = {
-                    if (vm.query.isNotEmpty()) IconButton(onClick = { vm.search("") }) { Icon(Icons.Filled.Clear, tr("Очистить поиск")) }
+                    // ⌫ wipes the whole query.
+                    if (vm.query.isNotEmpty()) IconButton(onClick = { vm.search("") }) { Icon(Icons.AutoMirrored.Filled.Backspace, tr("Очистить поиск"), tint = x.muted) }
                 },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyLarge,
@@ -320,6 +323,31 @@ fun LogScreen(
             // At the bottom, under the thumb; holding it records a voice note.
             AddQsoButton(vm, hasMicPermission, requestMicPermission, Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp))
         }
+    }
+
+    // Ctrl+D or Delete on the log: one dialog for the cursor's row or the picked records; Enter deletes.
+    vm.logDeleteAsk?.let { list ->
+        val one = list.singleOrNull()
+        AlertDialog(
+            onDismissRequest = { vm.logDeleteAsk = null },
+            title = { Text(if (one != null) tr("Удалить связь с %s?", one.call) else tr("Удалить выбранные связи: %s?", list.size)) },
+            text = {
+                val t = one?.let { utc(it.timeUtc) }
+                Text(
+                    (if (one != null && t != null) tr("%s, %s %s. Запись пропадёт из лога.", "${DATE_FMT.format(t)}, ${TIME_FMT.format(t)} UTC", one.band, one.mode) + "\n\n" else "") +
+                        tr("Enter — удалить, Esc — отмена"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.enterKey(vm::confirmDeleteLog),
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = vm::confirmDeleteLog,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
+                ) { Text(tr("Удалить")) }
+            },
+            dismissButton = { TextButton(onClick = { vm.logDeleteAsk = null }) { Text(tr("Отмена")) } },
+        )
     }
 }
 

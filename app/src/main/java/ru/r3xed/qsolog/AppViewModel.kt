@@ -477,6 +477,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.timeOnSave = on
     }
 
+    /** A new card whose time will be taken on saving: it shows a running clock. */
+    val timeLive: Boolean
+        get() = timeOnSave && form.isNew && formOriginal.let { it != null && it.date == form.date && it.time == form.time }
+
+    /** "Не выключать экран": the window keeps the screen on while the app is open. */
+    var keepScreenOn by mutableStateOf(prefs.keepScreenOn); private set
+
+    fun changeKeepScreenOn(on: Boolean) {
+        keepScreenOn = on
+        prefs.keepScreenOn = on
+    }
+
+    /** How long a finger rests on the app's keypad before it moves the cursor, ms. */
+    var keypadHoldMs by mutableStateOf(prefs.keypadHoldMs); private set
+
+    fun changeKeypadHoldMs(ms: Int) {
+        keypadHoldMs = ms
+        prefs.keypadHoldMs = ms
+    }
+
+    /** A key of a physical keyboard was pressed: shortcut hints are shown even if the system did not report it. */
+    var keysUsed by mutableStateOf(false)
+
     fun setHamqth(on: Boolean) {
         hamqthEnabled = on
         prefs.hamqthEnabled = on
@@ -1254,6 +1277,33 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val i = o.indexOf(q.id)
         logCursor = o.getOrNull(i + 1) ?: o.getOrNull(i - 1)
         delete(q)
+    }
+
+    /** Ctrl+D / Delete on the log: the records about to go (the picked ones, or the row under the cursor); a dialog asks. */
+    var logDeleteAsk by mutableStateOf<List<Qso>?>(null)
+
+    /** Asks before deleting the picked records or the cursor's row; false when there is nothing to delete. */
+    fun askDeleteLog(): Boolean {
+        val list = if (selecting) qsos.filter { it.id in selected } else listOfNotNull(cursorQso())
+        if (list.isEmpty()) return false
+        logDeleteAsk = list
+        return true
+    }
+
+    fun confirmDeleteLog() {
+        val list = logDeleteAsk ?: return
+        logDeleteAsk = null
+        if (!selecting && list.size == 1) return deleteLogCursor()
+        val ids = list.map { it.id }.toSet()
+        selected = selected - ids
+        if (logCursor in ids) logCursor = null
+        qsos = qsos.filter { it.id !in ids }
+        allQsos = allQsos.filter { it.id !in ids }
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { ids.forEach { db.delete(it) } }
+            reload()
+            _messages.send(Message(tr("Удалено связей: %s", list.size)) { list.forEach(::restore) })
+        }
     }
 
     /** Ctrl+K: contest mode on or off. */
