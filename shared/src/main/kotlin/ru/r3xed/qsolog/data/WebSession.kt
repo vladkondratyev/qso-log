@@ -39,6 +39,9 @@ internal class WebSession(private val site: String, private val minIntervalMs: L
                 conn.setRequestProperty("Accept-Language", language)
                 // A kept-alive socket goes stale during the pause between requests (QRZ.com then gives no status line).
                 conn.setRequestProperty("Connection", "close")
+                // Android's HttpURLConnection (OkHttp) asks for gzip on its own and fails on QRZ.com's login page, which
+                // sends "\r\n" after the gzip stream ("gzip finished without exhausting source"). Plain text avoids it.
+                conn.setRequestProperty("Accept-Encoding", "identity")
                 if (cookies.isNotEmpty()) conn.setRequestProperty("Cookie", cookies.entries.joinToString("; ") { "${it.key}=${it.value}" })
                 if (postBody != null) {
                     conn.requestMethod = "POST"

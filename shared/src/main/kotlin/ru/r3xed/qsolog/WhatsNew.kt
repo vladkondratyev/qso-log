@@ -10,10 +10,11 @@ object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
     /**
-     * Points of this release. The phone (0.40.1) is releases ahead of the computer (1.18.0): each has its own list
+     * Points of this release. The phone (0.40.2) is releases ahead of the computer (1.18.0): each has its own list
      * until the computer catches up.
      */
     fun items(desktop: Boolean): List<String> = if (desktop) desktopItems() else listOf(
+        tr("QRZ.com снова подгружает данные о корреспонденте на Android: вход больше не обрывается ошибкой «gzip finished without exhausting source»."),
         tr("Стереть поле своей клавиатурой теперь — провести пальцем влево и, не отрывая, обратно вправо: случайный свайп в одну сторону поле не стирает."),
         tr("Внешняя клавиатура как в классических логгерах: Пробел ходит по полям позывной → RST → RST (в контесте — сразу к номеру), Enter записывает связь из любого поля, Alt+W или Ctrl+Esc очищает карточку, Esc закрывает её."),
         tr("Удаление с клавиатуры: Ctrl+D или Delete на записи журнала или в открытой карточке, Enter в окне подтверждения — удалить."),

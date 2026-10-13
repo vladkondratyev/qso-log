@@ -27,7 +27,7 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 
 | Система | Версия | Файл |
 |---|---|---|
-| Android 8.0 и новее | 0.40.1 | [QSO-LOG-0.40.1.apk](../../releases/tag/v0.40.1) |
+| Android 8.0 и новее | 0.40.2 | [QSO-LOG-0.40.2.apk](../../releases/tag/v0.40.2) |
 | macOS 11 и новее, процессор Apple (M1 и новее) | 1.18.0 | [QSO-LOG-1.18.0-macos-arm64.dmg](../../releases/tag/desktop-v1.18.0) |
 | macOS 11 и новее, процессор Intel | 1.18.0 | [QSO-LOG-1.18.0-macos-x64.dmg](../../releases/tag/desktop-v1.18.0) |
 | Windows 10 и 11, 64 бит | 1.18.0 | [QSO-LOG-1.18.0-windows-x64.zip](../../releases/tag/desktop-v1.18.0) |
@@ -741,7 +741,7 @@ QSO-LOG использует скрипт: вход в Google в програм�
 
 ### Android
 
-1. Скачайте `QSO-LOG-0.40.1.apk` со [страницы релиза](../../releases/tag/v0.40.1).
+1. Скачайте `QSO-LOG-0.40.2.apk` со [страницы релиза](../../releases/tag/v0.40.2).
 2. Откройте файл на телефоне. Android может попросить разрешить установку из этого источника — разрешите.
 
 ### macOS

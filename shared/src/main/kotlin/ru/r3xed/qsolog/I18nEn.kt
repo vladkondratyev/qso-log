@@ -1140,4 +1140,5 @@ internal val EN: Map<String, String> = hashMapOf(
     "Справка → Морзе → «Текст»: любой текст, латиница и кириллица, звучит азбукой Морзе с выбранной скоростью, звучащий знак подсвечивается, внизу — лента с кодами." to "Reference → Morse → “Text”: any text, Latin and Cyrillic, played in Morse at the chosen speed; the sounding character is highlighted, with a tape of codes below.",
     "На кнопке «Добавить QSO» — подсказка Ctrl+N · F9, в «Журнале связей» — включена ли синхронизация с Google." to "The “Add QSO” button shows Ctrl+N · F9; the “QSO log” settings show whether Google sync is on.",
     "Стереть поле своей клавиатурой теперь — провести пальцем влево и, не отрывая, обратно вправо: случайный свайп в одну сторону поле не стирает." to "Clearing a field with the app keypad is now a swipe left and, without lifting the finger, back right: a stray swipe one way no longer clears it.",
+    "QRZ.com снова подгружает данные о корреспонденте на Android: вход больше не обрывается ошибкой «gzip finished without exhausting source»." to "QRZ.com lookups work again on Android: signing in no longer fails with “gzip finished without exhausting source”.",
 )
