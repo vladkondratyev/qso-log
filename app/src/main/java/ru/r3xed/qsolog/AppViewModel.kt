@@ -2027,6 +2027,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (added.isEmpty()) return
         reload()
+        // The log shows the new contact on top, as after saving a card (a new day's group would start above the view).
+        newSavedTick++
         say(if (added.size == 1) tr("Связь с %s из %s записана", added[0].call, from) else tr("Из %s записано связей: %s", from, added.size))
         if (hasQrzAccount) added.forEach { q ->
             refreshing = refreshing + q.id

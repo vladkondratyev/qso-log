@@ -201,6 +201,23 @@ fun main(args: Array<String>) {
             state.closeEditor()
             state.pane = Pane.Settings
             shot("en-08-settings")
+
+            // The main picture: FT8 and FT4 contacts just logged in a made-up WSJT-X, one of them open.
+            state.changeLanguage(Lang.RU)
+            state.pane = Pane.Empty
+            state.changeDigi(state.digiConfig.copy(enabled = true))
+            repeat(6) { frame(); delay(250) }
+            rigOnFt8 = true
+            val now = LocalDateTime.now(ZoneOffset.UTC).withSecond(15).withNano(0)
+            fakeWsjtxLogged(state.digiConfig.port, "JA1DEMO", "PM95", 14_074_000, "FT8", "-15", "-19", now.minusMinutes(9))
+            fakeWsjtxLogged(state.digiConfig.port, "W1DEMO", "FN42", 14_080_000, "FT4", "+03", "-01", now.minusMinutes(5))
+            // Their messages go by before the last one, which stays on screen.
+            repeat(48) { frame(); delay(250) }
+            fakeWsjtxLogged(state.digiConfig.port, "OH2DEMO", "KP20", 14_074_000, "FT8", "-08", "-12", now)
+            repeat(4) { frame(); delay(250) }
+            state.edit(log().first { it.call == "OH2DEMO" })
+            shot("26-wsjtx-log", 4000)
+            state.changeDigi(state.digiConfig.copy(enabled = false))
             big.close()
         }
     }
@@ -222,7 +239,23 @@ private fun fakeWsjtxHeartbeat(port: Int) {
     java.net.DatagramSocket().use { it.send(java.net.DatagramPacket(b.toByteArray(), b.size(), java.net.InetAddress.getLoopbackAddress(), port)) }
 }
 
+/** WSJT-X logged a contact (type 5, "QSO Logged") and sends it to the app's UDP port. */
+private fun fakeWsjtxLogged(port: Int, call: String, grid: String, hz: Long, mode: String, sent: String, rcvd: String, on: LocalDateTime) {
+    val b = java.io.ByteArrayOutputStream()
+    java.io.DataOutputStream(b).apply {
+        fun utf8(v: String) { writeInt(v.length); writeBytes(v) }
+        fun time(t: LocalDateTime) { writeLong(t.toLocalDate().toEpochDay() + 2_440_588L); writeInt(t.toLocalTime().toSecondOfDay() * 1000); writeByte(1) }
+        writeInt(ru.r3xed.qsolog.digi.Wsjtx.MAGIC); writeInt(3); writeInt(5); utf8("WSJT-X")
+        time(on.plusSeconds(45)); utf8(call); utf8(grid); writeLong(hz); utf8(mode); utf8(sent); utf8(rcvd)
+        utf8("100"); utf8(""); utf8(""); time(on)
+    }
+    java.net.DatagramSocket().use { it.send(java.net.DatagramPacket(b.toByteArray(), b.size(), java.net.InetAddress.getLoopbackAddress(), port)) }
+}
+
 /** rigctld of a made-up transceiver: 14.195 MHz, USB, S8. */
+/** The made-up transceiver is on the FT8 frequency in data mode (for the main picture), else on 14.195 USB. */
+@Volatile private var rigOnFt8 = false
+
 private fun fakeRigctld(): java.net.ServerSocket {
     val server = runCatching { java.net.ServerSocket(4532, 5, java.net.InetAddress.getLoopbackAddress()) }.getOrElse { java.net.ServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress()) }
     Thread {
@@ -234,7 +267,13 @@ private fun fakeRigctld(): java.net.ServerSocket {
                     val w = it.getOutputStream()
                     while (true) {
                         val l = r.readLine() ?: break
-                        w.write(when (l.trim()) { "f" -> "14195000\n"; "m" -> "USB\n2400\n"; "l STRENGTH" -> "-6\n"; else -> "RPRT -11\n" }.toByteArray())
+                        val ft8 = rigOnFt8
+                        w.write(when (l.trim()) {
+                            "f" -> if (ft8) "14074000\n" else "14195000\n"
+                            "m" -> if (ft8) "PKTUSB\n3000\n" else "USB\n2400\n"
+                            "l STRENGTH" -> if (ft8) "-18\n" else "-6\n"
+                            else -> "RPRT -11\n"
+                        }.toByteArray())
                         w.flush()
                     }
                 }

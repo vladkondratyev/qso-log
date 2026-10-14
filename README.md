@@ -22,7 +22,7 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 Программа бесплатная, исходный код открыт. Интерфейс на русском и английском.
 
 <p align="center">
-<img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG на компьютере и на телефоне, подключённых к трансиверу по CAT">
+<img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG на компьютере и на телефоне: трансивер по CAT, связи FT8 и FT4 из WSJT-X">
 </p>
 
 ## Скачать
@@ -794,6 +794,7 @@ QSO-LOG использует скрипт: вход в Google в програм�
 <img src="docs/screenshots/desktop-13-export-dialog.png" width="440" alt="Экспорт: только новые связи и отметка">
 <img src="docs/screenshots/desktop-12-export-marks.png" width="440" alt="Отметки об экспорте в карточке">
 <img src="docs/screenshots/desktop-24-cat.png" width="440" alt="Настройки CAT на компьютере">
+<img src="docs/screenshots/desktop-26-wsjtx-log.png" width="440" alt="Связь FT8 из WSJT-X в журнале">
 <img src="docs/screenshots/desktop-25-wsjtx.png" width="440" alt="Приём связей из WSJT-X">
 <img src="docs/screenshots/desktop-08-settings.png" width="440" alt="Настройки">
 <img src="docs/screenshots/desktop-09-about.png" width="440" alt="Версия и ссылка на проект">

@@ -22,7 +22,7 @@ without touching the screen at all.
 The app is free and open source. The interface is in Russian and English.
 
 <p align="center">
-<img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG on a computer and a phone connected to a transceiver over CAT">
+<img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG on a computer and a phone: CAT with the transceiver, FT8 and FT4 QSOs from WSJT-X">
 </p>
 
 ## Download
