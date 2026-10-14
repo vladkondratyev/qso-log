@@ -160,13 +160,33 @@ fun EditPane(vm: AppState) {
     }
     val focusManager = LocalFocusManager.current
     var callFocused by remember { mutableStateOf(false) }
+    var rstSentFocused by remember { mutableStateOf(false) }
+    var rstRcvdFocused by remember { mutableStateOf(false) }
+    var contestRcvdFocused by remember { mutableStateOf(false) }
+    val contestRcvdFocus = remember { FocusRequester() }
+    // Space goes round the fields as in classic loggers: callsign → RST sent → RST received → callsign
+    // (a contest contact: callsign ↔ received code).
+    fun spaceNext(): Boolean {
+        val contest = ContestMode.isContest(vm.form.adif)
+        when {
+            callFocused -> if (!vm.runCallCommand()) (if (contest) contestRcvdFocus else rstFocus).requestFocus()
+            rstSentFocused -> rstRcvdFocus.requestFocus()
+            rstRcvdFocused -> (if (contest) contestRcvdFocus else callFocus).requestFocus()
+            contestRcvdFocused -> callFocus.requestFocus()
+            else -> return false
+        }
+        return true
+    }
+    // Ctrl+D (⌘D) in a saved card, from the keyboard or the menu bar.
+    LaunchedEffect(vm.askDeleteCard) { if (vm.askDeleteCard) { vm.askDeleteCard = false; if (!vm.form.isNew) confirmDelete = true } }
 
     val me = vm.myPositionFor(vm.form)
     val them = f.position
 
-    // Keyboard-first entry: Space in the callsign goes on to the frequency or report, Enter logs the contact from any
-    // field (a new card: saves and opens the next one; "20m", "CW", "14195" in the callsign switch band, mode or
-    // frequency instead), ↑ in an empty callsign opens the contact just logged. Shift+Enter is a new line in the comment.
+    // Keyboard-first entry: Space goes round callsign → RST sent → RST received, Enter logs the contact from any field
+    // (a new card: saves and opens the next one; "20m", "CW", "14195" in the callsign switch band, mode or frequency
+    // instead), ↑ in an empty callsign opens the contact just logged, Alt+W or Ctrl+Esc wipes a new card, Esc closes
+    // the card (see Main.kt), Ctrl+D deletes a saved one. Shift+Enter is a new line in the comment.
     // Alt+1…9 picks the n-th band that is switched on, Alt+Shift+1…9 the n-th mode.
     // F2–F5 jump to the callsign, frequency and reports, F6 sets the current time, F8 saves and opens the next card,
     // F12 saves (F1 and F9 work in the whole window, see Main.kt).
@@ -178,17 +198,13 @@ fun EditPane(vm: AppState) {
                 (e.key == Key.Enter || e.key == Key.NumPadEnter) && !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed -> {
                     when {
                         callFocused && vm.runCallCommand() -> {}
-                        // In the callsign Enter never logs: typing a call and Enter to look it up must not log a contact.
-                        callFocused -> if (vm.form.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
-                        f.isNew -> showSaveError(vm.saveAndNext())
+                        vm.form.isNew -> showSaveError(vm.saveAndNext())
                         else -> showSaveError(vm.trySave())
                     }
                     true
                 }
-                e.key == Key.Spacebar && callFocused -> {
-                    if (vm.runCallCommand()) {} else if (vm.form.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
-                    true
-                }
+                e.key == Key.Spacebar && !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed -> spaceNext()
+                e.key == Key.D && (if (ru.r3xed.qsolog.IS_MAC) e.isMetaPressed else e.isCtrlPressed) && !vm.form.isNew -> { confirmDelete = true; true }
                 e.key == Key.DirectionUp && callFocused && f.isNew && f.call.isEmpty() -> { vm.editLast(); true }
                 e.key == Key.F2 -> { callFocus.requestFocus(); true }
                 e.key == Key.F3 -> { freqFocus.requestFocus(); true }
@@ -226,11 +242,16 @@ fun EditPane(vm: AppState) {
             ) {
                 Icon(Icons.Filled.Schedule, null, Modifier.size(20.dp), tint = x.muted)
                 Spacer(Modifier.width(8.dp))
+                // "Фиксировать время сохранения": the clock runs until the contact is saved.
+                val live = vm.timeLive
+                var tick by remember { mutableStateOf(System.currentTimeMillis()) }
+                if (live) LaunchedEffect(Unit) { while (true) { tick = System.currentTimeMillis(); kotlinx.coroutines.delay(250) } }
+                val now = if (live) utc(tick) else null
                 Text(
                     buildAnnotatedString {
-                        withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)) { append(f.time) }
+                        withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)) { append(now?.let(TIME_SEC_FMT::format) ?: f.time) }
                         withStyle(SpanStyle(fontSize = 13.sp, color = x.muted)) { append(" UTC  ") }
-                        withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 15.sp)) { append(f.date) }
+                        withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 15.sp)) { append(now?.let(DATE_FMT::format) ?: f.date) }
                     },
                     maxLines = 1,
                 )
@@ -260,6 +281,8 @@ fun EditPane(vm: AppState) {
                     onValueChange = vm::setCall,
                     modifier = Modifier.weight(1f).focusRequester(callFocus).onFocusChanged { callFocused = it.isFocused },
                     label = { Text(tr("Позывной корреспондента"), fontSize = 16.sp) },
+                    // ⌫ wipes the whole callsign, the cursor stays in the field.
+                    trailingIcon = if (f.call.isNotEmpty()) { { ClearButton { vm.setCall(""); callFocus.requestFocus() } } } else null,
                     isError = error == CALL_ERROR,
                     supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
                     textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = 1.sp),
@@ -289,6 +312,7 @@ fun EditPane(vm: AppState) {
                     )
                 }
             }
+            RigBadge(vm)
             LaunchedEffect(vm.editSession) { if (f.isNew || vm.openedByKeys) callFocus.requestFocus() }
             // Callsigns from the log that start with what is typed: one click instead of the rest.
             if (f.isNew) CallSuggestions(vm) { call ->
@@ -317,11 +341,11 @@ fun EditPane(vm: AppState) {
             val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.width(150.dp).focusRequester(rstFocus), rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.width(150.dp).focusRequester(rstFocus).onFocusChanged { rstSentFocused = it.isFocused }, rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
                     QuickValues(quick, f.rstSent, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstSent = it)) }
                 }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(150.dp).focusRequester(rstRcvdFocus), rstKeyboard, onNext = null)
+                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(150.dp).focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
                     QuickValues(quick, f.rstRcvd, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstRcvd = it)) }
                 }
             }
@@ -329,7 +353,7 @@ fun EditPane(vm: AppState) {
             val contest = ContestMode.isContest(f.adif)
             if (contest) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Field(tr("Код передан"), f.adif[ContestMode.SENT].orEmpty(), { vm.setAdif(ContestMode.SENT, it) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
-                Field(tr("Код принят"), f.adif[ContestMode.RCVD].orEmpty(), { vm.setAdif(ContestMode.RCVD, it) }, Modifier.weight(1f), KeyboardType.Number, mono = true, last = true)
+                Field(tr("Код принят"), f.adif[ContestMode.RCVD].orEmpty(), { vm.setAdif(ContestMode.RCVD, it) }, Modifier.weight(1f).focusRequester(contestRcvdFocus).onFocusChanged { contestRcvdFocused = it.isFocused }, KeyboardType.Number, mono = true, last = true)
             }
 
             // --- two columns: who the station is and how far | whether and when it was worked ---
@@ -453,8 +477,10 @@ fun EditPane(vm: AppState) {
             title = { Text(tr("Закрыть без сохранения?")) },
             text = {
                 Text(
-                    if (f.isNew && f.audio.isNotBlank()) tr("Введённые данные и голосовая заметка будут потеряны.") else tr("Введённые изменения не сохранятся."),
+                    (if (f.isNew && f.audio.isNotBlank()) tr("Введённые данные и голосовая заметка будут потеряны.") else tr("Введённые изменения не сохранятся.")) +
+                        "\n\n" + tr("Enter — закрыть, Esc — продолжить ввод"),
                     style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.enterKey { vm.confirmClose = false; vm.closeEditor() },
                 )
             },
             confirmButton = {
@@ -469,7 +495,13 @@ fun EditPane(vm: AppState) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(tr("Удалить связь с %s?", f.call)) },
-            text = { Text(tr("%s, %s %s. Запись пропадёт из лога.", when_, f.band, f.mode), style = MaterialTheme.typography.bodyLarge) },
+            text = {
+                Text(
+                    tr("%s, %s %s. Запись пропадёт из лога.", when_, f.band, f.mode) + "\n\n" + tr("Enter — удалить, Esc — отмена"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.enterKey { confirmDelete = false; vm.deleteCurrent() },
+                )
+            },
             confirmButton = {
                 Button(
                     onClick = { confirmDelete = false; vm.deleteCurrent() },

@@ -55,6 +55,7 @@ import ru.r3xed.qsolog.ui.ContestPane
 import ru.r3xed.qsolog.ui.DashboardPane
 import ru.r3xed.qsolog.ui.LocalExtra
 import ru.r3xed.qsolog.ui.LogPane
+import ru.r3xed.qsolog.ui.TransferDialog
 import ru.r3xed.qsolog.ui.MapPane
 import ru.r3xed.qsolog.ui.QsoTheme
 import androidx.compose.ui.input.key.isAltPressed
@@ -94,7 +95,8 @@ private fun logKey(state: AppState, e: androidx.compose.ui.input.key.KeyEvent, m
         e.key == Key.MoveEnd -> state.moveLogCursor(0, to = 1)
         (e.key == Key.Enter || e.key == Key.NumPadEnter) && state.logCursor != null -> state.openLogCursor()
         e.key == Key.Spacebar && state.logCursor != null -> state.toggleLogCursor()
-        (e.key == Key.Delete || (IS_MAC && e.key == Key.Backspace)) && state.logCursor != null -> state.deleteLogCursor()
+        // One dialog for the cursor's row or the picked records; Enter deletes.
+        e.key == Key.Delete || (IS_MAC && e.key == Key.Backspace) -> return state.askDeleteLog()
         else -> return false
     }
     return true
@@ -129,7 +131,7 @@ fun main() {
         val state = remember { AppState() }
         val windowState = rememberWindowState(width = 1024.dp, height = 700.dp, position = WindowPosition(Alignment.Center))
         Window(
-            onCloseRequest = { state.flushSettings(); exitApplication() },
+            onCloseRequest = { state.flushSettings(); state.stopCat(); exitApplication() },
             title = "QSO-LOG",
             icon = painterResource("icon.png"),
             state = windowState,
@@ -151,7 +153,10 @@ fun main() {
                 else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.E) { state.editLast(); true }
                 else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.K && state.pane != Pane.Edit && state.pane != Pane.Contest) { state.toggleContestMode(); true }
                 else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.R) { state.syncByKey(); true }
-                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Empty && !state.searchFocused && !state.showKeys && logKey(state, e, mod)) true
+                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Empty && !state.searchFocused && !state.showKeys && state.logDeleteAsk == null && !state.showTransfer && logKey(state, e, mod)) true
+                // Alt+W or Ctrl+Esc (⌘Esc) wipes a new card, as in classic loggers: a clean card, the cursor in the callsign.
+                else if (e.type == KeyEventType.KeyDown && (state.pane == Pane.Edit || state.pane == Pane.Contest) &&
+                    ((e.key == Key.W && e.isAltPressed && !mod) || (e.key == Key.Escape && mod))) { if (state.form.isNew) state.clearCard(); true }
                 else if (e.type == KeyEventType.KeyDown && state.pane == Pane.History && !state.historyTyping && state.historyEditCalls == null && state.historyDeleteAsk == null && historyKey(state, e, mod)) true
                 else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Dashboard && !mod && DASH_KEYS.indexOf(e.key) >= 0) {
                     state.changeDashFilter(state.dashFilter.copy(period = ru.r3xed.qsolog.data.StatPeriod.entries[DASH_KEYS.indexOf(e.key)]))
@@ -162,17 +167,15 @@ fun main() {
                 else if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) when {
                     state.showKeys -> { state.showKeys = false; true }
                     state.selecting -> { state.clearSelection(); true }
-                    // A new card with something typed is wiped first (the band, mode and frequency stay), a second Esc closes it.
+                    state.logDeleteAsk != null -> { state.logDeleteAsk = null; true }
+                    state.showTransfer -> { state.showTransfer = false; true }
+                    // Esc closes the card; with changes it asks first (Enter in the dialog closes).
                     state.pane == Pane.Edit -> {
-                        if (state.confirmClose) state.confirmClose = false
-                        else if (state.form.isNew && state.form.call.isNotBlank()) state.clearCard()
-                        else state.requestClose()
+                        if (state.confirmClose) state.confirmClose = false else state.requestClose()
                         true
                     }
                     state.pane == Pane.Contest -> {
-                        if (state.confirmClose) state.confirmClose = false
-                        else if (state.form.isNew && (state.form.call.isNotBlank() || !state.form.adif[ru.r3xed.qsolog.data.ContestMode.RCVD].isNullOrBlank())) state.clearCard()
-                        else state.requestCloseContest()
+                        if (state.confirmClose) state.confirmClose = false else state.requestCloseContest()
                         true
                     }
                     state.pane == Pane.Settings -> { state.closeSettings(); true }
@@ -232,7 +235,7 @@ fun main() {
                     Item(tr("Экспорт в ЕРМАК / Cabrillo…"), onClick = { state.openContestExport(selectedOnly = false) })
                     Item(tr("Импорт из ЕРМАК / Cabrillo…"), onClick = importContest)
                     Separator()
-                    Item(tr("Дашборд"), shortcut = shortcut(Key.D), onClick = state::openDashboard)
+                    Item(tr("Дашборд"), shortcut = shortcut(Key.D), onClick = state::dashboardOrDelete)
                     Item(tr("Карта QSO"), shortcut = shortcut(Key.M), onClick = state::openMap)
                     Item(tr("История поиска"), shortcut = shortcut(Key.H), onClick = state::openHistory)
                     Item(tr("Справка и калькуляторы"), onClick = state::openReference)
@@ -331,6 +334,14 @@ fun App(state: AppState, files: Exports) {
                 )
             }
             if (state.showKeys) KeysDialog(onClose = { state.showKeys = false })
+            if (state.showTransfer) TransferDialog(
+                total = state.total,
+                onExport = { format -> state.showTransfer = false; state.openExport(format, selectedOnly = false) },
+                onImportAdif = { state.showTransfer = false; files.importAdif() },
+                onImportCsv = { state.showTransfer = false; files.importCsv() },
+                onImportContest = { state.showTransfer = false; files.importContest() },
+                onDismiss = { state.showTransfer = false },
+            )
             // Not over the first-start setup: it waits until the log.
             if (state.showWhatsNew && state.pane != Pane.Welcome) ru.r3xed.qsolog.ui.WhatsNewDialog(APP_VERSION, desktop = true, onClose = state::closeWhatsNew)
             if (state.historyAsk) HistoryOnDialog(onConfirm = { state.changeHistoryOn(true) }, onDismiss = { state.historyAsk = false })

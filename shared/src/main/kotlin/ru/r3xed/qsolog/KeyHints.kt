@@ -2,13 +2,12 @@ package ru.r3xed.qsolog
 
 /**
  * Every key of the app in one place, by screen: the F1 list on the computer and on a phone with an external keyboard
- * shows exactly this. [mac]: ⌘ instead of Ctrl+. [phone]: the Android app, a release ahead of the computer in the cards
- * (Space goes round the fields, Enter always logs, Alt+W wipes) and the log (Ctrl+D / Delete ask before deleting).
+ * shows exactly this. [mac]: ⌘ instead of Ctrl+.
  */
 object KeyHints {
     class Section(val title: String, val keys: List<Pair<String, String>>)
 
-    fun sections(mac: Boolean, phone: Boolean = false): List<Section> {
+    fun sections(mac: Boolean): List<Section> {
         val m = if (mac) "⌘" else "Ctrl+"
         return listOf(
             Section(tr("Везде"), listOf(
@@ -16,7 +15,7 @@ object KeyHints {
                 "${m}E" to tr("исправить последнюю записанную связь"),
                 "${m}F" to tr("поиск по журналу; Enter в поиске — новая связь с найденным, ↓ — к списку"),
                 "${m}H" to tr("история поиска"),
-                "${m}D · ${m}M · $m," to if (phone) tr("дашборд (Ctrl+D на выбранной записи — удалить её) · карта QSO · настройки") else tr("дашборд · карта QSO · настройки"),
+                "${m}D · ${m}M · $m," to tr("дашборд (%sD на выбранной записи — удалить её) · карта QSO · настройки", m),
                 "${m}K" to tr("CONTEST MODE: включить или выключить"),
                 "${m}R" to tr("синхронизировать с Google Таблицей"),
                 (if (mac) "⇧⌘E" else "Ctrl+Shift+E") to tr("экспорт журнала в ADIF"),
@@ -27,21 +26,17 @@ object KeyHints {
                 "PgUp · PgDn · Home · End" to tr("на 10 записей, к первой, к последней"),
                 "Enter" to tr("открыть запись"),
                 (tr("Пробел") + " · ${m}A") to tr("отметить запись · отметить все"),
-                if (phone) "Delete · Ctrl+D" to tr("удалить запись или отмеченные: окно спросит, Enter — удалить")
-                else "Delete" to tr("удалить запись (можно отменить)"),
+                "Delete · ${m}D" to tr("удалить запись или отмеченные: окно спросит, Enter — удалить"),
                 "Esc" to tr("снять отметки"),
             )),
             Section(tr("Карточка связи"), listOfNotNull(
-                if (phone) tr("Пробел") to tr("по кругу: позывной → RST отправлен → RST принят → позывной (у контест-связи: позывной ↔ код принят)")
-                else (tr("Пробел") + " · Enter") to tr("из позывного — к частоте или RST (Enter в позывном связь не записывает)"),
-                if (phone) "Enter" to tr("из любого поля — записать (новая карточка — записать и открыть следующую)")
-                else "Enter" to tr("в остальных полях — записать (новая карточка — записать и открыть следующую)"),
+                tr("Пробел") to tr("по кругу: позывной → RST отправлен → RST принят → позывной (у контест-связи: позывной ↔ код принят)"),
+                "Enter" to tr("из любого поля — записать (новая карточка — записать и открыть следующую)"),
                 "Tab · Shift+Tab" to tr("следующее и предыдущее поле"),
                 "↑" to tr("в пустом позывном — исправить последнюю связь"),
-                if (phone) "Alt+W · Ctrl+Esc" to tr("очистить новую карточку: курсор — в позывной") else null,
-                if (phone) "Esc" to tr("закрыть карточку (с изменениями — спросит, Enter — закрыть)")
-                else "Esc" to tr("очистить новую карточку, второй раз — закрыть"),
-                if (phone) "Ctrl+D" to tr("удалить сохранённую связь (Enter — подтвердить)") else null,
+                "Alt+W · ${m}Esc" to tr("очистить новую карточку: курсор — в позывной"),
+                "Esc" to tr("закрыть карточку (с изменениями — спросит, Enter — закрыть)"),
+                "${m}D" to tr("удалить сохранённую связь (Enter — подтвердить)"),
                 "F2 · F3 · F4 · F5" to tr("к позывному, частоте, RST отправлен, RST принят"),
                 "F6" to tr("текущее время UTC"),
                 "F7" to tr("голосовая заметка: начать или остановить"),
@@ -51,14 +46,12 @@ object KeyHints {
                 "Shift+Enter" to tr("новая строка в комментарии"),
             )),
             Section(tr("Режим соревнований"), listOfNotNull(
-                if (phone) tr("Пробел") to tr("позывной ↔ принятый код (RST пропускается)")
-                else (tr("Пробел") + " · Enter") to tr("из позывного — к принятому коду"),
-                if (phone) "Enter · F12" to tr("записать связь из любого поля")
-                else "Enter · F12" to tr("в коде или RST — записать связь; F12 — из любого поля"),
+                tr("Пробел") to tr("позывной ↔ принятый код (RST пропускается)"),
+                "Enter · F12" to tr("записать связь из любого поля"),
                 "↑ · PgUp" to tr("предыдущая связь (↑ — в пустом позывном)"),
                 "PgDn" to tr("следующая связь"),
-                if (phone) "Alt+W · Ctrl+Esc" to tr("очистить карточку") else null,
-                if (phone) "Esc" to tr("закрыть карточку") else "Esc" to tr("очистить карточку, второй раз — закрыть"),
+                "Alt+W · ${m}Esc" to tr("очистить карточку"),
+                "Esc" to tr("закрыть карточку"),
             )),
             Section(tr("История поиска"), listOf(
                 "↑ ↓ · Enter" to tr("по записям · открыть с картой"),

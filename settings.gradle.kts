@@ -11,6 +11,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // usb-serial-for-android (CAT over the radio's USB cable) is published only there.
+        maven("https://jitpack.io") { content { includeGroup("com.github.mik3y") } }
     }
 }
 rootProject.name = "qsolog"

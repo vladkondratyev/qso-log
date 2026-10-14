@@ -14,6 +14,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import ru.r3xed.qsolog.cat.CatConfig
+import ru.r3xed.qsolog.cat.CatFormat
+import ru.r3xed.qsolog.cat.CatModes
+import ru.r3xed.qsolog.cat.CatSession
+import ru.r3xed.qsolog.cat.CatStatus
+import ru.r3xed.qsolog.cat.RigState
 import ru.r3xed.qsolog.data.Adif
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.BANDS
@@ -388,6 +394,7 @@ class AppState {
             if (firstInstall) prefs.whatsNewSeen = APP_VERSION else showWhatsNew = true
         }
         reload()
+        scope.launch { restartCat() }
         // First start: a short three-step setup; later, without a callsign, the settings as before.
         if (settings.myCall.isBlank()) pane = if (prefs.welcomeDone) Pane.Settings else Pane.Welcome
         scope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
@@ -868,10 +875,12 @@ class AppState {
         editSession++
         editReturn = Pane.Empty
         pane = Pane.Edit
+        catFollowNewCard()
     }
 
     fun edit(qso: Qso, from: Pane = Pane.Empty) {
         openedByKeys = false
+        catWrote = null // a saved contact keeps its frequency and mode
         lookupJob?.cancel() // a lookup for another card must not land in this one
         if (pane == Pane.Edit && form.isNew) closeEditor()
         cardFromLog = false
@@ -938,9 +947,13 @@ class AppState {
     }
 
     fun setMode(mode: String) {
-        val f = form
+        form = withMode(form, mode)
+    }
+
+    private fun withMode(f: Form, mode: String): Form {
+        // Swap the default report only if the user has not typed their own.
         val oldDefault = defaultRst(f.mode)
-        form = f.copy(
+        return f.copy(
             mode = mode,
             rstSent = if (f.rstSent.isBlank() || f.rstSent == oldDefault) defaultRst(mode) else f.rstSent,
             rstRcvd = if (f.rstRcvd.isBlank() || f.rstRcvd == oldDefault) defaultRst(mode) else f.rstRcvd,
@@ -1244,6 +1257,56 @@ class AppState {
         logCursor = o.getOrNull(i + 1) ?: o.getOrNull(i - 1)
         delete(q)
     }
+
+    /** Delete or Ctrl+D (⌘D) on the log: the records about to go (the picked ones, or the row under the cursor); a dialog asks. */
+    var logDeleteAsk by mutableStateOf<List<Qso>?>(null)
+
+    /** Asks before deleting the picked records or the cursor's row; false when there is nothing to delete. */
+    fun askDeleteLog(): Boolean {
+        val list = if (selecting) qsos.filter { it.id in selected } else listOfNotNull(cursorQso())
+        if (list.isEmpty()) return false
+        logDeleteAsk = list
+        return true
+    }
+
+    fun confirmDeleteLog() {
+        val list = logDeleteAsk ?: return
+        logDeleteAsk = null
+        if (!selecting && list.size == 1) return deleteLogCursor()
+        val ids = list.map { it.id }.toSet()
+        selected = selected - ids
+        if (logCursor in ids) logCursor = null
+        qsos = qsos.filter { it.id !in ids }
+        allQsos = allQsos.filter { it.id !in ids }
+        scope.launch {
+            withContext(Dispatchers.IO) { ids.forEach { db.delete(it) } }
+            reload()
+            _messages.send(Message(tr("Удалено связей: %s", list.size)) { list.forEach(::restore) })
+        }
+    }
+
+    /** Ctrl+D (⌘D) in a saved card: the card asks before deleting it. */
+    var askDeleteCard by mutableStateOf(false)
+
+    /**
+     * Ctrl+D (⌘D), also from the menu bar: in the log with a picked record or the cursor on a row — delete it (a dialog
+     * asks); in a saved card — delete the card; otherwise the dashboard.
+     */
+    fun dashboardOrDelete() {
+        when {
+            (pane == Pane.Edit || pane == Pane.Contest) && !form.isNew -> askDeleteCard = true
+            pane == Pane.Edit || pane == Pane.Contest -> {}
+            pane == Pane.Empty && !searchFocused && logDeleteAsk == null && askDeleteLog() -> {}
+            else -> openDashboard()
+        }
+    }
+
+    /** "Экспорт и импорт…" from the ⋮ menu is open. */
+    var showTransfer by mutableStateOf(false)
+
+    /** A new card whose time will be taken on saving: it shows a running clock. */
+    val timeLive: Boolean
+        get() = timeOnSave && form.isNew && formOriginal.let { it != null && it.date == form.date && it.time == form.time }
 
     /** Ctrl+K: contest mode on or off. */
     fun toggleContestMode() {
@@ -1748,6 +1811,7 @@ class AppState {
         )
         formOriginal = form
         pane = Pane.Contest
+        catFollowNewCard()
     }
 
     /**
@@ -1888,6 +1952,93 @@ class AppState {
                 qrzComOk = false
                 qrzComStatus = networkError(e).replace("api.qrz.ru", "www.qrz.com").replace("QRZ.ru", "QRZ.com")
             }
+        }
+    }
+
+    // ---------- CAT ----------
+
+    var catConfig by mutableStateOf(prefs.cat); private set
+    var catStatus by mutableStateOf<CatStatus>(CatStatus.Off); private set
+    private var catSession: CatSession? = null
+    private var catRestartJob: Job? = null
+
+    /**
+     * What the new card had or the radio last wrote into it. A field that no longer matches was changed by hand:
+     * the radio leaves it alone in this card. Null — the card does not follow the radio (a saved contact).
+     */
+    private data class CatWrote(val freq: String, val band: String, val mode: String, val rst: String)
+    private var catWrote: CatWrote? = null
+
+    fun changeCat(c: CatConfig) {
+        val old = catConfig
+        catConfig = c
+        prefs.cat = c
+        // Only what the card takes changed: the link stays. Typing an address: reconnect once the typing pauses.
+        val relink = c.copy(followFreq = old.followFreq, followMode = old.followMode, sMeterToRst = old.sMeterToRst) != old
+        if (relink) {
+            catRestartJob?.cancel()
+            catRestartJob = scope.launch {
+                if (c.enabled == old.enabled) delay(700)
+                restartCat()
+            }
+        }
+    }
+
+    fun restartCat() {
+        catRestartJob?.cancel()
+        catSession?.stop()
+        catSession = null
+        catStatus = CatStatus.Off
+        val c = catConfig
+        if (!c.enabled) return
+        lateinit var session: CatSession
+        session = CatSession(c, { CatDesktop.open(c) }, { st -> scope.launch { if (catSession === session) onCat(st) } })
+        catSession = session
+        session.start()
+    }
+
+    fun stopCat() {
+        catSession?.stop()
+        catSession = null
+    }
+
+    fun catPorts(): List<CatDevice> = CatDesktop.ports()
+
+    /** The radio's latest state, while it answers. */
+    val rig: RigState? get() = (catStatus as? CatStatus.Connected)?.takeIf { !it.silent }?.state
+
+    private fun onCat(st: CatStatus) {
+        catStatus = st
+        rig?.let(::applyRig)
+    }
+
+    private fun catFollowNewCard() {
+        val f = form
+        catWrote = CatWrote(f.freq, f.band, f.mode, f.rstSent)
+        rig?.let(::applyRig)
+    }
+
+    /** The open new card takes the radio's frequency, band, mode and S-meter — the fields not changed by hand. */
+    private fun applyRig(s: RigState) {
+        val w = catWrote ?: return
+        if ((pane != Pane.Edit && pane != Pane.Contest) || !form.isNew) return
+        val c = catConfig
+        var f = form
+        if (c.followFreq && f.freq == w.freq && f.band == w.band) s.freqMhz?.let { mhz ->
+            f = f.copy(freq = mhz, band = bandForFreq(mhz.toDouble()) ?: f.band)
+        }
+        if (c.followMode && f.mode == w.mode) s.radioMode?.let { CatModes.toLog(it, f.mode) }?.let { m ->
+            if (m != f.mode) f = withMode(f, m)
+        }
+        if (c.sMeterToRst && f.rstSent == w.rst) s.sDb?.let { db -> f = f.copy(rstSent = CatFormat.rstWithS(f.rstSent, db)) }
+        catWrote = CatWrote(f.freq, f.band, f.mode, f.rstSent)
+        if (f == form) return
+        val before = form
+        form = f
+        // The radio's values are not the user's changes: closing the card does not ask about them.
+        formOriginal = formOriginal?.let { o ->
+            if (o.freq == before.freq && o.band == before.band && o.mode == before.mode && o.rstSent == before.rstSent && o.rstRcvd == before.rstRcvd)
+                o.copy(freq = f.freq, band = f.band, mode = f.mode, rstSent = f.rstSent, rstRcvd = f.rstRcvd) else o
         }
     }
 

@@ -56,6 +56,14 @@ import ru.r3xed.qsolog.data.UpdateChecker
 import ru.r3xed.qsolog.data.Settings
 import ru.r3xed.qsolog.data.StationSettings
 import ru.r3xed.qsolog.data.VoiceNotes
+import ru.r3xed.qsolog.data.CatAndroid
+import ru.r3xed.qsolog.data.CatDevice
+import ru.r3xed.qsolog.cat.CatConfig
+import ru.r3xed.qsolog.cat.CatFormat
+import ru.r3xed.qsolog.cat.CatModes
+import ru.r3xed.qsolog.cat.CatSession
+import ru.r3xed.qsolog.cat.CatStatus
+import ru.r3xed.qsolog.cat.RigState
 import ru.r3xed.qsolog.data.bandForFreq
 import ru.r3xed.qsolog.data.freqMhz
 import ru.r3xed.qsolog.data.normalizeFreq
@@ -603,12 +611,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // First start: a short three-step setup; later, without a callsign, the settings as before.
         if (settings.myCall.isBlank()) screen = if (prefs.welcomeDone) Screen.Settings else Screen.Welcome
         viewModelScope.launch { secrets.await(); applySecrets() }
+        // After the constructor: the CAT fields are declared further down.
+        android.os.Handler(android.os.Looper.getMainLooper()).post { restartCat() }
         viewModelScope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
         // Keys and passwords of the online logbooks the app no longer uploads to.
         viewModelScope.launch(Dispatchers.IO) { prefs.forgetOnlineLogAccounts() }
     }
 
     override fun onCleared() {
+        catSession?.stop()
         cardRecordingSince = null
         voice.stopAndDiscard()
     }
@@ -903,10 +914,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         editSession++
         editReturn = Screen.Log
         screen = Screen.Edit
+        catFollowNewCard()
     }
 
     fun edit(qso: Qso, from: Screen = Screen.Log) {
         openedByKeys = false
+        catWrote = null // a saved contact keeps its frequency and mode
         lookupJob?.cancel() // a lookup for another card must not land in this one
         cardFromLog = false
         editSession++
@@ -952,10 +965,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setMode(mode: String) {
-        val f = form
+        form = withMode(form, mode)
+    }
+
+    private fun withMode(f: Form, mode: String): Form {
         // Swap the default report only if the user has not typed their own.
         val oldDefault = defaultRst(f.mode)
-        form = f.copy(
+        return f.copy(
             mode = mode,
             rstSent = if (f.rstSent.isBlank() || f.rstSent == oldDefault) defaultRst(mode) else f.rstSent,
             rstRcvd = if (f.rstRcvd.isBlank() || f.rstRcvd == oldDefault) defaultRst(mode) else f.rstRcvd,
@@ -1831,6 +1847,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
         formOriginal = form
         screen = Screen.Contest
+        catFollowNewCard()
     }
 
     /**
@@ -1919,6 +1936,91 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setContestField(key: String, value: String) {
         form = form.copy(adif = form.adif + (key to value))
+    }
+
+    // ---------- CAT ----------
+
+    private val catAndroid = CatAndroid(app)
+    var catConfig by mutableStateOf(prefs.cat); private set
+    var catStatus by mutableStateOf<CatStatus>(CatStatus.Off); private set
+    private var catSession: CatSession? = null
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /**
+     * What the new card had or the radio last wrote into it. A field that no longer matches was changed by hand:
+     * the radio leaves it alone in this card. Null — the card does not follow the radio (a saved contact).
+     */
+    private data class CatWrote(val freq: String, val band: String, val mode: String, val rst: String)
+    private var catWrote: CatWrote? = null
+
+    fun changeCat(c: CatConfig) {
+        val old = catConfig
+        catConfig = c
+        prefs.cat = c
+        // Only what the card takes changed: the link stays.
+        val relink = c.copy(followFreq = old.followFreq, followMode = old.followMode, sMeterToRst = old.sMeterToRst) != old
+        // Typing an address or a port: reconnect once the typing pauses, not on every character.
+        if (relink) {
+            mainHandler.removeCallbacks(catRestart)
+            mainHandler.postDelayed(catRestart, if (c.enabled != old.enabled) 0 else 700)
+        }
+    }
+
+    private val catRestart = Runnable { restartCat() }
+
+    fun restartCat() {
+        mainHandler.removeCallbacks(catRestart)
+        catSession?.stop()
+        catSession = null
+        catStatus = CatStatus.Off
+        val c = catConfig
+        if (!c.enabled) return
+        lateinit var session: CatSession
+        session = CatSession(c, { catAndroid.open(c) }, { st -> mainHandler.post { if (catSession === session) onCat(st) } })
+        catSession = session
+        session.start()
+    }
+
+    fun catUsbDevices(): List<CatDevice> = runCatching { catAndroid.usbDevices() }.getOrDefault(emptyList())
+    fun catBluetoothDevices(): List<CatDevice> = catAndroid.bluetoothDevices()
+    fun catBluetoothAllowed(): Boolean = catAndroid.bluetoothAllowed()
+
+    /** The radio's latest state, while it answers. */
+    val rig: RigState? get() = (catStatus as? CatStatus.Connected)?.takeIf { !it.silent }?.state
+
+    private fun onCat(st: CatStatus) {
+        catStatus = st
+        rig?.let(::applyRig)
+    }
+
+    private fun catFollowNewCard() {
+        val f = form
+        catWrote = CatWrote(f.freq, f.band, f.mode, f.rstSent)
+        rig?.let(::applyRig)
+    }
+
+    /** The open new card takes the radio's frequency, band, mode and S-meter — the fields not changed by hand. */
+    private fun applyRig(s: RigState) {
+        val w = catWrote ?: return
+        if ((screen != Screen.Edit && screen != Screen.Contest) || !form.isNew) return
+        val c = catConfig
+        var f = form
+        if (c.followFreq && f.freq == w.freq && f.band == w.band) s.freqMhz?.let { mhz ->
+            f = f.copy(freq = mhz, band = bandForFreq(mhz.toDouble()) ?: f.band)
+        }
+        if (c.followMode && f.mode == w.mode) s.radioMode?.let { CatModes.toLog(it, f.mode) }?.let { m ->
+            if (m != f.mode) f = withMode(f, m)
+        }
+        if (c.sMeterToRst && f.rstSent == w.rst) s.sDb?.let { db -> f = f.copy(rstSent = CatFormat.rstWithS(f.rstSent, db)) }
+        catWrote = CatWrote(f.freq, f.band, f.mode, f.rstSent)
+        if (f == form) return
+        val before = form
+        form = f
+        // The radio's values are not the user's changes: closing the card does not ask about them.
+        formOriginal = formOriginal?.let { o ->
+            if (o.freq == before.freq && o.band == before.band && o.mode == before.mode && o.rstSent == before.rstSent && o.rstRcvd == before.rstRcvd)
+                o.copy(freq = f.freq, band = f.band, mode = f.mode, rstSent = f.rstSent, rstRcvd = f.rstRcvd) else o
+        }
     }
 
     // ---------- settings ----------

@@ -53,7 +53,8 @@ import ru.r3xed.qsolog.tr
 @Composable
 fun ReferencePane(onClose: () -> Unit, myPosition: LatLon? = null) {
     val x = LocalExtra.current
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    // Opens on the band table; the keys come first in the row.
+    var tab by rememberSaveable { mutableIntStateOf(1) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose, modifier = Modifier.size(56.dp)) {
@@ -61,14 +62,13 @@ fun ReferencePane(onClose: () -> Unit, myPosition: LatLon? = null) {
             }
             Text(tr("Справка"), style = MaterialTheme.typography.headlineSmall)
         }
-        // Three tabs as a row of pills; the chosen one is filled.
-        // Ten tabs: a row of pills that scrolls sideways.
+        // Eleven tabs: a row of pills that scrolls sideways; the chosen one is filled.
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             listOf(
-                tr("Частоты РФ"), tr("План и активность"), tr("Морзе"), tr("Позывные"), tr("Коды"),
+                tr("Клавиши"), tr("Частоты РФ"), tr("План и активность"), tr("Морзе"), tr("Позывные"), tr("Коды"),
                 tr("Уровни"), tr("Кабели"), tr("Антенны"), tr("Префиксы"), tr("Прохождение"),
             ).forEachIndexed { i, title ->
                 val on = tab == i
@@ -92,15 +92,19 @@ fun ReferencePane(onClose: () -> Unit, myPosition: LatLon? = null) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             when (tab) {
-                0 -> BandsTable()
-                1 -> PlanTab()
-                2 -> MorseTables()
-                3 -> PhoneticTable()
-                4 -> CodesTab()
-                5 -> LevelsTab()
-                6 -> CablesTab()
-                7 -> AntennasTab()
-                8 -> PrefixTab(myPosition)
+                0 -> {
+                    RefNote(tr("Все клавиши программы по экранам. Этот же список открывается клавишей F1."))
+                    KeysList()
+                }
+                1 -> BandsTable()
+                2 -> PlanTab()
+                3 -> MorseTables()
+                4 -> PhoneticTable()
+                5 -> CodesTab()
+                6 -> LevelsTab()
+                7 -> CablesTab()
+                8 -> AntennasTab()
+                9 -> PrefixTab(myPosition)
                 else -> PropagationTab()
             }
             Spacer(Modifier.height(16.dp))
@@ -201,12 +205,13 @@ private fun MorseGrid(items: List<Pair<String, String>>, perRow: Int = 2, chants
 
 @Composable
 private fun MorseTables() {
-    // The table, or the trainer: sending with a key, receiving by ear.
+    // The table, a text played in Morse, or the trainer: sending with a key, receiving by ear.
     var mode by rememberSaveable { mutableIntStateOf(0) }
-    Chips(listOf(tr("Таблица"), tr("Передача"), tr("Приём")), mode) { mode = it }
+    Chips(listOf(tr("Таблица"), tr("Текст"), tr("Передача"), tr("Приём")), mode) { mode = it }
     when (mode) {
-        1 -> { MorseSendTrainer(rememberMorseStore()); return }
-        2 -> { MorseReceiveTrainer(rememberMorseStore()); return }
+        1 -> { MorseTextPlayer(rememberMorseStore()); return }
+        2 -> { MorseSendTrainer(rememberMorseStore()); return }
+        3 -> { MorseReceiveTrainer(rememberMorseStore()); return }
     }
     RefNote(tr("Точка — короткий сигнал, тире — втрое длиннее. Пауза между знаками буквы — одна точка, между буквами — три, между словами — семь. Нажмите на знак, чтобы услышать его (тон 700 Гц, 18 слов в минуту)."))
     RefHeading(tr("Латиница (международная)"))

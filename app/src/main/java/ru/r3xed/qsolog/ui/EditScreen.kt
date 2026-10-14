@@ -412,6 +412,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                 Modifier.fillMaxWidth().bringIntoViewRequester(freqView), caret = caret,
             ) { activate(KeyTarget.FREQ) }
             else Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
+            RigBadge(vm)
 
             // One scrolling row each: what is switched on in the settings, plus the record's own value if that one is off.
             // Nothing to choose from (one value on, and the record has it) — the label alone shows it.

@@ -99,6 +99,21 @@ import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.KeypadMode
+import ru.r3xed.qsolog.cat.CatLinkType
+import ru.r3xed.qsolog.cat.CatProtocol
+import ru.r3xed.qsolog.cat.CatStatus
+import ru.r3xed.qsolog.cat.Rigs
+import ru.r3xed.qsolog.cat.describe
+import ru.r3xed.qsolog.cat.short
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.RadioButton
 
 @Composable
 fun SettingsScreen(
@@ -286,6 +301,14 @@ fun SettingsScreen(
                 )
             }
 
+
+            SettingsBlock(
+                tr("CAT — трансивер"),
+                if (!vm.catConfig.enabled) tr("выключено") + " · " + Rigs.title(vm.catConfig.model)
+                else vm.catStatus.let { st -> (st as? CatStatus.Connected)?.state?.takeIf { !st.silent }?.let { Rigs.title(vm.catConfig.model) + " · " + it.short() } ?: st.describe() },
+            ) {
+                CatSettings(vm)
+            }
 
             SettingsBlock(
                 tr("Ввод связи"),
@@ -829,4 +852,177 @@ private fun ContestModeSettings(vm: AppViewModel) {
         }
     }
     Note(tr("Режим соревнований: «Добавить QSO» открывает упрощённую карточку — позывной, контрольные номера и RST; время ставится при записи. Принятый номер может быть любым: 015, MO69, EU, 16. Свайп справа налево — записать и открыть следующую, слева направо — вернуться к предыдущим связям контеста и поправить их. Такие связи отмечены в журнале флажком. Режим выключается при каждом запуске программы."))
+}
+
+/**
+ * CAT: which transceiver, how it is connected (a USB cable, Bluetooth, the network) and what the new QSO card takes
+ * from it. The status line shows what the radio answers right now.
+ */
+@Composable
+private fun CatSettings(vm: AppViewModel) {
+    val x = LocalExtra.current
+    val c = vm.catConfig
+    val model = c.model
+    @Composable
+    fun SwitchRow(text: String, on: Boolean, strong: Boolean = false, onChange: (Boolean) -> Unit) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                .background(if (strong && on) MaterialTheme.colorScheme.primaryContainer else x.field)
+                .toggleable(value = on, role = Role.Switch, onValueChange = onChange)
+                .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = if (strong) FontWeight.Bold else null, modifier = Modifier.weight(1f).padding(end = 12.dp))
+            Switch(checked = on, onCheckedChange = null)
+        }
+    }
+    @Composable
+    fun <T> Choice(items: List<Pair<T, String>>, selected: T, onPick: (T) -> Unit) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items.forEach { (v, label) ->
+                val on = v == selected
+                Box(
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp))
+                        .background(if (on) MaterialTheme.colorScheme.primary else x.field)
+                        .selectable(selected = on, role = Role.RadioButton) { onPick(v) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(label, fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1,
+                        color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+    }
+
+    SwitchRow(tr("Получать частоту и вид связи от трансивера (CAT)"), c.enabled, strong = true) { vm.changeCat(c.copy(enabled = it)) }
+    if (c.enabled) {
+        val st = vm.catStatus
+        val ok = st is CatStatus.Connected && st.state != null && !st.silent
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field).padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(if (ok) x.ok else if (st is CatStatus.Failed || (st is CatStatus.Connected && st.silent)) MaterialTheme.colorScheme.error else x.muted))
+            Spacer(Modifier.width(10.dp))
+            Text(st.describe(), style = MaterialTheme.typography.bodyMedium, fontFamily = if (ok) Mono else null, modifier = Modifier.weight(1f))
+        }
+        ActionButton(tr("Переподключить"), Icons.Filled.Refresh, vm::restartCat)
+    }
+
+    Section(tr("Трансивер"))
+    var rigMenu by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { rigMenu = true }, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(14.dp)) {
+            Text(Rigs.title(model), fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Icon(Icons.Filled.ArrowDropDown, null)
+        }
+        DropdownMenu(expanded = rigMenu, onDismissRequest = { rigMenu = false }, modifier = Modifier.heightIn(max = 460.dp)) {
+            CatProtocol.entries.forEach { p ->
+                Text(p.title, style = MaterialTheme.typography.labelMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                Rigs.ALL.filter { it.protocol == p }.forEach { m ->
+                    DropdownMenuItem(text = { Text(Rigs.title(m), fontWeight = if (m.name == c.rig) FontWeight.Bold else null) }, onClick = {
+                        rigMenu = false
+                        val link = when {
+                            m.protocol == CatProtocol.RIGCTLD -> CatLinkType.NETWORK
+                            c.link == CatLinkType.NETWORK && c.protocol == CatProtocol.RIGCTLD -> CatLinkType.USB
+                            else -> c.link
+                        }
+                        vm.changeCat(c.copy(rig = m.name, civAddress = if (m.protocol == CatProtocol.ICOM) m.civ else c.civAddress, baud = m.baud, link = link,
+                            port = if (m.protocol == CatProtocol.RIGCTLD) 4532 else c.port))
+                    })
+                }
+            }
+        }
+    }
+    Note(model.protocol.title)
+
+    if (c.protocol != CatProtocol.RIGCTLD) {
+        Section(tr("Подключение"))
+        Choice(listOf(CatLinkType.USB to "USB", CatLinkType.BLUETOOTH to "Bluetooth", CatLinkType.NETWORK to tr("Сеть")), c.link) { vm.changeCat(c.copy(link = it)) }
+    }
+    when {
+        c.protocol == CatProtocol.RIGCTLD || c.link == CatLinkType.NETWORK -> {
+            SettingField(tr("Адрес (IP или имя)"), c.host, { vm.changeCat(c.copy(host = it.trim())) }, mono = true)
+            SettingField(tr("Порт"), c.port.toString(), { v -> v.filter(Char::isDigit).take(5).toIntOrNull()?.takeIf { it in 1..65535 }?.let { vm.changeCat(c.copy(port = it)) } }, mono = true)
+            Note(
+                if (c.protocol == CatProtocol.RIGCTLD) tr("Hamlib rigctld на компьютере или Raspberry Pi рядом с трансивером (порт 4532), или программы с таким же сервером: wfview (4533), SDR++, flrig. Телефон и компьютер — в одной сети Wi-Fi.")
+                else tr("Трансивер за сетевым CAT-адаптером или сервером последовательного порта (ser2net, ESP32, Wi-Fi-адаптер): программа шлёт команды выбранного трансивера прямо в TCP-соединение.")
+            )
+        }
+        c.link == CatLinkType.BLUETOOTH -> {
+            val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.restartCat() }
+            if (!vm.catBluetoothAllowed()) {
+                ActionButton(tr("Разрешить доступ к Bluetooth"), Icons.Filled.Bluetooth) {
+                    if (android.os.Build.VERSION.SDK_INT >= 31) launcher.launch(android.Manifest.permission.BLUETOOTH_CONNECT)
+                }
+            }
+            DeviceList(vm.catBluetoothDevices(), c.device, tr("Нет сопряжённых устройств. Включите Bluetooth на трансивере, сделайте сопряжение в настройках Android и вернитесь сюда.")) { vm.changeCat(c.copy(device = it)) }
+            Note(tr("Трансивер или Bluetooth-адаптер CAT должен быть сопряжён с телефоном в настройках Android (профиль последовательного порта, SPP). Например, у трансиверов со встроенным Bluetooth включите в их меню передачу данных CI-V по Bluetooth."))
+        }
+        else -> {
+            var tick by remember { mutableStateOf(0) }
+            val devices = remember(tick) { vm.catUsbDevices() }
+            DeviceList(devices, c.device, tr("USB-устройств не видно. Подключите трансивер кабелем через переходник OTG и нажмите «Обновить список».")) { vm.changeCat(c.copy(device = it)) }
+            ActionButton(tr("Обновить список"), Icons.Filled.Refresh) { tick++ }
+        }
+    }
+    if (c.protocol != CatProtocol.RIGCTLD && c.link == CatLinkType.USB) {
+        Section(tr("Скорость порта, бод"))
+        Choice(Rigs.BAUDS.take(3).map { it to it.toString() }, c.baud) { vm.changeCat(c.copy(baud = it)) }
+        Choice(Rigs.BAUDS.drop(3).map { it to it.toString() }, c.baud) { vm.changeCat(c.copy(baud = it)) }
+        Note(tr("Как в меню трансивера (у ICOM: «CI-V USB Baud Rate» или «CI-V Baud Rate»). Если там «Auto» — подойдёт любая."))
+    }
+    if (c.protocol == CatProtocol.ICOM) {
+        var text by remember(c.civAddress) { mutableStateOf("%02X".format(c.civAddress)) }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { v ->
+                text = v.uppercase().filter { it in "0123456789ABCDEF" }.take(2)
+                text.toIntOrNull(16)?.takeIf { it in 1..0xDF }?.let { if (it != c.civAddress) vm.changeCat(c.copy(civAddress = it)) }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(tr("Адрес CI-V (hex)")) },
+            singleLine = true,
+            supportingText = { Text(tr("Заводской для %s — %sh. Если трансивер не ответит, программа сама переберёт заводские адреса.", Rigs.title(model), "%02X".format(model.civ))) },
+            textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 22.sp),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrect = false, keyboardType = KeyboardType.Ascii),
+            shape = RoundedCornerShape(12.dp),
+        )
+    }
+
+    Section(tr("Что брать в новую карточку QSO"))
+    SwitchRow(tr("Частоту и диапазон"), c.followFreq) { vm.changeCat(c.copy(followFreq = it)) }
+    SwitchRow(tr("Вид связи"), c.followMode) { vm.changeCat(c.copy(followMode = it)) }
+    SwitchRow(tr("S-метр — в RST отправленный"), c.sMeterToRst) { vm.changeCat(c.copy(sMeterToRst = it)) }
+    Note(tr("Пока открыта новая карточка, частота, диапазон и вид связи меняются вслед за трансивером, а с включённым S-метром — и цифра S в отправленном RST (59 → 57). Поле, исправленное вручную, трансивер в этой карточке больше не трогает. Сохранённые связи не меняются. Цифровые виды трансивер не различает: в режиме DATA (USB-D) остаётся FT8, FT4 или другой цифровой вид из карточки."))
+
+    Section(tr("Поддерживаемые трансиверы"))
+    Note(tr("ICOM (протокол CI-V): IC-705, IC-7300, IC-7610, IC-9700, IC-905, IC-7100, IC-7851, IC-7800, IC-7700, IC-7600, IC-7410, IC-7200, IC-9100, IC-7000, IC-756PRO, IC-746PRO, IC-910H, IC-718, IC-706MKIIG, IC-703, IC-R8600 и другие с CI-V — адрес можно задать вручную. Совместимые с CI-V: Xiegu X6100, X6200, G90, X5105, X108G."))
+    Note(tr("Другие стандарты: Kenwood (TS-590, TS-890, TS-990, TS-480, TS-2000), Elecraft (K3, K4, KX2, KX3), FlexRadio через SmartSDR CAT, Yaesu с новым CAT (FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450) и со старым (FT-817, FT-818, FT-857, FT-897), а также любой трансивер через Hamlib rigctld по сети."))
+    Note(tr("Как это сделано: как в N1MM, Log4OM, WSJT-X и FT8CN — программа несколько раз в секунду спрашивает у трансивера частоту, вид связи и S-метр и ничего не передаёт в эфир: команд управления она не шлёт, линии DTR и RTS USB-порта держит выключенными, чтобы трансивер не перешёл на передачу. Подключение: кабель USB от трансивера к телефону через переходник OTG (у ICOM с USB-разъёмом — напрямую, у остальных — кабель CI-V/CAT с адаптером CP210x, FTDI, CH340 или PL2303), Bluetooth или сеть."))
+}
+
+@Composable
+private fun DeviceList(devices: List<ru.r3xed.qsolog.data.CatDevice>, chosen: String, empty: String, onPick: (String) -> Unit) {
+    val x = LocalExtra.current
+    if (devices.isEmpty()) {
+        Note(empty)
+        return
+    }
+    // Nothing chosen yet: the first device is the one the app opens.
+    val current = devices.firstOrNull { it.key == chosen }?.key ?: devices.first().key
+    devices.forEach { d ->
+        val on = d.key == current
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                .background(if (on) MaterialTheme.colorScheme.primaryContainer else x.field)
+                .selectable(selected = on, role = Role.RadioButton) { onPick(d.key) }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(selected = on, onClick = null)
+            Spacer(Modifier.width(10.dp))
+            Text(d.title, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
 }

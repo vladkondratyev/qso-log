@@ -10,7 +10,8 @@
 QSO-LOG is a logbook for radio amateurs. It runs on Android, macOS, Windows and Linux, and does the same things
 on the phone and on the computer.
 
-A QSO takes a few taps: callsign, frequency, RST. The app looks up the other station's name and city on QRZ.ru
+A QSO takes a few taps: callsign, frequency, RST. The frequency, band and mode can come from the transceiver over CAT
+(ICOM CI-V, Kenwood, Elecraft, Yaesu, Hamlib rigctld). The app looks up the other station's name and city on QRZ.ru
 or QRZ.com, works out the distance and draws the path on a map. You can attach a voice note to a QSO. Contest mode
 gives fast entry with exchange numbers, and the log exports to Cabrillo and to ЕРМАК, the Russian contest format.
 A dashboard shows the log in charts. The log exports to ADIF and CSV, and several devices can keep one log through
@@ -20,18 +21,18 @@ without touching the screen at all.
 The app is free and open source. The interface is in Russian and English.
 
 <p align="center">
-<img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG on a computer and on a phone">
+<img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG on a computer and a phone connected to a transceiver over CAT">
 </p>
 
 ## Download
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 0.40.2 | [QSO-LOG-0.40.2.apk](../../releases/tag/v0.40.2) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 1.18.0 | [QSO-LOG-1.18.0-macos-arm64.dmg](../../releases/tag/desktop-v1.18.0) |
-| macOS 11 or newer, Intel | 1.18.0 | [QSO-LOG-1.18.0-macos-x64.dmg](../../releases/tag/desktop-v1.18.0) |
-| Windows 10 and 11, 64-bit | 1.18.0 | [QSO-LOG-1.18.0-windows-x64.zip](../../releases/tag/desktop-v1.18.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 1.18.0 | [QSO-LOG-1.18.0-linux-amd64.deb](../../releases/tag/desktop-v1.18.0) |
+| Android 8.0 or newer | 2.0.0 | [QSO-LOG-2.0.0.apk](../../releases/tag/v2.0.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.0.0 | [QSO-LOG-2.0.0-macos-arm64.dmg](../../releases/tag/desktop-v2.0.0) |
+| macOS 11 or newer, Intel | 2.0.0 | [QSO-LOG-2.0.0-macos-x64.dmg](../../releases/tag/desktop-v2.0.0) |
+| Windows 10 and 11, 64-bit | 2.0.0 | [QSO-LOG-2.0.0-windows-x64.zip](../../releases/tag/desktop-v2.0.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.0.0 | [QSO-LOG-2.0.0-linux-amd64.deb](../../releases/tag/desktop-v2.0.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -43,6 +44,7 @@ is switched in Settings and changes at once.
 
 - [First start](#first-start)
 - [New QSO](#new-qso)
+- [CAT — transceiver](#cat--transceiver)
 - [Contest mode](#contest-mode)
 - [Keyboard only](#keyboard-only)
 - [Log](#log)
@@ -124,6 +126,46 @@ Gestures: swipe left across the keypad and, without lifting the finger, back rig
 the keypad becomes a trackpad: slide sideways to move the cursor between the letters, as when holding the space bar on
 an iPhone; the next key inserts there. The hold time (0.2–1.5 s) is set in "QSO entry" too.
 
+## CAT — transceiver
+
+QSO-LOG talks to the transceiver the way N1MM, Log4OM, WSJT-X or FT8CN do: a few times a second it asks for the
+frequency, mode and S-meter. While a new card is open, its frequency, band and mode follow the dial; optionally the
+S digit of the RST sent follows the S-meter (59 → 57). A field changed by hand is left alone in that card, saved QSOs
+never change. The card shows a line "TRX 14 195.000 · USB · S8" — tap it to open the CAT settings.
+
+The app only reads: it sends no control commands, never transmits, and keeps the port's DTR and RTS lines low. A
+transceiver cannot tell digital modes apart, so in DATA (USB-D) the card keeps FT8, FT4 or whatever digital mode it has.
+
+Settings → **"CAT — transceiver"**: the model, the connection, the port speed and the CI-V address (if the radio does
+not answer at the set address, the app tries the factory ones), and what the card takes. The status line shows what
+the transceiver answers right now.
+
+| Transceivers | Protocol |
+|---|---|
+| ICOM: IC-705, IC-7300, IC-7610, IC-9700, IC-905, IC-7100, IC-7851, IC-7800, IC-7700, IC-7600, IC-7410, IC-7200, IC-9100, IC-7000, IC-756PRO, IC-746PRO, IC-910H, IC-718, IC-706MKIIG, IC-703, IC-R8600 and others | CI-V (the address can be set by hand) |
+| Xiegu X6100, X6200, G90, X5105, X108G | CI-V compatible |
+| Kenwood TS-590, TS-890, TS-990, TS-480, TS-2000; Elecraft K3, K4, KX2, KX3; FlexRadio (SmartSDR CAT) | Kenwood |
+| Yaesu FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450 | Yaesu, new CAT |
+| Yaesu FT-817, FT-818, FT-857, FT-897 | Yaesu, old 5-byte CAT |
+| any transceiver Hamlib knows | rigctld over the network (also wfview, SDR++, flrig) |
+
+Connection:
+
+- **Phone** — the transceiver's USB cable through an OTG adapter (ICOM with a USB socket directly, others with a CI-V/CAT
+  cable on a CP210x, FTDI, CH340 or PL2303 adapter; Android asks for USB permission), **Bluetooth** (a transceiver or an
+  adapter paired in the Android settings, SPP profile — an IC-705, for one) or the **network** (rigctld, a network CAT
+  adapter, ser2net).
+- **Computer** — a **COM port** (the transceiver's USB cable or a CAT/CI-V interface; some need a CP210x, FTDI or CH340
+  driver) or the **network**. Only one program can open a COM port: if WSJT-X already controls the transceiver, run
+  Hamlib rigctld and connect both programs to it.
+
+<p>
+<img src="docs/screenshots/69-cat-card.png" width="200" alt="New QSO: frequency and mode from the transceiver">
+<img src="docs/screenshots/70-cat-settings.png" width="200" alt="CAT settings on the phone">
+<img src="docs/screenshots/71-cat-rigs.png" width="200" alt="Choosing the transceiver">
+<img src="docs/screenshots/desktop-24-cat.png" width="440" alt="CAT settings on the computer">
+</p>
+
 ## Contest mode
 
 Contests need speed, so there is a separate mode. Switch it on in the ⋮ menu (below "Reference and calculators") — **CONTEST MODE**
@@ -184,18 +226,13 @@ A whole outing or contest can be done without touching the screen: on the comput
 tablet with an external one (Bluetooth or USB OTG). Handy in the field: phone on a stand, small keyboard on your lap.
 With an external keyboard attached, the built-in on-screen keyboard hides and the cursor is in the callsign.
 
-On the phone (since 0.40.0) it works as in classic loggers: **Space** goes round the fields: callsign → RST sent →
+It works as in classic loggers (on the phone since 0.40.0, on the computer since 2.0.0): **Space** goes round the fields: callsign → RST sent →
 RST received → callsign again (in a contest RST is skipped: callsign ↔ received exchange). **Enter** in any field,
 the callsign included, logs the QSO and opens a new card. **Alt+W** or **Ctrl+Esc** wipes the card when the station
 fades into QSB: callsign, data and reports are cleared, the cursor is in the callsign. **Esc** closes the card (if
 something is typed it asks; Enter closes). **Ctrl+D** on a saved QSO or a log record deletes it, Enter confirms. With
-a keyboard attached, the "Add QSO" button shows "Ctrl+N · F9".
-
-On the computer it is still the old way: type the callsign, press **Space** or **Enter** — the cursor moves to the
-frequency or RST (in a contest, to the received exchange); press **Enter** again — the QSO is logged and a new card
-opens; Enter in the callsign field does not log. The tables below are for the computer; the phone's exact list is
-under F1. Made a typo? **↑** in an
-empty callsign opens the QSO you just logged; Enter saves it and brings you back to a new card.
+a keyboard attached, the "Add QSO" button shows "Ctrl+N · F9". **Delete** on a log record deletes it too. Made a
+typo? **↑** in an empty callsign opens the QSO you just logged; Enter saves it and brings you back to a new card.
 
 Keys by screen. On macOS use ⌘ instead of Ctrl.
 
@@ -207,7 +244,7 @@ Keys by screen. On macOS use ⌘ instead of Ctrl.
 | Ctrl+E | fix the QSO just logged |
 | Ctrl+F | search the log; Enter in the search — new QSO with the station found, ↓ — to the list |
 | Ctrl+H | search history |
-| Ctrl+D · Ctrl+M · Ctrl+, | dashboard · QSO map · settings |
+| Ctrl+D · Ctrl+M · Ctrl+, | dashboard (Ctrl+D on a selected record deletes it) · QSO map · settings |
 | Ctrl+K | CONTEST MODE on or off |
 | Ctrl+R | sync with the Google Sheet |
 | Ctrl+Shift+E | export the log to ADIF |
@@ -221,18 +258,20 @@ Keys by screen. On macOS use ⌘ instead of Ctrl.
 | PgUp · PgDn · Home · End | 10 rows, first, last |
 | Enter | open the row |
 | Space · Ctrl+A | select the row · select all (for export) |
-| Delete | delete the row (the message offers to undo) |
+| Delete · Ctrl+D | delete the row or the selected ones: a dialog asks, Enter deletes (undo is offered after) |
 | Esc | clear the selection |
 
 **QSO card**
 
 | Key | Action |
 |---|---|
-| Space or Enter | from the callsign to the frequency or RST (Enter in the callsign never logs) |
-| Enter | in the other fields — log; in a new card — log and open the next one |
+| Space | round the fields: callsign → RST sent → RST received → callsign (a contest QSO: callsign ↔ received exchange) |
+| Enter | from any field — log; in a new card — log and open the next one |
 | Tab · Shift+Tab | next and previous field |
 | ↑ | in an empty callsign — fix the last QSO |
-| Esc | clear a new card (band, mode and frequency stay), a second time — close it |
+| Alt+W · Ctrl+Esc | wipe a new card (band, mode and frequency stay), the cursor goes to the callsign |
+| Esc | close the card (with changes it asks, Enter closes) |
+| Ctrl+D | delete the saved QSO (Enter confirms) |
 | F2 · F3 · F4 · F5 | to callsign, frequency, RST sent, RST received |
 | F6 | current UTC time |
 | F7 | voice note: start or stop |
@@ -245,11 +284,12 @@ Keys by screen. On macOS use ⌘ instead of Ctrl.
 
 | Key | Action |
 |---|---|
-| Space or Enter | from the callsign to the received exchange |
-| Enter · F12 | in the exchange or RST — log the QSO; F12 — from any field |
+| Space | callsign ↔ received exchange (RST is skipped) |
+| Enter · F12 | log the QSO from any field |
 | ↑ · PgUp | previous QSO (↑ in an empty callsign) |
 | PgDn | next QSO |
-| Esc | clear the card, a second time — close it |
+| Alt+W · Ctrl+Esc | wipe the card |
+| Esc | close the card |
 
 **Search history**
 
@@ -277,9 +317,9 @@ press Enter or Space; the app switches band, mode or frequency and clears the fi
 
 A command can't be mistaken for a callsign: a callsign always has both letters and digits.
 
-On a phone the whole list is the first reference tab, **"Keys"**, and the **"Key list"** button in Settings →
-"QSO entry"; both open without a keyboard attached. With a keyboard attached the ⋮ menu also gets a "Keys" item, and
-the shortcuts are shown in the menu items. On a Mac press the F keys with fn unless "Use F1, F2, etc. keys as standard function keys" is
+The whole list is the first reference tab, **"Keys"**, and the **"Key list"** button in Settings → "QSO entry"; on a
+phone both open without a keyboard attached. The ⋮ menu has a "Keys" item (on a phone when a keyboard is attached),
+and the shortcuts are shown in the menu items. On a Mac press the F keys with fn unless "Use F1, F2, etc. keys as standard function keys" is
 on in the keyboard settings.
 
 <p>
@@ -479,7 +519,8 @@ All `*DEMO` callsigns in the screenshots are made up.
 
 ## On the computer
 
-The desktop version does everything the Android one does. The window has two parts: the log on the left, the card,
+The desktop version does everything the Android one does, CAT included (a COM port or Hamlib rigctld). Since 2.0.0
+the phone and the computer share version numbers. The window has two parts: the log on the left, the card,
 map, dashboard, history or settings on the right. Every key is in [Keyboard only](#keyboard-only); F1 shows them in the app.
 
 <p>
@@ -502,17 +543,17 @@ installing from this source if Android asks.
 ### macOS
 
 Download `QSO-LOG-1.18.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v1.18.0), open it and drag QSO-LOG to Applications. The app is not signed by
+[release page](../../releases/tag/desktop-v2.0.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-1.18.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v1.18.0), unpack the
+Download `QSO-LOG-1.18.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.0.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-1.18.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v1.18.0) and install it:
+Download `QSO-LOG-1.18.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.0.0) and install it:
 
 ```bash
 sudo apt install ./QSO-LOG-1.18.0-linux-amd64.deb
@@ -542,8 +583,9 @@ GitHub when checking for updates, and your Google Sheet (script.google.com) when
 
 ## For developers
 
-Kotlin. The shared part (log, formats, calculations, QRZ.ru, QRZ.com, HamQTH, sheet sync, reference) is the same for
-all systems; Android uses Jetpack Compose, the desktop Compose Multiplatform. `shared/` — common code, `app/` — Android,
+Kotlin. The shared part (log, formats, calculations, QRZ.ru, QRZ.com, HamQTH, sheet sync, reference, the CAT protocols
+in `shared/…/cat/`) is the same for all systems; the transceiver's port is usb-serial-for-android and Bluetooth SPP on
+Android, jSerialComm on the computer; Android uses Jetpack Compose, the desktop Compose Multiplatform. `shared/` — common code, `app/` — Android,
 `desktop/` — macOS, Windows, Linux. Needs JDK 17 (Temurin) and Android SDK 34.
 
 ```bash

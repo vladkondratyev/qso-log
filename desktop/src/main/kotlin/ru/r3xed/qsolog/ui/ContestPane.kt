@@ -134,6 +134,8 @@ fun ContestPane(vm: AppState) {
     }
     val prev = { showError(vm.contestPrev()) }
     val hasPrev = vm.contestHasPrev()
+    // Ctrl+D (⌘D) from the menu bar.
+    LaunchedEffect(vm.askDeleteCard) { if (vm.askDeleteCard) { vm.askDeleteCard = false; if (!vm.form.isNew) confirmDelete = true } }
 
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).onPreviewKeyEvent { e ->
@@ -141,16 +143,18 @@ fun ContestPane(vm: AppState) {
             val plain = !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed
             when {
                 // Enter logs from any field ("20m", "CW", "14025" in the callsign switch band, mode or frequency);
-                // Space in the callsign goes on to the received number; ↑ in an empty callsign — the previous contact.
+                // Space goes between the callsign and the received code (the reports are skipped); ↑ in an empty
+                // callsign — the previous contact; Ctrl+D (⌘D) deletes a saved contact. Esc and Alt+W: see Main.kt.
                 (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
-                    // In the callsign: on to the received code (never logs); in the other fields: log.
-                    if (focused == Target.CALL) { if (!vm.runCallCommand()) rcvdFocus.requestFocus() } else next()
+                    if (!(focused == Target.CALL && vm.runCallCommand())) next()
                     true
                 }
-                e.key == Key.Spacebar && focused == Target.CALL -> {
+                e.key == Key.Spacebar && plain && focused == Target.CALL -> {
                     if (!vm.runCallCommand()) rcvdFocus.requestFocus()
                     true
                 }
+                e.key == Key.Spacebar && plain -> { callFocus.requestFocus(); true }
+                e.key == Key.D && (if (ru.r3xed.qsolog.IS_MAC) e.isMetaPressed else e.isCtrlPressed) && !vm.form.isNew -> { confirmDelete = true; true }
                 e.key == Key.DirectionUp && focused == Target.CALL && f.isNew && f.call.isEmpty() -> {
                     if (hasPrev) prev()
                     true
@@ -182,6 +186,8 @@ fun ContestPane(vm: AppState) {
             Text("CONTEST", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(14.dp))
             BandModePicker(vm)
+            Spacer(Modifier.width(10.dp))
+            RigBadge(vm, Modifier.weight(1f, fill = false))
             Spacer(Modifier.weight(1f))
             ContestRate(vm)
         }
@@ -221,6 +227,8 @@ fun ContestPane(vm: AppState) {
                 onValueChange = { error = null; vm.setCall(it) },
                 modifier = Modifier.fillMaxWidth().focusRequester(callFocus).onFocusChanged { if (it.isFocused) focused = Target.CALL },
                 label = { Text(tr("Позывной"), fontSize = 16.sp) },
+                // ⌫ wipes the whole callsign, the cursor stays in the field.
+                trailingIcon = if (f.call.isNotEmpty()) { { ClearButton { error = null; vm.setCall(""); callFocus.requestFocus() } } } else null,
                 isError = callError,
                 textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 40.sp, letterSpacing = 1.sp),
                 singleLine = true,
@@ -337,7 +345,13 @@ fun ContestPane(vm: AppState) {
         AlertDialog(
             onDismissRequest = { vm.confirmClose = false },
             title = { Text(tr("Закрыть без сохранения?")) },
-            text = { Text(tr("Введённые изменения не сохранятся."), style = MaterialTheme.typography.bodyLarge) },
+            text = {
+                Text(
+                    tr("Введённые изменения не сохранятся.") + "\n\n" + tr("Enter — закрыть, Esc — продолжить ввод"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.enterKey { vm.confirmClose = false; vm.closeEditor() },
+                )
+            },
             confirmButton = {
                 TextButton(onClick = { vm.confirmClose = false; vm.closeEditor() }) { Text(tr("Закрыть"), color = MaterialTheme.colorScheme.error) }
             },
@@ -349,7 +363,13 @@ fun ContestPane(vm: AppState) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(tr("Удалить связь с %s?", f.call)) },
-            text = { Text(tr("%s, %s %s. Запись пропадёт из лога.", "${f.date}, ${f.time} UTC", f.band, f.mode), style = MaterialTheme.typography.bodyLarge) },
+            text = {
+                Text(
+                    tr("%s, %s %s. Запись пропадёт из лога.", "${f.date}, ${f.time} UTC", f.band, f.mode) + "\n\n" + tr("Enter — удалить, Esc — отмена"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.enterKey { confirmDelete = false; vm.deleteCurrent() },
+                )
+            },
             confirmButton = {
                 Button(
                     onClick = { confirmDelete = false; vm.deleteCurrent() },
@@ -394,7 +414,7 @@ private fun TimeLine(isNew: Boolean, logged: String, freq: String?) {
     Text(listOfNotNull(time, freq).joinToString(" · "), style = MaterialTheme.typography.bodyLarge, color = x.muted, fontFamily = if (isNew) Mono else null)
 }
 
-private val TIME_SEC_FMT: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+internal val TIME_SEC_FMT: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
 
 /** The last contest contacts under the card: proof they were logged, and a click opens one to correct it. */
 @Composable

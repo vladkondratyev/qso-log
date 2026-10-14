@@ -75,7 +75,7 @@ fun HardwareKeysDialog(onClose: () -> Unit) {
 @Composable
 fun KeysList() {
     val x = LocalExtra.current
-    KeyHints.sections(mac = false, phone = true).forEach { sec ->
+    KeyHints.sections(mac = false).forEach { sec ->
         Text(sec.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
         // The key on its own line, what it does under it: long combinations fit on a phone.
         sec.keys.forEach { (k, what) ->

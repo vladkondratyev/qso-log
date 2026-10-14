@@ -76,8 +76,21 @@ fun main(args: Array<String>) {
                 }
             }
 
+            fun click(x: Float, y: Float) {
+                big.sendPointerEvent(PointerEventType.Move, Offset(x, y))
+                big.sendPointerEvent(PointerEventType.Press, Offset(x, y))
+                big.sendPointerEvent(PointerEventType.Release, Offset(x, y))
+                frame()
+            }
+
             val log = { state.allQsos }
             shot("01-log")
+
+            // CAT: a made-up transceiver behind rigctld on this machine, 14.195 MHz USB, S8 — the new card follows it.
+            val rig = fakeRigctld()
+            state.changeCat(state.catConfig.copy(enabled = true, rig = ru.r3xed.qsolog.cat.Rigs.RIGCTLD, link = ru.r3xed.qsolog.cat.CatLinkType.NETWORK, host = "127.0.0.1", port = rig.localPort))
+            state.restartCat()
+            delay(1500)
 
             state.newQso(audio = "demo_new.wav") // deleted again when this unsaved card closes
             state.setCall("R9DEMO")
@@ -150,6 +163,11 @@ fun main(args: Array<String>) {
 
             state.pane = Pane.Settings
             shot("08-settings")
+            // The CAT block: fold the sources open by default, unfold CAT.
+            click(1150f, 286f)
+            click(1150f, 418f)
+            big.sendPointerEvent(PointerEventType.Move, Offset(1900f, 1300f))
+            shot("24-cat", 1000)
             // Scroll the settings column to the bottom: version and project link.
             scrollRight(700)
             shot("09-about")
@@ -179,6 +197,28 @@ fun main(args: Array<String>) {
 }
 
 private val MY = LatLon(55.77, 37.62) // KO85ts, Moscow
+
+/** rigctld of a made-up transceiver: 14.195 MHz, USB, S8. */
+private fun fakeRigctld(): java.net.ServerSocket {
+    val server = runCatching { java.net.ServerSocket(4532, 5, java.net.InetAddress.getLoopbackAddress()) }.getOrElse { java.net.ServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress()) }
+    Thread {
+        while (true) {
+            val s = runCatching { server.accept() }.getOrNull() ?: break
+            Thread {
+                s.use {
+                    val r = it.getInputStream().bufferedReader()
+                    val w = it.getOutputStream()
+                    while (true) {
+                        val l = r.readLine() ?: break
+                        w.write(when (l.trim()) { "f" -> "14195000\n"; "m" -> "USB\n2400\n"; "l STRENGTH" -> "-6\n"; else -> "RPRT -11\n" }.toByteArray())
+                        w.flush()
+                    }
+                }
+            }.apply { isDaemon = true }.start()
+        }
+    }.apply { isDaemon = true }.start()
+    return server
+}
 
 private fun seed(dir: File) {
     val today = LocalDate.now(ZoneOffset.UTC)

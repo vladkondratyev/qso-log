@@ -330,6 +330,14 @@ class Settings {
         put(key, pw)
     }
 
+    /** CAT: the transceiver's frequency, mode and S-meter (see ru.r3xed.qsolog.cat). */
+    var cat: ru.r3xed.qsolog.cat.CatConfig
+        get() = ru.r3xed.qsolog.cat.CatConfig.fromMap(ru.r3xed.qsolog.cat.CatConfig.KEYS.associateWith { props.getProperty(it) }, ru.r3xed.qsolog.cat.CatLinkType.SERIAL)
+        set(v) {
+            v.toMap().forEach { (k, x) -> props.setProperty(k, x) }
+            file.outputStream().use { props.store(it, "QSO Log") }
+        }
+
     /**
      * Once: removes the keys and passwords of the online logbooks (QRZ.com, eQSL, Club Log) the app no longer
      * uploads to, from the keychain and the settings file.

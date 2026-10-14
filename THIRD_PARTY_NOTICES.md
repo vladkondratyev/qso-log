@@ -13,6 +13,8 @@
 | java-keyring | хранение пароля в системной связке ключей | BSD 3-Clause |
 | Eclipse Temurin (OpenJDK) | встроенная Java в сборках для macOS, Windows и Linux | GPLv2 with Classpath Exception |
 | Launch4j | запускатель `QSO-LOG.exe` | BSD / MIT (заголовок exe) |
+| usb-serial-for-android (mik3y) | CAT по USB-кабелю на Android | MIT |
+| jSerialComm (Fazecast) | CAT через COM-порт на компьютере | Apache License 2.0 (или LGPL 3.0, на выбор) |
 
 Картографические данные © участники OpenStreetMap, лицензия ODbL. Тайлы загружаются с серверов OpenStreetMap
 по их [правилам использования](https://operations.osmfoundation.org/policies/tiles/).

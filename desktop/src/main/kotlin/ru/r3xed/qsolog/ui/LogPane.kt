@@ -5,6 +5,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Switch
+import androidx.compose.material.icons.filled.ImportExport
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +69,7 @@ import ru.r3xed.qsolog.data.SheetSync
 import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -151,28 +158,8 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                         Icon(Icons.Filled.MoreVert, contentDescription = tr("Меню"), modifier = Modifier.size(28.dp))
                     }
                 }
+                // Grouped: the log's views, files, help, the contest mode, then the keys and the settings.
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(
-                        text = { MenuText(tr("Настройки"), (if (IS_MAC) "⌘" else "Ctrl+") + ",") },
-                        leadingIcon = { Icon(Icons.Filled.Settings, null) },
-                        onClick = { menu = false; state.openSettings() },
-                    )
-                    if (state.contestMode) {
-                        DropdownMenuItem(
-                            text = { Text(tr("Справочник контестов"), fontSize = 17.sp) },
-                            leadingIcon = { Icon(Icons.Filled.EmojiEvents, null) },
-                            onClick = { menu = false; state.openContests() },
-                        )
-                    }
-                    // Shown once the table is set up in the settings; the sync runs only from here or there.
-                    if (SheetSync.isScriptUrl(state.sheetUrl)) {
-                        DropdownMenuItem(
-                            text = { MenuText(if (state.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), (if (IS_MAC) "⌘" else "Ctrl+") + "R") },
-                            leadingIcon = { Icon(Icons.Filled.Sync, null) },
-                            enabled = !state.sheetSyncing,
-                            onClick = { menu = false; state.syncSheet() },
-                        )
-                    }
                     DropdownMenuItem(
                         text = { MenuText(tr("Дашборд"), (if (IS_MAC) "⌘" else "Ctrl+") + "D") },
                         leadingIcon = { Icon(Icons.Filled.BarChart, null) },
@@ -184,10 +171,52 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                         onClick = { menu = false; state.openMap() },
                     )
                     HistoryMenuItem(state) { menu = false; state.openHistory() }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(tr("Экспорт и импорт…"), fontSize = 17.sp) },
+                        leadingIcon = { Icon(Icons.Filled.ImportExport, null) },
+                        onClick = { menu = false; state.showTransfer = true },
+                    )
+                    // Shown once the table is set up in the settings; the sync runs only from here or there.
+                    if (SheetSync.isScriptUrl(state.sheetUrl)) {
+                        DropdownMenuItem(
+                            text = { MenuText(if (state.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), (if (IS_MAC) "⌘" else "Ctrl+") + "R") },
+                            leadingIcon = { Icon(Icons.Filled.Sync, null) },
+                            enabled = !state.sheetSyncing,
+                            onClick = { menu = false; state.syncSheet() },
+                        )
+                    }
+                    HorizontalDivider()
                     DropdownMenuItem(
                         text = { Text(tr("Справка и калькуляторы"), fontSize = 17.sp) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
                         onClick = { menu = false; state.openReference() },
+                    )
+                    HorizontalDivider()
+                    // The whole row switches contest mode; the menu stays open so the contest book shows up under it.
+                    DropdownMenuItem(
+                        text = { MenuText("CONTEST MODE", (if (IS_MAC) "⌘" else "Ctrl+") + "K") },
+                        leadingIcon = { Icon(Icons.Filled.Flag, null) },
+                        trailingIcon = { Switch(checked = state.contestMode, onCheckedChange = null) },
+                        onClick = { state.toggleContestMode() },
+                    )
+                    if (state.contestMode) {
+                        DropdownMenuItem(
+                            text = { Text(tr("Справочник контестов"), fontSize = 17.sp) },
+                            leadingIcon = { Icon(Icons.Filled.EmojiEvents, null) },
+                            onClick = { menu = false; state.openContests() },
+                        )
+                    }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { MenuText(tr("Клавиши"), "F1") },
+                        leadingIcon = { Icon(Icons.Filled.Keyboard, null) },
+                        onClick = { menu = false; state.showKeys = true },
+                    )
+                    DropdownMenuItem(
+                        text = { MenuText(tr("Настройки"), (if (IS_MAC) "⌘" else "Ctrl+") + ",") },
+                        leadingIcon = { Icon(Icons.Filled.Settings, null) },
+                        onClick = { menu = false; state.openSettings() },
                     )
                 }
             }
@@ -216,7 +245,8 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
             placeholder = { Text(tr("Поиск: позывной, имя, город"), style = MaterialTheme.typography.bodyLarge) },
             leadingIcon = { Icon(Icons.Filled.Search, null) },
             trailingIcon = {
-                if (state.query.isNotEmpty()) IconButton(onClick = { state.search("") }) { Icon(Icons.Filled.Clear, tr("Очистить поиск")) }
+                // ⌫ wipes the whole query.
+                if (state.query.isNotEmpty()) IconButton(onClick = { state.search("") }) { Icon(Icons.AutoMirrored.Filled.Backspace, tr("Очистить поиск"), tint = x.muted) }
             },
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyLarge,
@@ -309,6 +339,31 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
 
         // At the bottom, like on the phone; holding it records a voice note.
         AddQsoButton(state, shortcut, Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp))
+    }
+
+    // Delete or Ctrl+D (⌘D) on the log: one dialog for the cursor's row or the picked records; Enter deletes.
+    state.logDeleteAsk?.let { list ->
+        val one = list.singleOrNull()
+        AlertDialog(
+            onDismissRequest = { state.logDeleteAsk = null },
+            title = { Text(if (one != null) tr("Удалить связь с %s?", one.call) else tr("Удалить выбранные связи: %s?", list.size)) },
+            text = {
+                val t = one?.let { utc(it.timeUtc) }
+                Text(
+                    (if (one != null && t != null) tr("%s, %s %s. Запись пропадёт из лога.", "${DATE_FMT.format(t)}, ${TIME_FMT.format(t)} UTC", one.band, one.mode) + "\n\n" else "") +
+                        tr("Enter — удалить, Esc — отмена"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.enterKey(state::confirmDeleteLog),
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = state::confirmDeleteLog,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
+                ) { Text(tr("Удалить")) }
+            },
+            dismissButton = { TextButton(onClick = { state.logDeleteAsk = null }) { Text(tr("Отмена")) } },
+        )
     }
 }
 

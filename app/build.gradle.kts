@@ -11,8 +11,8 @@ android {
         applicationId = "ru.r3xed.qsolog"
         minSdk = 26
         targetSdk = 34
-        versionCode = 57
-        versionName = "0.40.2"
+        versionCode = 58
+        versionName = "2.0.0"
     }
 
     buildTypes {
@@ -54,4 +54,5 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("org.osmdroid:osmdroid-android:6.1.20")
+    implementation("com.github.mik3y:usb-serial-for-android:3.8.1")
 }

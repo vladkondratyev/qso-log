@@ -6,3 +6,6 @@
 # Annotations Tink (security-crypto) is compiled against; not needed at run time.
 -dontwarn com.google.errorprone.annotations.**
 -dontwarn javax.annotation.**
+
+# usb-serial-for-android finds its drivers by reflection (getSupportedDevices, the UsbDevice constructor).
+-keep class com.hoho.android.usbserial.driver.** { *; }

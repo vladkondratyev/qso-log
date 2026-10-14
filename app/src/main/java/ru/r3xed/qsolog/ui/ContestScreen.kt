@@ -271,6 +271,8 @@ fun ContestScreen(vm: AppViewModel) {
             Text("CONTEST", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(8.dp))
             BandModePicker(vm)
+            Spacer(Modifier.width(6.dp))
+            RigBadge(vm, Modifier.weight(1f, fill = false))
             Spacer(Modifier.weight(1f))
             ContestRate(vm)
         }

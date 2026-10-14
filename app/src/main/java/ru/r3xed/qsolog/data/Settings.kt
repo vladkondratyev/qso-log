@@ -178,6 +178,10 @@ class Settings(context: Context) {
     var contestRstShown: Boolean
         get() = prefs.getBoolean("contest_rst_shown", true)
         set(v) = prefs.edit().putBoolean("contest_rst_shown", v).apply()
+    /** CAT: the transceiver's frequency, mode and S-meter (see ru.r3xed.qsolog.cat). */
+    var cat: ru.r3xed.qsolog.cat.CatConfig
+        get() = ru.r3xed.qsolog.cat.CatConfig.fromMap(ru.r3xed.qsolog.cat.CatConfig.KEYS.associateWith { prefs.getString(it, null) }, ru.r3xed.qsolog.cat.CatLinkType.USB)
+        set(v) = prefs.edit().apply { v.toMap().forEach { (k, x) -> putString(k, x) } }.apply()
     var lastPower: String
         get() = prefs.getString("last_power", "") ?: ""
         set(v) = prefs.edit().putString("last_power", v).apply()
