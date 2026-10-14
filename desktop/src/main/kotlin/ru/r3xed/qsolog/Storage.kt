@@ -338,6 +338,14 @@ class Settings {
             file.outputStream().use { props.store(it, "QSO Log") }
         }
 
+    /** Contacts from WSJT-X, JTDX, MSHV over UDP (see ru.r3xed.qsolog.digi). */
+    var digi: ru.r3xed.qsolog.digi.DigiConfig
+        get() = ru.r3xed.qsolog.digi.DigiConfig.fromMap(ru.r3xed.qsolog.digi.DigiConfig.KEYS.associateWith { props.getProperty(it) })
+        set(v) {
+            v.toMap().forEach { (k, x) -> props.setProperty(k, x) }
+            file.outputStream().use { props.store(it, "QSO Log") }
+        }
+
     /**
      * Once: removes the keys and passwords of the online logbooks (QRZ.com, eQSL, Club Log) the app no longer
      * uploads to, from the keychain and the settings file.

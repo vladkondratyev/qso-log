@@ -13,6 +13,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.r3xed.qsolog.cat.CatConfig
 import ru.r3xed.qsolog.cat.CatFormat
@@ -21,6 +23,9 @@ import ru.r3xed.qsolog.cat.CatSession
 import ru.r3xed.qsolog.cat.CatStatus
 import ru.r3xed.qsolog.cat.RigState
 import ru.r3xed.qsolog.data.Adif
+import ru.r3xed.qsolog.digi.DigiConfig
+import ru.r3xed.qsolog.digi.DigiListener
+import ru.r3xed.qsolog.digi.DigiStatus
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.Cabrillo
@@ -395,6 +400,7 @@ class AppState {
         }
         reload()
         scope.launch { restartCat() }
+        scope.launch { restartDigi() }
         // First start: a short three-step setup; later, without a callsign, the settings as before.
         if (settings.myCall.isBlank()) pane = if (prefs.welcomeDone) Pane.Settings else Pane.Welcome
         scope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
@@ -1098,45 +1104,50 @@ class AppState {
         refreshing = refreshing + qso.id
         scope.launch {
             val msg = try {
-                val info = qrzLookup(qso.call)
-                if (info == null) {
-                    withContext(Dispatchers.IO) { db.save(qso.copy(pendingLookup = false)) }
-                    tr("На QRZ.ru позывного %s нет", qso.call)
-                } else {
-                    val pos = info.position
-                    // A region-centre position from HamQTH gives way to the station's own one.
-                    val approx = qso.approxPosition && pos != null
-                    val lat = if (approx) pos!!.lat else qso.lat ?: pos?.lat
-                    val lon = if (approx) pos!!.lon else qso.lon ?: pos?.lon
-                    val me = Geo.locatorToLatLon(qso.myLocator) ?: settings.myPosition
-                    val them = if (lat != null && lon != null) LatLon(lat, lon) else null
-                    val updated = qso.copy(
-                        name = qso.name.ifBlank { info.fullName },
-                        qth = if (approx) info.city.ifBlank { qso.qth } else qso.qth.ifBlank { info.city },
-                        country = qso.country.ifBlank { info.country },
-                        locator = qso.locator.ifBlank { info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) }.orEmpty() } },
-                        lat = lat, lon = lon,
-                        distanceKm = (if (approx) null else qso.distanceKm) ?: if (me != null && them != null) Geo.distanceKm(me, them) else null,
-                        bearing = (if (approx) null else qso.bearing) ?: if (me != null && them != null) Geo.bearing(me, them) else null,
-                        adif = withQrzExtras(if (approx) qso.adif - HamQth.POSITION_FIELD else qso.adif, info),
-                        pendingLookup = false,
-                        updatedAt = System.currentTimeMillis(),
-                    )
-                    withContext(Dispatchers.IO) { db.save(updated) }
-                    tr("Данные %s получены с QRZ.ru", qso.call)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: QrzException) {
-                e.message ?: tr("Ошибка QRZ.ru")
-            } catch (e: Exception) {
-                networkError(e)
+                fillFromQrz(qso)
             } finally {
                 refreshing = refreshing - qso.id
             }
             reload()
             say(msg)
         }
+    }
+
+    /** Fills the saved contact's empty fields from QRZ.ru; returns what to tell the user. */
+    private suspend fun fillFromQrz(qso: Qso): String = try {
+        val info = qrzLookup(qso.call)
+        if (info == null) {
+            withContext(Dispatchers.IO) { db.save(qso.copy(pendingLookup = false)) }
+            tr("На QRZ.ru позывного %s нет", qso.call)
+        } else {
+            val pos = info.position
+            // A region-centre position from HamQTH gives way to the station's own one.
+            val approx = qso.approxPosition && pos != null
+            val lat = if (approx) pos!!.lat else qso.lat ?: pos?.lat
+            val lon = if (approx) pos!!.lon else qso.lon ?: pos?.lon
+            val me = Geo.locatorToLatLon(qso.myLocator) ?: settings.myPosition
+            val them = if (lat != null && lon != null) LatLon(lat, lon) else null
+            val updated = qso.copy(
+                name = qso.name.ifBlank { info.fullName },
+                qth = if (approx) info.city.ifBlank { qso.qth } else qso.qth.ifBlank { info.city },
+                country = qso.country.ifBlank { info.country },
+                locator = qso.locator.ifBlank { info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) }.orEmpty() } },
+                lat = lat, lon = lon,
+                distanceKm = (if (approx) null else qso.distanceKm) ?: if (me != null && them != null) Geo.distanceKm(me, them) else null,
+                bearing = (if (approx) null else qso.bearing) ?: if (me != null && them != null) Geo.bearing(me, them) else null,
+                adif = withQrzExtras(if (approx) qso.adif - HamQth.POSITION_FIELD else qso.adif, info),
+                pendingLookup = false,
+                updatedAt = System.currentTimeMillis(),
+            )
+            withContext(Dispatchers.IO) { db.save(updated) }
+            tr("Данные %s получены с QRZ.ru", qso.call)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: QrzException) {
+        e.message ?: tr("Ошибка QRZ.ru")
+    } catch (e: Exception) {
+        networkError(e)
     }
 
     /** Returns an error message, or null when saved. [quiet]: no "Связь записана" message (the contest card says it in its own line). */
@@ -2039,6 +2050,78 @@ class AppState {
         formOriginal = formOriginal?.let { o ->
             if (o.freq == before.freq && o.band == before.band && o.mode == before.mode && o.rstSent == before.rstSent && o.rstRcvd == before.rstRcvd)
                 o.copy(freq = f.freq, band = f.band, mode = f.mode, rstSent = f.rstSent, rstRcvd = f.rstRcvd) else o
+        }
+    }
+
+    // ---------- WSJT-X, JTDX, MSHV ----------
+
+    var digiConfig by mutableStateOf(prefs.digi); private set
+    var digiStatus by mutableStateOf<DigiStatus>(DigiStatus.Off); private set
+    private var digiListener: DigiListener? = null
+    private var digiRestartJob: Job? = null
+    private val digiLock = Mutex()
+
+    fun changeDigi(c: DigiConfig) {
+        val old = digiConfig
+        if (c == old) return
+        digiConfig = c
+        prefs.digi = c
+        // Typing a port or a group: listen again once the typing pauses.
+        digiRestartJob?.cancel()
+        digiRestartJob = scope.launch {
+            if (c.enabled == old.enabled) delay(700)
+            restartDigi()
+        }
+    }
+
+    fun restartDigi() {
+        digiListener?.stop()
+        digiListener = null
+        digiStatus = DigiStatus.Off
+        val c = digiConfig
+        if (!c.enabled) return
+        lateinit var l: DigiListener
+        l = DigiListener(
+            c,
+            { st -> scope.launch { if (digiListener === l) digiStatus = st } },
+            { qsos, from -> scope.launch { if (digiListener === l) logDigi(qsos, from) } },
+        )
+        digiListener = l
+        l.start()
+    }
+
+    fun stopDigi() {
+        digiListener?.stop()
+        digiListener = null
+    }
+
+    /**
+     * A contact logged in WSJT-X: straight into the log, with "Моя станция" from the settings where the program did
+     * not say, then name and QTH from QRZ.ru. The same contact twice (WSJT-X sends it as fields and as ADIF) is one.
+     */
+    private suspend fun logDigi(qsos: List<Qso>, from: String) {
+        val s = settings
+        val added = digiLock.withLock {
+            withContext(Dispatchers.IO) {
+                qsos.mapNotNull { q0 ->
+                    val q = q0.copy(
+                        myCall = q0.myCall.ifBlank { s.myCall.trim().uppercase() },
+                        myLocator = q0.myLocator.ifBlank { s.myLocator.trim() },
+                        power = q0.power.ifBlank { s.power.trim() },
+                        adif = s.station + q0.adif,
+                        pendingLookup = hasQrzAccount,
+                    ).withDistance(s.myPosition)
+                    if (db.exists(q)) null else q.copy(id = db.save(q))
+                }
+            }
+        }
+        if (added.isEmpty()) return
+        reload()
+        say(if (added.size == 1) tr("Связь с %s из %s записана", added[0].call, from) else tr("Из %s записано связей: %s", from, added.size))
+        if (hasQrzAccount) added.forEach { q ->
+            refreshing = refreshing + q.id
+            try { fillFromQrz(q) } finally { refreshing = refreshing - q.id }
+            reload()
         }
     }
 

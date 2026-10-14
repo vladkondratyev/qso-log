@@ -131,7 +131,7 @@ fun main() {
         val state = remember { AppState() }
         val windowState = rememberWindowState(width = 1024.dp, height = 700.dp, position = WindowPosition(Alignment.Center))
         Window(
-            onCloseRequest = { state.flushSettings(); state.stopCat(); exitApplication() },
+            onCloseRequest = { state.flushSettings(); state.stopCat(); state.stopDigi(); exitApplication() },
             title = "QSO-LOG",
             icon = painterResource("icon.png"),
             state = windowState,

@@ -102,6 +102,9 @@ import ru.r3xed.qsolog.data.KeypadMode
 import ru.r3xed.qsolog.cat.CatLinkType
 import ru.r3xed.qsolog.cat.CatProtocol
 import ru.r3xed.qsolog.cat.CatStatus
+import ru.r3xed.qsolog.digi.DigiStatus
+import ru.r3xed.qsolog.digi.describe
+import ru.r3xed.qsolog.digi.localAddresses
 import ru.r3xed.qsolog.cat.Rigs
 import ru.r3xed.qsolog.cat.describe
 import ru.r3xed.qsolog.cat.short
@@ -308,6 +311,13 @@ fun SettingsScreen(
                 else vm.catStatus.let { st -> (st as? CatStatus.Connected)?.state?.takeIf { !st.silent }?.let { Rigs.title(vm.catConfig.model) + " · " + it.short() } ?: st.describe() },
             ) {
                 CatSettings(vm)
+            }
+
+            SettingsBlock(
+                tr("Цифровые виды — WSJT-X, JTDX, MSHV"),
+                if (!vm.digiConfig.enabled) tr("выключено") else vm.digiStatus.describe(),
+            ) {
+                DigiSettings(vm)
             }
 
             SettingsBlock(
@@ -852,6 +862,48 @@ private fun ContestModeSettings(vm: AppViewModel) {
         }
     }
     Note(tr("Режим соревнований: «Добавить QSO» открывает упрощённую карточку — позывной, контрольные номера и RST; время ставится при записи. Принятый номер может быть любым: 015, MO69, EU, 16. Свайп справа налево — записать и открыть следующую, слева направо — вернуться к предыдущим связям контеста и поправить их. Такие связи отмечены в журнале флажком. Режим выключается при каждом запуске программы."))
+}
+
+/**
+ * Contacts from WSJT-X, JTDX, MSHV on a computer in the same network: the UDP port they send to and how to set them
+ * up. Each contact logged there appears in the log by itself.
+ */
+@Composable
+private fun DigiSettings(vm: AppViewModel) {
+    val x = LocalExtra.current
+    val c = vm.digiConfig
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(if (c.enabled) MaterialTheme.colorScheme.primaryContainer else x.field)
+            .toggleable(value = c.enabled, role = Role.Switch, onValueChange = { vm.changeDigi(c.copy(enabled = it)) })
+            .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(tr("Принимать связи из WSJT-X, JTDX, MSHV"), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(end = 12.dp))
+        Switch(checked = c.enabled, onCheckedChange = null)
+    }
+    // Wi-Fi can change while the settings are open: the addresses are read again with the status.
+    val ips = remember(vm.digiStatus) { localAddresses() }
+    if (c.enabled) {
+        val st = vm.digiStatus
+        val ok = st is DigiStatus.Listening
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field).padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(if (ok) x.ok else if (st is DigiStatus.Failed) MaterialTheme.colorScheme.error else x.muted))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(st.describe(), style = MaterialTheme.typography.bodyMedium)
+                if (ips.isNotEmpty()) Text(tr("Адрес телефона: %s", ips.joinToString(", ")), style = MaterialTheme.typography.bodyMedium, fontFamily = Mono, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+    SettingField(tr("Порт UDP"), c.port.toString(), { v -> v.filter(Char::isDigit).take(5).toIntOrNull()?.takeIf { it in 1..65535 }?.let { vm.changeDigi(c.copy(port = it)) } }, mono = true)
+    SettingField(tr("Групповой адрес (multicast), если нужен"), c.group, { vm.changeDigi(c.copy(group = it.trim())) }, mono = true)
+    Note(tr("WSJT-X, JTDX или MSHV на компьютере в той же сети Wi-Fi: в Settings → Reporting → UDP Server укажите адрес телефона и порт %s. Связь попадает в журнал, когда вы нажимаете OK в окне «Log QSO».", c.port))
+    Note(tr("Связи принимаются, пока QSO-LOG запущен: свёрнутое надолго приложение Android может остановить. Связи, проведённые без телефона, перенесите файлом ADIF из WSJT-X (wsjtx_log.adi)."))
+    Note(tr("Если UDP-порт уже слушает другая программа (JTAlert, GridTracker), укажите в WSJT-X групповой адрес, например 224.0.0.1, и тот же адрес здесь — тогда связи получат все программы."))
 }
 
 /**

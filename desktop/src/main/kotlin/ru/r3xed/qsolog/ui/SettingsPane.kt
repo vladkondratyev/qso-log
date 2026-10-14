@@ -3,6 +3,9 @@ package ru.r3xed.qsolog.ui
 import ru.r3xed.qsolog.cat.CatLinkType
 import ru.r3xed.qsolog.cat.CatProtocol
 import ru.r3xed.qsolog.cat.CatStatus
+import ru.r3xed.qsolog.digi.DigiStatus
+import ru.r3xed.qsolog.digi.describe
+import ru.r3xed.qsolog.digi.localAddresses
 import ru.r3xed.qsolog.cat.Rigs
 import ru.r3xed.qsolog.cat.describe
 import ru.r3xed.qsolog.cat.short
@@ -314,6 +317,13 @@ fun SettingsPane(
                 else vm.catStatus.let { st -> (st as? CatStatus.Connected)?.state?.takeIf { !st.silent }?.let { Rigs.title(vm.catConfig.model) + " · " + it.short() } ?: st.describe() },
             ) {
                 CatSettings(vm)
+            }
+
+            SettingsBlock(
+                tr("Цифровые виды — WSJT-X, JTDX, MSHV"),
+                if (!vm.digiConfig.enabled) tr("выключено") else vm.digiStatus.describe(),
+            ) {
+                DigiSettings(vm)
             }
 
             SettingsBlock(
@@ -842,19 +852,6 @@ private fun CatSettings(vm: AppState) {
     val c = vm.catConfig
     val model = c.model
     @Composable
-    fun SwitchRow(text: String, on: Boolean, strong: Boolean = false, onChange: (Boolean) -> Unit) {
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                .background(if (strong && on) MaterialTheme.colorScheme.primaryContainer else x.field)
-                .toggleable(value = on, role = Role.Switch, onValueChange = onChange)
-                .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = if (strong) FontWeight.Bold else null, modifier = Modifier.weight(1f).padding(end = 12.dp))
-            Switch(checked = on, onCheckedChange = null)
-        }
-    }
-    @Composable
     fun <T> Choice(items: List<Pair<T, String>>, selected: T, onPick: (T) -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items.forEach { (v, label) ->
@@ -968,6 +965,50 @@ private fun CatSettings(vm: AppState) {
     Note(tr("ICOM (протокол CI-V): IC-705, IC-7300, IC-7610, IC-9700, IC-905, IC-7100, IC-7851, IC-7800, IC-7700, IC-7600, IC-7410, IC-7200, IC-9100, IC-7000, IC-756PRO, IC-746PRO, IC-910H, IC-718, IC-706MKIIG, IC-703, IC-R8600 и другие с CI-V — адрес можно задать вручную. Совместимые с CI-V: Xiegu X6100, X6200, G90, X5105, X108G."))
     Note(tr("Другие стандарты: Kenwood (TS-590, TS-890, TS-990, TS-480, TS-2000), Elecraft (K3, K4, KX2, KX3), FlexRadio через SmartSDR CAT, Yaesu с новым CAT (FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450) и со старым (FT-817, FT-818, FT-857, FT-897), а также любой трансивер через Hamlib rigctld по сети."))
     Note(tr("Как это сделано: как в N1MM, Log4OM, WSJT-X и FT8CN — программа несколько раз в секунду спрашивает у трансивера частоту, вид связи и S-метр и ничего не передаёт в эфир: команд управления она не шлёт, линии DTR и RTS USB-порта держит выключенными, чтобы трансивер не перешёл на передачу. Подключение: кабель USB от трансивера (у ICOM с USB-разъёмом — напрямую, у остальных — кабель CI-V/CAT с адаптером CP210x, FTDI, CH340 или PL2303) или сеть. COM-порт одновременно может открыть только одна программа: если трансивером уже управляет WSJT-X или другой логгер, подключайтесь через rigctld."))
+}
+
+/**
+ * Contacts from WSJT-X, JTDX, MSHV: the UDP port they send to, and how to set them up. Each contact logged there
+ * appears in the log by itself.
+ */
+@Composable
+private fun DigiSettings(vm: AppState) {
+    val x = LocalExtra.current
+    val c = vm.digiConfig
+    SwitchRow(tr("Принимать связи из WSJT-X, JTDX, MSHV"), c.enabled, strong = true) { vm.changeDigi(c.copy(enabled = it)) }
+    if (c.enabled) {
+        val st = vm.digiStatus
+        val ok = st is DigiStatus.Listening
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field).padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(if (ok) x.ok else if (st is DigiStatus.Failed) MaterialTheme.colorScheme.error else x.muted))
+            Spacer(Modifier.width(10.dp))
+            Text(st.describe(), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        }
+    }
+    SettingField(tr("Порт UDP"), c.port.toString(), { v -> v.filter(Char::isDigit).take(5).toIntOrNull()?.takeIf { it in 1..65535 }?.let { vm.changeDigi(c.copy(port = it)) } }, mono = true)
+    SettingField(tr("Групповой адрес (multicast), если нужен"), c.group, { vm.changeDigi(c.copy(group = it.trim())) }, mono = true)
+    Note(tr("В WSJT-X: Settings → Reporting → UDP Server — адрес 127.0.0.1, порт %s. Связь попадает в журнал, когда вы нажимаете OK в окне «Log QSO». В JTDX и MSHV — те же поля в их настройках (Reporting / UDP).", c.port))
+    Note(tr("Если UDP-порт уже слушает другая программа (JTAlert, GridTracker), укажите в WSJT-X групповой адрес, например 224.0.0.1, и тот же адрес здесь — тогда связи получат все программы."))
+    val ips = remember { localAddresses() }
+    if (ips.isNotEmpty()) Note(tr("WSJT-X на другом компьютере: укажите в нём адрес этого компьютера — %s.", ips.joinToString(", ")))
+}
+
+@Composable
+private fun SwitchRow(text: String, on: Boolean, strong: Boolean = false, onChange: (Boolean) -> Unit) {
+    val x = LocalExtra.current
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(if (strong && on) MaterialTheme.colorScheme.primaryContainer else x.field)
+            .toggleable(value = on, role = Role.Switch, onValueChange = onChange)
+            .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = if (strong) FontWeight.Bold else null, modifier = Modifier.weight(1f).padding(end = 12.dp))
+        Switch(checked = on, onCheckedChange = null)
+    }
 }
 
 @Composable

@@ -11,7 +11,8 @@ QSO-LOG is a logbook for radio amateurs. It runs on Android, macOS, Windows and 
 on the phone and on the computer.
 
 A QSO takes a few taps: callsign, frequency, RST. The frequency, band and mode can come from the transceiver over CAT
-(ICOM CI-V, Kenwood, Elecraft, Yaesu, Hamlib rigctld). The app looks up the other station's name and city on QRZ.ru
+(ICOM CI-V, Kenwood, Elecraft, Yaesu, Hamlib rigctld), and FT8 and FT4 QSOs come in by themselves from WSJT-X, JTDX
+and MSHV. The app looks up the other station's name and city on QRZ.ru
 or QRZ.com, works out the distance and draws the path on a map. You can attach a voice note to a QSO. Contest mode
 gives fast entry with exchange numbers, and the log exports to Cabrillo and to ЕРМАК, the Russian contest format.
 A dashboard shows the log in charts. The log exports to ADIF and CSV, and several devices can keep one log through
@@ -28,11 +29,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.0.0 | [QSO-LOG-2.0.0.apk](../../releases/tag/v2.0.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.0.0 | [QSO-LOG-2.0.0-macos-arm64.dmg](../../releases/tag/desktop-v2.0.0) |
-| macOS 11 or newer, Intel | 2.0.0 | [QSO-LOG-2.0.0-macos-x64.dmg](../../releases/tag/desktop-v2.0.0) |
-| Windows 10 and 11, 64-bit | 2.0.0 | [QSO-LOG-2.0.0-windows-x64.zip](../../releases/tag/desktop-v2.0.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.0.0 | [QSO-LOG-2.0.0-linux-amd64.deb](../../releases/tag/desktop-v2.0.0) |
+| Android 8.0 or newer | 2.1.0 | [QSO-LOG-2.1.0.apk](../../releases/tag/v2.1.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.1.0 | [QSO-LOG-2.1.0-macos-arm64.dmg](../../releases/tag/desktop-v2.1.0) |
+| macOS 11 or newer, Intel | 2.1.0 | [QSO-LOG-2.1.0-macos-x64.dmg](../../releases/tag/desktop-v2.1.0) |
+| Windows 10 and 11, 64-bit | 2.1.0 | [QSO-LOG-2.1.0-windows-x64.zip](../../releases/tag/desktop-v2.1.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.1.0 | [QSO-LOG-2.1.0-linux-amd64.deb](../../releases/tag/desktop-v2.1.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -45,6 +46,7 @@ is switched in Settings and changes at once.
 - [First start](#first-start)
 - [New QSO](#new-qso)
 - [CAT — transceiver](#cat--transceiver)
+- [Digital modes — WSJT-X, JTDX, MSHV](#digital-modes--wsjt-x-jtdx-mshv)
 - [Contest mode](#contest-mode)
 - [Keyboard only](#keyboard-only)
 - [Log](#log)
@@ -164,6 +166,29 @@ Connection:
 <img src="docs/screenshots/70-cat-settings.png" width="200" alt="CAT settings on the phone">
 <img src="docs/screenshots/71-cat-rigs.png" width="200" alt="Choosing the transceiver">
 <img src="docs/screenshots/desktop-24-cat.png" width="440" alt="CAT settings on the computer">
+</p>
+
+## Digital modes — WSJT-X, JTDX, MSHV
+
+FT8, FT4 and the other digital modes are worked in WSJT-X, JTDX or MSHV. After each QSO these programs send it over
+the network (UDP, port 2237), and QSO-LOG puts it into the log by itself: callsign, start and end time, frequency, mode
+(FT8, FT4, JT65, Q65, MSK144…), dB reports, both locators. Name and QTH then come from QRZ.ru, as for any QSO.
+Duplicates are not saved: WSJT-X reports a QSO twice (as fields and as an ADIF line), and it goes into the log once.
+Plain ADIF over UDP is taken as well.
+
+Settings → **“Digital modes — WSJT-X, JTDX, MSHV”** → “Take QSOs”. The status line shows whether the program is heard
+(“port 2237 · hearing WSJT-X v2.7.0”).
+
+- **Computer.** In WSJT-X: Settings → Reporting → UDP Server — `127.0.0.1`, port `2237`. A QSO is saved when you
+  press OK in the “Log QSO” window. JTDX and MSHV have the same fields in their settings.
+- **Phone.** WSJT-X on a computer in the same Wi-Fi network sends QSOs to the phone's address, shown in the same
+  settings block. QSOs are taken while QSO-LOG is running.
+- If another program (JTAlert, GridTracker) already listens on port 2237, set a multicast group in WSJT-X, `224.0.0.1`
+  for one, and the same group in QSO-LOG: every program gets the QSOs.
+
+<p>
+<img src="docs/screenshots/72-wsjtx.png" width="200" alt="QSOs from WSJT-X on the phone">
+<img src="docs/screenshots/desktop-25-wsjtx.png" width="440" alt="QSOs from WSJT-X on the computer">
 </p>
 
 ## Contest mode
@@ -542,21 +567,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-1.18.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.0.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.1.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.1.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-1.18.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.0.0), unpack the
+Download `QSO-LOG-2.1.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.1.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-1.18.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.0.0) and install it:
+Download `QSO-LOG-2.1.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.1.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-1.18.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.1.0-linux-amd64.deb
 ```
 
 ## Where the data is kept
@@ -580,11 +605,13 @@ GitHub when checking for updates, and your Google Sheet (script.google.com) when
 - The Windows build is made on a Mac and has not been tested on real Windows yet. Please report problems in
   [issues](../../issues) — in English or Russian.
 - On Linux "system" theme is always light; switch to dark by hand.
+- On the phone, QSOs from WSJT-X are taken only while QSO-LOG is running: Android may stop an app left in the
+  background for long. Missed QSOs move over with the ADIF file from WSJT-X.
 
 ## For developers
 
 Kotlin. The shared part (log, formats, calculations, QRZ.ru, QRZ.com, HamQTH, sheet sync, reference, the CAT protocols
-in `shared/…/cat/`) is the same for all systems; the transceiver's port is usb-serial-for-android and Bluetooth SPP on
+in `shared/…/cat/`, WSJT-X reception in `shared/…/digi/`) is the same for all systems; the transceiver's port is usb-serial-for-android and Bluetooth SPP on
 Android, jSerialComm on the computer; Android uses Jetpack Compose, the desktop Compose Multiplatform. `shared/` — common code, `app/` — Android,
 `desktop/` — macOS, Windows, Linux. Needs JDK 17 (Temurin) and Android SDK 34.
 

@@ -182,6 +182,10 @@ class Settings(context: Context) {
     var cat: ru.r3xed.qsolog.cat.CatConfig
         get() = ru.r3xed.qsolog.cat.CatConfig.fromMap(ru.r3xed.qsolog.cat.CatConfig.KEYS.associateWith { prefs.getString(it, null) }, ru.r3xed.qsolog.cat.CatLinkType.USB)
         set(v) = prefs.edit().apply { v.toMap().forEach { (k, x) -> putString(k, x) } }.apply()
+    /** Contacts from WSJT-X, JTDX, MSHV over UDP (see ru.r3xed.qsolog.digi). */
+    var digi: ru.r3xed.qsolog.digi.DigiConfig
+        get() = ru.r3xed.qsolog.digi.DigiConfig.fromMap(ru.r3xed.qsolog.digi.DigiConfig.KEYS.associateWith { prefs.getString(it, null) })
+        set(v) = prefs.edit().apply { v.toMap().forEach { (k, x) -> putString(k, x) } }.apply()
     var lastPower: String
         get() = prefs.getString("last_power", "") ?: ""
         set(v) = prefs.edit().putString("last_power", v).apply()

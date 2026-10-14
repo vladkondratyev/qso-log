@@ -9,18 +9,12 @@ import java.net.URLEncoder
 object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
-    /** Points of this release (2.0.0 on the phone and the computer): the computer also gets what the phone had since 1.18.0. */
+    /** Points of this release (2.1.0 on the phone and the computer). */
     fun items(desktop: Boolean): List<String> = listOf(
-        tr("CAT — связь с трансивером: частота, диапазон и вид связи сами попадают в новую карточку QSO, по желанию — и S-метр в отправленный RST. В карточке видно, что сейчас на трансивере."),
-        tr("ICOM по протоколу CI-V (IC-705, IC-7300, IC-7610, IC-9700 и другие) и совместимые Xiegu; Kenwood, Elecraft, Yaesu (новый CAT и FT-817/857/897), а также любой трансивер через Hamlib rigctld."),
-        if (desktop) tr("Подключение на компьютере: COM-порт (USB-кабель трансивера или интерфейс CAT/CI-V) или сеть. Настройки → «CAT — трансивер».")
-        else tr("Подключение на телефоне: USB-кабель через переходник OTG, Bluetooth (например, IC-705) или сеть. Настройки → «CAT — трансивер»."),
-    ) + if (!desktop) emptyList() else listOf(
-        tr("Внешняя клавиатура как в классических логгерах: Пробел ходит по полям позывной → RST → RST (в контесте — сразу к номеру), Enter записывает связь из любого поля, Alt+W или Ctrl+Esc очищает карточку, Esc закрывает её."),
-        tr("Удаление с клавиатуры: Delete или Ctrl+D на записи журнала или в открытой карточке, Enter в окне подтверждения — удалить."),
-        tr("Меню ⋮ разложено по группам, CONTEST MODE включается прямо из меню, «Экспорт и импорт…» — ADIF, CSV и ЕРМАК/Cabrillo в одном окне."),
-        tr("Справка: первая вкладка «Клавиши», в «Морзе» — «Текст»: любой текст звучит азбукой Морзе с подсветкой звучащего знака."),
-        tr("«Фиксировать время сохранения карточки QSO»: в новой карточке идут часы. ⌫ в поле позывного и поиска стирает его целиком."),
+        tr("Цифровые виды связи: связи из WSJT-X, JTDX и MSHV сами попадают в журнал — с частотой, видом (FT8, FT4 и другими), отчётами в дБ и локатором. Имя и QTH подтягиваются с QRZ.ru, повторы не записываются."),
+        if (desktop) tr("Включается в Настройки → «Цифровые виды — WSJT-X, JTDX, MSHV». В WSJT-X: Settings → Reporting → UDP Server — 127.0.0.1, порт 2237; связь записывается по OK в окне «Log QSO».")
+        else tr("На телефоне: WSJT-X, JTDX или MSHV на компьютере в той же сети Wi-Fi шлёт связи на адрес телефона — он показан в Настройки → «Цифровые виды — WSJT-X, JTDX, MSHV»."),
+        tr("Можно слушать групповой адрес (multicast), если связи из WSJT-X нужны ещё и JTAlert или GridTracker. Принимается и простой ADIF по UDP."),
     )
 }
 

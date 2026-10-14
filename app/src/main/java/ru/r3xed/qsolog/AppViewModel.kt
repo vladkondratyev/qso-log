@@ -16,8 +16,13 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.r3xed.qsolog.data.Adif
+import ru.r3xed.qsolog.digi.DigiConfig
+import ru.r3xed.qsolog.digi.DigiListener
+import ru.r3xed.qsolog.digi.DigiStatus
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.AdifLabels
@@ -612,7 +617,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (settings.myCall.isBlank()) screen = if (prefs.welcomeDone) Screen.Settings else Screen.Welcome
         viewModelScope.launch { secrets.await(); applySecrets() }
         // After the constructor: the CAT fields are declared further down.
-        android.os.Handler(android.os.Looper.getMainLooper()).post { restartCat() }
+        android.os.Handler(android.os.Looper.getMainLooper()).post { restartCat(); restartDigi() }
         viewModelScope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
         // Keys and passwords of the online logbooks the app no longer uploads to.
         viewModelScope.launch(Dispatchers.IO) { prefs.forgetOnlineLogAccounts() }
@@ -620,6 +625,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         catSession?.stop()
+        stopDigi()
         cardRecordingSince = null
         voice.stopAndDiscard()
     }
@@ -1136,45 +1142,50 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         refreshing = refreshing + qso.id
         viewModelScope.launch {
             val msg = try {
-                val info = qrzLookup(qso.call)
-                if (info == null) {
-                    withContext(Dispatchers.IO) { db.save(qso.copy(pendingLookup = false)) }
-                    tr("На QRZ.ru позывного %s нет", qso.call)
-                } else {
-                    val pos = info.position
-                    // A region-centre position from HamQTH gives way to the station's own one.
-                    val approx = qso.approxPosition && pos != null
-                    val lat = if (approx) pos!!.lat else qso.lat ?: pos?.lat
-                    val lon = if (approx) pos!!.lon else qso.lon ?: pos?.lon
-                    val me = Geo.locatorToLatLon(qso.myLocator) ?: settings.myPosition
-                    val them = if (lat != null && lon != null) LatLon(lat, lon) else null
-                    val updated = qso.copy(
-                        name = qso.name.ifBlank { info.fullName },
-                        qth = if (approx) info.city.ifBlank { qso.qth } else qso.qth.ifBlank { info.city },
-                        country = qso.country.ifBlank { info.country },
-                        locator = qso.locator.ifBlank { info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) }.orEmpty() } },
-                        lat = lat, lon = lon,
-                        distanceKm = (if (approx) null else qso.distanceKm) ?: if (me != null && them != null) Geo.distanceKm(me, them) else null,
-                        bearing = (if (approx) null else qso.bearing) ?: if (me != null && them != null) Geo.bearing(me, them) else null,
-                        adif = withQrzExtras(if (approx) qso.adif - HamQth.POSITION_FIELD else qso.adif, info),
-                        pendingLookup = false,
-                        updatedAt = System.currentTimeMillis(),
-                    )
-                    withContext(Dispatchers.IO) { db.save(updated) }
-                    tr("Данные %s получены с QRZ.ru", qso.call)
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: QrzException) {
-                e.message ?: tr("Ошибка QRZ.ru")
-            } catch (e: Exception) {
-                networkError(e)
+                fillFromQrz(qso)
             } finally {
                 refreshing = refreshing - qso.id
             }
             reload()
             _messages.send(Message(msg))
         }
+    }
+
+    /** Fills the saved contact's empty fields from QRZ.ru; returns what to tell the user. */
+    private suspend fun fillFromQrz(qso: Qso): String = try {
+        val info = qrzLookup(qso.call)
+        if (info == null) {
+            withContext(Dispatchers.IO) { db.save(qso.copy(pendingLookup = false)) }
+            tr("На QRZ.ru позывного %s нет", qso.call)
+        } else {
+            val pos = info.position
+            // A region-centre position from HamQTH gives way to the station's own one.
+            val approx = qso.approxPosition && pos != null
+            val lat = if (approx) pos!!.lat else qso.lat ?: pos?.lat
+            val lon = if (approx) pos!!.lon else qso.lon ?: pos?.lon
+            val me = Geo.locatorToLatLon(qso.myLocator) ?: settings.myPosition
+            val them = if (lat != null && lon != null) LatLon(lat, lon) else null
+            val updated = qso.copy(
+                name = qso.name.ifBlank { info.fullName },
+                qth = if (approx) info.city.ifBlank { qso.qth } else qso.qth.ifBlank { info.city },
+                country = qso.country.ifBlank { info.country },
+                locator = qso.locator.ifBlank { info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) }.orEmpty() } },
+                lat = lat, lon = lon,
+                distanceKm = (if (approx) null else qso.distanceKm) ?: if (me != null && them != null) Geo.distanceKm(me, them) else null,
+                bearing = (if (approx) null else qso.bearing) ?: if (me != null && them != null) Geo.bearing(me, them) else null,
+                adif = withQrzExtras(if (approx) qso.adif - HamQth.POSITION_FIELD else qso.adif, info),
+                pendingLookup = false,
+                updatedAt = System.currentTimeMillis(),
+            )
+            withContext(Dispatchers.IO) { db.save(updated) }
+            tr("Данные %s получены с QRZ.ru", qso.call)
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: QrzException) {
+        e.message ?: tr("Ошибка QRZ.ru")
+    } catch (e: Exception) {
+        networkError(e)
     }
 
     /** Returns an error message, or null when saved. */
@@ -1936,6 +1947,92 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setContestField(key: String, value: String) {
         form = form.copy(adif = form.adif + (key to value))
+    }
+
+    // ---------- WSJT-X, JTDX, MSHV ----------
+
+    var digiConfig by mutableStateOf(prefs.digi); private set
+    var digiStatus by mutableStateOf<DigiStatus>(DigiStatus.Off); private set
+    private var digiListener: DigiListener? = null
+    private var digiRestartJob: Job? = null
+    private val digiLock = Mutex()
+
+    fun changeDigi(c: DigiConfig) {
+        val old = digiConfig
+        if (c == old) return
+        digiConfig = c
+        prefs.digi = c
+        // Typing a port or a group: listen again once the typing pauses.
+        digiRestartJob?.cancel()
+        digiRestartJob = viewModelScope.launch {
+            if (c.enabled == old.enabled) delay(700)
+            restartDigi()
+        }
+    }
+
+    fun restartDigi() {
+        digiListener?.stop()
+        digiListener = null
+        digiStatus = DigiStatus.Off
+        releaseMulticast()
+        val c = digiConfig
+        if (!c.enabled) return
+        // Android drops multicast datagrams over Wi-Fi unless an app holds this lock.
+        if (c.multicast) multicastLock = runCatching {
+            (getApplication<Application>().applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager)
+                .createMulticastLock("qsolog-wsjtx").apply { setReferenceCounted(false); acquire() }
+        }.getOrNull()
+        lateinit var l: DigiListener
+        l = DigiListener(
+            c,
+            { st -> viewModelScope.launch { if (digiListener === l) digiStatus = st } },
+            { qsos, from -> viewModelScope.launch { if (digiListener === l) logDigi(qsos, from) } },
+        )
+        digiListener = l
+        l.start()
+    }
+
+    fun stopDigi() {
+        digiListener?.stop()
+        digiListener = null
+        releaseMulticast()
+    }
+
+    private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+
+    private fun releaseMulticast() {
+        runCatching { multicastLock?.release() }
+        multicastLock = null
+    }
+
+    /**
+     * A contact logged in WSJT-X: straight into the log, with "Моя станция" from the settings where the program did
+     * not say, then name and QTH from QRZ.ru. The same contact twice (WSJT-X sends it as fields and as ADIF) is one.
+     */
+    private suspend fun logDigi(qsos: List<Qso>, from: String) {
+        val s = settings
+        val added = digiLock.withLock {
+            withContext(Dispatchers.IO) {
+                qsos.mapNotNull { q0 ->
+                    val q = q0.copy(
+                        myCall = q0.myCall.ifBlank { s.myCall.trim().uppercase() },
+                        myLocator = q0.myLocator.ifBlank { s.myLocator.trim() },
+                        power = q0.power.ifBlank { s.power.trim() },
+                        adif = s.station + q0.adif,
+                        pendingLookup = hasQrzAccount,
+                    ).withDistance(s.myPosition)
+                    if (db.exists(q)) null else q.copy(id = db.save(q))
+                }
+            }
+        }
+        if (added.isEmpty()) return
+        reload()
+        say(if (added.size == 1) tr("Связь с %s из %s записана", added[0].call, from) else tr("Из %s записано связей: %s", from, added.size))
+        if (hasQrzAccount) added.forEach { q ->
+            refreshing = refreshing + q.id
+            try { fillFromQrz(q) } finally { refreshing = refreshing - q.id }
+            reload()
+        }
     }
 
     // ---------- CAT ----------

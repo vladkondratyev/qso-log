@@ -37,6 +37,8 @@ fun main(args: Array<String>) {
     val out = File(args.getOrElse(0) { "docs/screenshots" }).apply { mkdirs() }
     val data = Files.createTempDirectory("qsolog-demo").toFile()
     System.setProperty("qsolog.data", data.absolutePath)
+    // Not this computer's real network addresses in the WSJT-X settings.
+    System.setProperty("qsolog.addresses", "192.168.1.20")
     seed(data)
     seedHistory(data)
 
@@ -168,6 +170,16 @@ fun main(args: Array<String>) {
             click(1150f, 418f)
             big.sendPointerEvent(PointerEventType.Move, Offset(1900f, 1300f))
             shot("24-cat", 1000)
+            // The WSJT-X block: fold CAT, unfold the next one; a heartbeat from a made-up WSJT-X fills the status line.
+            state.changeDigi(state.digiConfig.copy(enabled = true))
+            repeat(6) { frame(); delay(250) }
+            fakeWsjtxHeartbeat(state.digiConfig.port)
+            click(1150f, 418f)
+            click(1150f, 550f)
+            big.sendPointerEvent(PointerEventType.Move, Offset(1900f, 1300f))
+            shot("25-wsjtx", 1500)
+            click(1150f, 550f)
+            state.changeDigi(state.digiConfig.copy(enabled = false))
             // Scroll the settings column to the bottom: version and project link.
             scrollRight(700)
             shot("09-about")
@@ -197,6 +209,18 @@ fun main(args: Array<String>) {
 }
 
 private val MY = LatLon(55.77, 37.62) // KO85ts, Moscow
+
+/** WSJT-X says it is running (type 0, heartbeat) to the app's UDP port. */
+private fun fakeWsjtxHeartbeat(port: Int) {
+    val b = java.io.ByteArrayOutputStream()
+    java.io.DataOutputStream(b).apply {
+        writeInt(ru.r3xed.qsolog.digi.Wsjtx.MAGIC); writeInt(3); writeInt(0)
+        listOf("WSJT-X").forEach { writeInt(it.length); writeBytes(it) }
+        writeInt(3)
+        listOf("2.7.0", "abc").forEach { writeInt(it.length); writeBytes(it) }
+    }
+    java.net.DatagramSocket().use { it.send(java.net.DatagramPacket(b.toByteArray(), b.size(), java.net.InetAddress.getLoopbackAddress(), port)) }
+}
 
 /** rigctld of a made-up transceiver: 14.195 MHz, USB, S8. */
 private fun fakeRigctld(): java.net.ServerSocket {
