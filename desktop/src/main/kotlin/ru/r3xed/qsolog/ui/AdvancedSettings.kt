@@ -1,0 +1,334 @@
+package ru.r3xed.qsolog.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import ru.r3xed.qsolog.AppState
+import ru.r3xed.qsolog.IS_MAC
+import ru.r3xed.qsolog.StartLauncher
+import ru.r3xed.qsolog.cat.CatProtocol
+import ru.r3xed.qsolog.data.StartApps
+import ru.r3xed.qsolog.cw.CwConfig
+import ru.r3xed.qsolog.cw.CwLine
+import ru.r3xed.qsolog.cw.CwMacros
+import ru.r3xed.qsolog.cw.CwState
+import ru.r3xed.qsolog.data.StartApp
+import ru.r3xed.qsolog.keys.Chord
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
+import ru.r3xed.qsolog.keys.KeyScope
+import ru.r3xed.qsolog.tr
+
+@Composable
+private fun SwitchLine(text: String, on: Boolean, strong: Boolean = false, onChange: (Boolean) -> Unit) {
+    val x = LocalExtra.current
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(if (strong && on) MaterialTheme.colorScheme.primaryContainer else x.field)
+            .toggleable(value = on, role = Role.Switch, onValueChange = onChange)
+            .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = if (strong) FontWeight.Bold else null, modifier = Modifier.weight(1f).padding(end = 12.dp))
+        Switch(checked = on, onCheckedChange = null)
+    }
+}
+
+/** The summary line of the telegraph block. */
+fun cwSummary(vm: AppState): String =
+    if (!vm.cwConfig.enabled) tr("выключено") else tr("ключ на %s · %s WPM", vm.cwConfig.line.name, vm.cwConfig.wpm) +
+        ((vm.cwState as? CwState.Failed)?.let { " · " + it.message } ?: "")
+
+/**
+ * Telegraph from the log, as in N1MM: the USB adapter and its line, the speed, the eight messages and what they may
+ * hold, and how to wire the key of a Xiegu G90.
+ */
+@Composable
+fun CwSettings(vm: AppState) {
+    val c = vm.cwConfig
+    SwitchLine(tr("Передавать телеграфом с клавиш F1–F8"), c.enabled, strong = true) { vm.changeCw(c.copy(enabled = it)) }
+    (vm.cwState as? CwState.Failed)?.let { Text(it.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
+    Section(tr("COM-порт ключа"))
+    var tick by remember { mutableStateOf(0) }
+    val devices = remember(tick) { vm.catPorts() }
+    DeviceList(devices, c.device, tr("COM-портов не видно. Подключите адаптер (CP2102, CH340, FTDI) и нажмите «Обновить список».")) { vm.changeCw(c.copy(device = it)) }
+    ActionButton(tr("Обновить список"), Icons.Filled.Refresh) { tick++ }
+    Section(tr("Линия ключа"))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        CwLine.entries.forEach { l ->
+            val on = c.line == l
+            Box(
+                Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp))
+                    .background(if (on) MaterialTheme.colorScheme.primary else LocalExtra.current.field)
+                    .selectable(selected = on, role = Role.RadioButton) { vm.changeCw(c.copy(line = l)) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(l.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+    SwitchLine(tr("Вторая линия — PTT на время передачи"), c.ptt) { vm.changeCw(c.copy(ptt = it)) }
+    SwitchLine(tr("Инвертировать линию ключа"), c.invert) { vm.changeCw(c.copy(invert = it)) }
+    Section(tr("Скорость: %s WPM", c.wpm))
+    Slider(
+        value = c.wpm.toFloat(), onValueChange = { vm.changeCw(c.copy(wpm = it.toInt())) },
+        valueRange = CwConfig.MIN_WPM.toFloat()..CwConfig.MAX_WPM.toFloat(), steps = CwConfig.MAX_WPM - CwConfig.MIN_WPM - 1,
+    )
+    Section(tr("Сообщения"))
+    c.messages.forEachIndexed { i, m ->
+        OutlinedTextField(
+            value = m,
+            onValueChange = { v -> vm.changeCw(c.copy(messages = c.messages.toMutableList().also { it[i] = v.uppercase() })) },
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            label = { Text(KeyMap.label(KeyAction.entries.first { it.cwMessage == i }, false).ifEmpty { tr("Сообщение %s", i + 1) }) },
+            textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp),
+            shape = RoundedCornerShape(12.dp),
+        )
+    }
+    Note(CwMacros.HELP)
+    ActionButton(tr("Проверить: передать «VVV»"), Icons.Filled.PlayArrow) { vm.testCw() }
+    Note(tr("Сообщения передаются, когда в карточке QSO выбран вид CW: клавиши F1–F8 (их можно переназначить в «Дополнительных настройках»), кнопки под частотой, Esc — остановить, Alt+↑ и Alt+↓ — скорость. Так работает N1MM: программа замыкает ключ линией DTR или RTS USB-адаптера."))
+    Note(tr("Xiegu G90 и другие трансиверы, у которых ключ замыкается на массу: у адаптера CP2102 выводы DTR и RTS при передаче опускаются в 0 В. Соедините вывод с «точкой» (или прямым ключом) гнезда KEY через транзистор или оптрон (PC817), массу — с массой. В меню трансивера выберите прямой ключ (Straight). Если ключ замкнут без передачи, включите «Инвертировать»."))
+    Note(tr("Если CAT идёт через тот же COM-порт (один кабель CP2102 для CI-V и ключа), выберите его и здесь: порт будет общим."))
+}
+
+/**
+ * Дополнительные настройки: the keys, and the programs started together with QSO-LOG.
+ */
+@Composable
+fun AdvancedSettings(vm: AppState) {
+    var keys by remember { mutableStateOf(false) }
+    Section(tr("Клавиши"))
+    Note(tr("Любое сочетание можно заменить своим: например, F9 вместо Ctrl+N, или клавиши, к которым вы привыкли в другом логгере. Список клавиш (F1) показывает уже ваши."))
+    ActionButton(tr("Назначить клавиши"), Icons.Filled.Keyboard) { keys = true }
+    if (vm.keymap.isNotEmpty()) Note(tr("Изменено действий: %s", vm.keymap.size))
+
+    Section(tr("Запускать вместе с QSO-LOG"))
+    vm.startApps.forEachIndexed { i, a ->
+        fun upd(n: StartApp) = vm.changeStartApps(vm.startApps.toMutableList().also { it[i] = n })
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, LocalExtra.current.line, RoundedCornerShape(12.dp)).padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { SwitchLine(a.title, a.enabled) { on -> upd(a.copy(enabled = on)) } }
+                IconButton(onClick = { vm.changeStartApps(vm.startApps.filterIndexed { j, _ -> j != i }) }) { Icon(Icons.Filled.Delete, tr("Убрать")) }
+            }
+            Text(a.target, fontFamily = Mono, style = MaterialTheme.typography.bodySmall, color = LocalExtra.current.muted)
+            OutlinedTextField(
+                a.args, { upd(a.copy(args = it)) }, Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text(tr("Параметры запуска")) }, textStyle = TextStyle(fontFamily = Mono),
+            )
+            SwitchLine(tr("Закрывать вместе с QSO-LOG"), a.closeOnExit) { upd(a.copy(closeOnExit = it)) }
+        }
+    }
+    ActionButton(tr("Добавить программу…"), Icons.Filled.Add) {
+        chooseProgram()?.let { f -> vm.changeStartApps(vm.startApps + StartApp(f.path, f.nameWithoutExtension)) }
+    }
+    var rigctld by remember { mutableStateOf(false) }
+    ActionButton(tr("Добавить Hamlib rigctld (для JTDX и QSO-LOG вместе)"), Icons.Filled.Add) { rigctld = true }
+    if (vm.startApps.any { it.enabled }) ActionButton(tr("Запустить сейчас"), Icons.Filled.PlayArrow) { vm.launchStartApps() }
+    Note(tr("При запуске QSO-LOG откроет отмеченные программы с их параметрами — например, JTDX, WSJT-X или Hamlib rigctld. Уже запущенная программа второй раз не открывается. «Закрывать вместе с QSO-LOG» — программа закроется при выходе из QSO-LOG."))
+    Note(tr("JTDX и QSO-LOG с одним трансивером: COM-порт может открыть только одна программа. Его держит rigctld, а обе программы подключаются к нему: в JTDX — Settings → Radio → Rig «Hamlib NET rigctl», Network Server 127.0.0.1:4532; в QSO-LOG — CAT → «Hamlib rigctld», 127.0.0.1, порт 4532. Без rigctld частоту и вид QSO-LOG берёт из JTDX по UDP (Settings → Reporting → UDP Server 127.0.0.1:2237 и блок «Цифровые виды» здесь), но управлять трансивером тогда может только JTDX."))
+    if (rigctld) RigctldDialog(vm, onDone = { a ->
+        rigctld = false
+        if (a != null) {
+            vm.changeStartApps(vm.startApps.filter { it.target != "rigctld" } + a)
+            // QSO-LOG then talks to the radio through it.
+            vm.changeCat(vm.catConfig.copy(rig = ru.r3xed.qsolog.cat.Rigs.RIGCTLD, host = "127.0.0.1", port = 4532, link = ru.r3xed.qsolog.cat.CatLinkType.NETWORK))
+        }
+    })
+
+    if (keys) KeysEditor(vm) { keys = false }
+}
+
+/** A file dialog for a program: an .exe, a Mac .app, a script or a binary. */
+private fun chooseProgram(): java.io.File? {
+    val d = java.awt.FileDialog(null as java.awt.Frame?, tr("Программа для автозапуска"), java.awt.FileDialog.LOAD)
+    if (IS_MAC) d.directory = "/Applications"
+    d.isVisible = true
+    val name = d.file ?: return null
+    return java.io.File(d.directory, name)
+}
+
+/** Hamlib rigctld for the radio: its Hamlib model number, the COM port and the speed. */
+@Composable
+private fun RigctldDialog(vm: AppState, onDone: (StartApp?) -> Unit) {
+    var model by remember { mutableStateOf("") }
+    var port by remember { mutableStateOf(vm.catConfig.device.ifBlank { vm.catPorts().firstOrNull()?.key.orEmpty() }) }
+    var baud by remember { mutableStateOf(vm.catConfig.baud.toString()) }
+    val ok = model.toIntOrNull() != null && port.isNotBlank() && baud.toIntOrNull() != null
+    AlertDialog(
+        onDismissRequest = { onDone(null) },
+        title = { Text("Hamlib rigctld") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(model, { model = it.filter(Char::isDigit).take(5) }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(tr("Номер модели Hamlib (rigctl -l): IC-7300 — 3073, FT-891 — 1036")) })
+                OutlinedTextField(port, { port = it.trim() }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(tr("COM-порт трансивера")) })
+                OutlinedTextField(baud, { baud = it.filter(Char::isDigit).take(6) }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(tr("Скорость, бод")) })
+                Note(tr("rigctld входит в Hamlib: hamlib.github.io (Windows), brew install hamlib (macOS), apt install libhamlib-utils (Linux). QSO-LOG переключит свой CAT на rigctld 127.0.0.1:4532."))
+            }
+        },
+        confirmButton = { TextButton(onClick = { onDone(StartApps.rigctld(model.toInt(), port, baud.toInt())) }, enabled = ok) { Text(tr("Добавить")) } },
+        dismissButton = { TextButton(onClick = { onDone(null) }) { Text(tr("Отмена")) } },
+    )
+}
+
+/** Every action with its keys, by screen; a tap on one asks for the new key. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun KeysEditor(vm: AppState, onClose: () -> Unit) {
+    val x = LocalExtra.current
+    var editing by remember { mutableStateOf<KeyAction?>(null) }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxWidth(0.8f).fillMaxHeight(0.9f), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.background) {
+            Column {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onClose, modifier = Modifier.size(56.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Назад")) }
+                    Text(tr("Клавиши"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    if (vm.keymap.isNotEmpty()) TextButton(onClick = { vm.changeKeymap(emptyMap()) }) { Text(tr("Сбросить все")) }
+                }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Note(tr("Нажмите на действие и затем новое сочетание. Стрелки, Tab, Enter и Пробел в списках, Alt+1…9 работают как прежде."))
+                    KeyScope.entries.forEach { scope ->
+                        Section(scope.title)
+                        KeyAction.entries.filter { it.scope == scope }.forEach { a ->
+                            val chords = KeyMap.chords(a)
+                            val changed = a in vm.keymap
+                            Column(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
+                                    .clickable { editing = a }.padding(horizontal = 14.dp, vertical = 10.dp),
+                            ) {
+                                Text(a.title, style = MaterialTheme.typography.bodyLarge)
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                                    if (chords.isEmpty()) Text(tr("нет клавиши"), color = x.muted)
+                                    chords.forEach { ch ->
+                                        Text(
+                                            ch.label(IS_MAC), fontFamily = Mono, fontWeight = FontWeight.Bold,
+                                            color = if (changed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.border(1.dp, x.line, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 2.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(24.dp))
+                }
+            }
+        }
+    }
+    editing?.let { a -> KeyCapture(vm, a) { editing = null } }
+}
+
+/** Waits for a key of the external keyboard; then replace, add, or take it off; or back to the defaults. */
+@Composable
+private fun KeyCapture(vm: AppState, a: KeyAction, onClose: () -> Unit) {
+    var chord by remember { mutableStateOf<Chord?>(null) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val refusal = chord?.let { KeyMap.refusal(a, it) }
+    val taken = chord?.let { KeyMap.conflicts(a, it) }.orEmpty()
+    fun set(list: List<Chord>) {
+        vm.changeKeymap(KeyMap.assign(vm.keymap, a, list))
+        onClose()
+    }
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(a.title) },
+        text = {
+            Column(
+                Modifier.focusRequester(focus).focusable().onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    e.chord()?.let { chord = it }
+                    true
+                },
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(tr("Сейчас: %s", KeyMap.label(a, false).ifEmpty { tr("нет клавиши") }), style = MaterialTheme.typography.bodyLarge)
+                Box(
+                    Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(14.dp)).background(LocalExtra.current.field),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(chord?.label(IS_MAC) ?: tr("нажмите сочетание…"), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp)
+                }
+                refusal?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (refusal == null && taken.isNotEmpty())
+                    Text(tr("Сейчас эта клавиша — «%s»: там она будет снята.", taken.joinToString("», «") { it.title }), color = MaterialTheme.colorScheme.error)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { set(emptyList()) }) { Text(tr("Без клавиши")) }
+                    TextButton(onClick = { set(a.defaults) }) { Text(tr("Как было")) }
+                }
+            }
+        },
+        confirmButton = {
+            Row {
+                TextButton(onClick = { chord?.let { set(KeyMap.chords(a) + it) } }, enabled = chord != null && refusal == null) { Text(tr("Добавить")) }
+                TextButton(onClick = { chord?.let { set(listOf(it)) } }, enabled = chord != null && refusal == null) { Text(tr("Заменить")) }
+            }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text(tr("Отмена")) } },
+    )
+}

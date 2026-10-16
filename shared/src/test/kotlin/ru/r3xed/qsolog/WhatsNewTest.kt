@@ -15,14 +15,14 @@ class WhatsNewTest {
     }
 
     @Test
-    fun digitalModesOnBoth() {
-        // 2.1.0: contacts from WSJT-X on both; the phone says where to send them, the computer how to set up WSJT-X.
+    fun transceiverPanelOnBoth() {
+        // 2.2.0: the panel and CW on both; the computer also starts JTDX and rigctld.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Цифровые виды"))
-            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Цифровые виды"))
-            assertTrue(WhatsNew.items(desktop = false).any { "Wi-Fi" in it })
-            assertTrue(WhatsNew.items(desktop = true).any { "127.0.0.1" in it })
+            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Пульт трансивера"))
+            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Пульт трансивера"))
+            assertTrue(WhatsNew.items(desktop = true).any { "rigctld" in it })
+            assertTrue(WhatsNew.items(desktop = false).none { "rigctld" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

@@ -1,5 +1,10 @@
 package ru.r3xed.qsolog
 
+import ru.r3xed.qsolog.keys.Chord
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
+import ru.r3xed.qsolog.ui.chord
+import ru.r3xed.qsolog.ui.menuShortcut
 import androidx.compose.runtime.key
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -77,15 +82,20 @@ val NEXT_SHORTCUT = if (IS_MAC) "⇧⌘S" else "Ctrl+Shift+S"
 
 private fun shortcut(key: Key) = KeyShortcut(key, meta = IS_MAC, ctrl = !IS_MAC)
 
+/** Actions of the menu bar: their first key is the menu item's shortcut (see [menuShortcut]). */
+private val MENU_ACTIONS = setOf(KeyAction.NEW_QSO, KeyAction.DASHBOARD, KeyAction.MAP, KeyAction.HISTORY, KeyAction.SETTINGS)
+
 private val DASH_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four)
 
 /** Keys held down now, to tell the computer's auto-repeat from a new press of the Morse key. */
 private val morseHeld = mutableSetOf<String>()
 
 /** The log with no card open: the arrows walk through the rows, Enter opens, Space picks, Delete deletes. */
-private fun logKey(state: AppState, e: androidx.compose.ui.input.key.KeyEvent, mod: Boolean): Boolean {
+private fun logKey(state: AppState, e: androidx.compose.ui.input.key.KeyEvent, mod: Boolean, c: Chord?): Boolean {
     when {
         mod && e.key == Key.A -> state.selectAllShown()
+        // One dialog for the cursor's row or the picked records; Enter deletes.
+        KeyMap.hit(KeyAction.LOG_DELETE, c) -> return state.askDeleteLog()
         mod -> return false
         e.key == Key.DirectionDown -> state.moveLogCursor(1)
         e.key == Key.DirectionUp -> state.moveLogCursor(-1)
@@ -95,28 +105,26 @@ private fun logKey(state: AppState, e: androidx.compose.ui.input.key.KeyEvent, m
         e.key == Key.MoveEnd -> state.moveLogCursor(0, to = 1)
         (e.key == Key.Enter || e.key == Key.NumPadEnter) && state.logCursor != null -> state.openLogCursor()
         e.key == Key.Spacebar && state.logCursor != null -> state.toggleLogCursor()
-        // One dialog for the cursor's row or the picked records; Enter deletes.
-        e.key == Key.Delete || (IS_MAC && e.key == Key.Backspace) -> return state.askDeleteLog()
         else -> return false
     }
     return true
 }
 
 /** The search history: arrows, Enter, Space, and one letter per action on the row, the picked ones or the open entry. */
-private fun historyKey(state: AppState, e: androidx.compose.ui.input.key.KeyEvent, mod: Boolean): Boolean {
+private fun historyKey(state: AppState, e: androidx.compose.ui.input.key.KeyEvent, mod: Boolean, c: Chord?): Boolean {
     val open = state.historyOpen != null
     when {
         mod && e.key == Key.A && !open -> state.selectAllHistory()
+        KeyMap.hit(KeyAction.H_FAVORITE, c) -> state.historyTargets().ifEmpty { null }?.let(state::toggleFavorite)
+        KeyMap.hit(KeyAction.H_EDIT, c) -> state.historyTargets().ifEmpty { null }?.let { state.historyEditCalls = it }
+        KeyMap.hit(KeyAction.H_DELETE, c) -> state.historyTargets().ifEmpty { null }?.let { state.historyDeleteAsk = it }
+        KeyMap.hit(KeyAction.H_NEW, c) -> state.newQsoFromHistoryTarget()
+        KeyMap.hit(KeyAction.H_MAP, c) && !open -> state.historyMap = !state.historyMap
         mod || e.isAltPressed -> return false
         e.key == Key.DirectionDown && !open -> state.moveHistoryCursor(1)
         e.key == Key.DirectionUp && !open -> state.moveHistoryCursor(-1)
         (e.key == Key.Enter || e.key == Key.NumPadEnter) && !open -> state.openHistoryCursor()
         e.key == Key.Spacebar && !open -> state.historyCursor?.let(state::toggleHistorySelected)
-        e.key == Key.F -> state.historyTargets().ifEmpty { null }?.let(state::toggleFavorite)
-        e.key == Key.E -> state.historyTargets().ifEmpty { null }?.let { state.historyEditCalls = it }
-        e.key == Key.Delete || (IS_MAC && e.key == Key.Backspace) -> state.historyTargets().ifEmpty { null }?.let { state.historyDeleteAsk = it }
-        e.key == Key.N -> state.newQsoFromHistoryTarget()
-        e.key == Key.M && !open -> state.historyMap = !state.historyMap
         else -> return false
     }
     return true
@@ -131,7 +139,7 @@ fun main() {
         val state = remember { AppState() }
         val windowState = rememberWindowState(width = 1024.dp, height = 700.dp, position = WindowPosition(Alignment.Center))
         Window(
-            onCloseRequest = { state.flushSettings(); state.stopCat(); state.stopDigi(); exitApplication() },
+            onCloseRequest = { state.flushSettings(); state.stopCat(); state.stopDigi(); state.closeCw(); state.stopStartApps(); exitApplication() },
             title = "QSO-LOG",
             icon = painterResource("icon.png"),
             state = windowState,
@@ -145,39 +153,46 @@ fun main() {
                     if (down) morseHeld.add(id) else morseHeld.remove(id)
                     if (ru.r3xed.qsolog.morse.MorseKeyBus.key(id, down, repeat)) return@Window true
                 }
-                // One key instead of two: F9 opens a new card from anywhere, F1 lists the keys.
+                // The keys are the user's (Настройки → Дополнительные настройки → Клавиши); the defaults are those of KeyAction.
                 val mod = if (IS_MAC) e.isMetaPressed else e.isCtrlPressed
-                if (e.type == KeyEventType.KeyDown && e.key == Key.F9) { state.addQso(); true }
-                // Ctrl+E (⌘E): the contact just logged opens to be fixed; Ctrl+F (⌘F): the search.
-                else if (e.type == KeyEventType.KeyDown && mod && e.isShiftPressed && e.key == Key.E) { state.openExport(ExportFormat.ADIF, selectedOnly = false); true }
-                else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.E) { state.editLast(); true }
-                else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.K && state.pane != Pane.Edit && state.pane != Pane.Contest) { state.toggleContestMode(); true }
-                else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.R) { state.syncByKey(); true }
-                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Empty && !state.searchFocused && !state.showKeys && state.logDeleteAsk == null && !state.showTransfer && logKey(state, e, mod)) true
+                val c = if (e.type == KeyEventType.KeyDown) e.chord() else null
+                val inCard = state.pane == Pane.Edit || state.pane == Pane.Contest
+                // The menu bar has the first key of these actions as its shortcut and does them itself.
+                fun hit(a: KeyAction) = KeyMap.hit(a, c) && (a !in MENU_ACTIONS || c != KeyMap.chords(a).firstOrNull())
+                // The card in CW with the key line on: F1–F8 send the messages, on top of the card's own keys.
+                if (inCard && state.cwKey(c)) true
+                else if (hit(KeyAction.NEW_QSO)) { state.addQso(); true }
+                else if (hit(KeyAction.EXPORT_ADIF)) { state.openExport(ExportFormat.ADIF, selectedOnly = false); true }
+                else if (hit(KeyAction.EDIT_LAST)) { state.editLast(); true }
+                else if (hit(KeyAction.CONTEST_MODE) && !inCard) { state.toggleContestMode(); true }
+                else if (hit(KeyAction.SYNC)) { state.syncByKey(); true }
+                else if (hit(KeyAction.RIG_PANEL)) { state.showRigPanel = !state.showRigPanel; true }
+                else if (hit(KeyAction.DASHBOARD)) { state.dashboardOrDelete(); true }
+                else if (hit(KeyAction.MAP)) { state.openMap(); true }
+                else if (hit(KeyAction.HISTORY)) { state.openHistory(); true }
+                else if (hit(KeyAction.SETTINGS)) { state.openSettings(); true }
+                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Empty && !state.searchFocused && !state.showKeys && state.logDeleteAsk == null && !state.showTransfer && logKey(state, e, mod, c)) true
                 // Alt+W or Ctrl+Esc (⌘Esc) wipes a new card, as in classic loggers: a clean card, the cursor in the callsign.
-                else if (e.type == KeyEventType.KeyDown && (state.pane == Pane.Edit || state.pane == Pane.Contest) &&
-                    ((e.key == Key.W && e.isAltPressed && !mod) || (e.key == Key.Escape && mod))) { if (state.form.isNew) state.clearCard(); true }
-                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.History && !state.historyTyping && state.historyEditCalls == null && state.historyDeleteAsk == null && historyKey(state, e, mod)) true
+                else if (inCard && hit(KeyAction.CLEAR_CARD)) { if (state.form.isNew) state.clearCard(); true }
+                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.History && !state.historyTyping && state.historyEditCalls == null && state.historyDeleteAsk == null && historyKey(state, e, mod, c)) true
                 else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Dashboard && !mod && DASH_KEYS.indexOf(e.key) >= 0) {
                     state.changeDashFilter(state.dashFilter.copy(period = ru.r3xed.qsolog.data.StatPeriod.entries[DASH_KEYS.indexOf(e.key)]))
                     true
                 }
-                else if (e.type == KeyEventType.KeyDown && mod && e.key == Key.F) { state.requestSearchFocus(); true }
-                else if (e.type == KeyEventType.KeyDown && e.key == Key.F1) { state.showKeys = !state.showKeys; true }
-                else if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) when {
+                else if (hit(KeyAction.SEARCH)) { state.requestSearchFocus(); true }
+                else if (hit(KeyAction.KEYS_HELP)) { state.showKeys = !state.showKeys; true }
+                // Esc closes the card; with changes it asks first (Enter in the dialog closes).
+                else if (inCard && !state.showKeys && !state.showTransfer && hit(KeyAction.CLOSE_CARD)) {
+                    if (state.confirmClose) state.confirmClose = false
+                    else if (state.pane == Pane.Edit) state.requestClose() else state.requestCloseContest()
+                    true
+                }
+                else if (e.type == KeyEventType.KeyDown && e.key == Key.Escape && !mod) when {
                     state.showKeys -> { state.showKeys = false; true }
                     state.selecting -> { state.clearSelection(); true }
                     state.logDeleteAsk != null -> { state.logDeleteAsk = null; true }
                     state.showTransfer -> { state.showTransfer = false; true }
-                    // Esc closes the card; with changes it asks first (Enter in the dialog closes).
-                    state.pane == Pane.Edit -> {
-                        if (state.confirmClose) state.confirmClose = false else state.requestClose()
-                        true
-                    }
-                    state.pane == Pane.Contest -> {
-                        if (state.confirmClose) state.confirmClose = false else state.requestCloseContest()
-                        true
-                    }
+                    state.pane == Pane.Edit || state.pane == Pane.Contest -> false
                     state.pane == Pane.Settings -> { state.closeSettings(); true }
                     state.pane == Pane.History -> { state.closeHistory(); true }
                     state.pane != Pane.Empty -> { state.pane = Pane.Empty; true }
@@ -219,7 +234,7 @@ fun main() {
             // Texts are read through tr() while composing: a new language rebuilds the menu and the window.
             key(state.language) { MenuBar {
                 Menu(tr("Файл")) {
-                    Item(tr("Новый QSO"), shortcut = shortcut(Key.N), onClick = { state.addQso() })
+                    Item(tr("Новый QSO"), shortcut = menuShortcut(KeyAction.NEW_QSO), onClick = { state.addQso() })
                     Item(tr("Сохранить связь"), enabled = state.pane == Pane.Edit, shortcut = shortcut(Key.S), onClick = state::trySave)
                     Item(
                         tr("Сохранить и следующая"), enabled = state.pane == Pane.Edit && state.form.isNew,
@@ -235,19 +250,20 @@ fun main() {
                     Item(tr("Экспорт в ЕРМАК / Cabrillo…"), onClick = { state.openContestExport(selectedOnly = false) })
                     Item(tr("Импорт из ЕРМАК / Cabrillo…"), onClick = importContest)
                     Separator()
-                    Item(tr("Дашборд"), shortcut = shortcut(Key.D), onClick = state::dashboardOrDelete)
-                    Item(tr("Карта QSO"), shortcut = shortcut(Key.M), onClick = state::openMap)
-                    Item(tr("История поиска"), shortcut = shortcut(Key.H), onClick = state::openHistory)
+                    Item(tr("Дашборд"), shortcut = menuShortcut(KeyAction.DASHBOARD), onClick = state::dashboardOrDelete)
+                    Item(tr("Карта QSO"), shortcut = menuShortcut(KeyAction.MAP), onClick = state::openMap)
+                    Item(tr("История поиска"), shortcut = menuShortcut(KeyAction.HISTORY), onClick = state::openHistory)
                     Item(tr("Справка и калькуляторы"), onClick = state::openReference)
-                    Item(tr("Горячие клавиши") + " (F1)", onClick = { state.showKeys = true })
-                    Item(tr("Настройки"), shortcut = shortcut(Key.Comma), onClick = { state.openSettings() })
+                    Item(tr("Горячие клавиши") + KeyMap.label(KeyAction.KEYS_HELP, IS_MAC).ifEmpty { null }?.let { " ($it)" }.orEmpty(), onClick = { state.showKeys = true })
+                    if (state.catConfig.enabled || state.rig != null) Item(tr("Пульт трансивера"), onClick = { state.showRigPanel = true })
+                    Item(tr("Настройки"), shortcut = menuShortcut(KeyAction.SETTINGS), onClick = { state.openSettings() })
                     // Shown once the table is set up in the settings; the sync runs only when asked.
                     if (ru.r3xed.qsolog.data.SheetSync.isScriptUrl(state.sheetUrl)) {
                         Item(tr("Синхронизировать"), enabled = !state.sheetSyncing, onClick = state::syncSheet)
                     }
                     if (!IS_MAC) {
                         Separator()
-                        Item(tr("Выход"), onClick = { state.flushSettings(); exitApplication() })
+                        Item(tr("Выход"), onClick = { state.flushSettings(); state.closeCw(); state.stopStartApps(); exitApplication() })
                     }
                 }
             } }
@@ -333,7 +349,8 @@ fun App(state: AppState, files: Exports) {
                     onUtf8 = state::chooseAdifUtf8,
                 )
             }
-            if (state.showKeys) KeysDialog(onClose = { state.showKeys = false })
+            if (state.showKeys) KeysDialog(state.cwConfig.messages.takeIf { state.cwConfig.enabled }, onClose = { state.showKeys = false })
+            if (state.showRigPanel) ru.r3xed.qsolog.ui.RigPanel(state)
             if (state.showTransfer) TransferDialog(
                 total = state.total,
                 onExport = { format -> state.showTransfer = false; state.openExport(format, selectedOnly = false) },
@@ -376,9 +393,9 @@ private fun EmptyPane(state: AppState) {
 
 /** F1: every key of the card in one table. */
 @Composable
-private fun KeysDialog(onClose: () -> Unit) {
+private fun KeysDialog(cwMessages: List<String>?, onClose: () -> Unit) {
     // The sections in two columns of a wide dialog; it scrolls in a small window.
-    val sections = KeyHints.sections(IS_MAC)
+    val sections = KeyHints.sections(IS_MAC, cwMessages)
     AlertDialog(
         onDismissRequest = onClose,
         modifier = Modifier.widthIn(max = 1180.dp).fillMaxWidth(0.94f),
@@ -387,7 +404,8 @@ private fun KeysDialog(onClose: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Balanced by lines: "everywhere" and the card on the left, the log, contest, history and dashboard on the right.
-                val columns = listOf(listOf(sections[0], sections[2]), listOf(sections[1], sections[3], sections[4], sections[5]))
+                val left = listOf(sections[0], sections[2])
+                val columns = listOf(left, sections - left.toSet())
                 Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                     columns.forEach { col ->
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {

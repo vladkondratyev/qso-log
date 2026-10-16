@@ -1,5 +1,7 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -140,35 +142,36 @@ fun ContestPane(vm: AppState) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).onPreviewKeyEvent { e ->
             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-            val plain = !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed
+            val c = e.chord()
+            fun hit(a: KeyAction) = KeyMap.hit(a, c)
             when {
                 // Enter logs from any field ("20m", "CW", "14025" in the callsign switch band, mode or frequency);
                 // Space goes between the callsign and the received code (the reports are skipped); ↑ in an empty
                 // callsign — the previous contact; Ctrl+D (⌘D) deletes a saved contact. Esc and Alt+W: see Main.kt.
-                (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
+                hit(KeyAction.LOG_ENTER) -> {
                     if (!(focused == Target.CALL && vm.runCallCommand())) next()
                     true
                 }
-                e.key == Key.Spacebar && plain && focused == Target.CALL -> {
+                hit(KeyAction.SPACE_NEXT) && focused == Target.CALL -> {
                     if (!vm.runCallCommand()) rcvdFocus.requestFocus()
                     true
                 }
-                e.key == Key.Spacebar && plain -> { callFocus.requestFocus(); true }
-                e.key == Key.D && (if (ru.r3xed.qsolog.IS_MAC) e.isMetaPressed else e.isCtrlPressed) && !vm.form.isNew -> { confirmDelete = true; true }
+                hit(KeyAction.SPACE_NEXT) -> { callFocus.requestFocus(); true }
+                hit(KeyAction.DELETE_SAVED) && !vm.form.isNew -> { confirmDelete = true; true }
                 e.key == Key.DirectionUp && focused == Target.CALL && f.isNew && f.call.isEmpty() -> {
                     if (hasPrev) prev()
                     true
                 }
                 // F12 records the contact from any field, as "Сохранить" does in the usual card.
-                e.key == Key.F12 -> {
+                hit(KeyAction.SAVE) -> {
                     next()
                     true
                 }
-                e.key == Key.PageUp || (e.isAltPressed && e.key == Key.DirectionLeft) -> {
+                hit(KeyAction.CONTEST_PREV) -> {
                     if (hasPrev) prev()
                     true
                 }
-                e.key == Key.PageDown || (e.isAltPressed && e.key == Key.DirectionRight) -> {
+                hit(KeyAction.CONTEST_NEXT) -> {
                     next()
                     true
                 }
@@ -191,6 +194,7 @@ fun ContestPane(vm: AppState) {
             Spacer(Modifier.weight(1f))
             ContestRate(vm)
         }
+        CwBar(vm, Modifier.padding(horizontal = 20.dp))
         // Where this card is among the contest contacts; the arrows do what Page Up / Page Down do.
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = prev, enabled = hasPrev) {

@@ -53,6 +53,8 @@ class DigiListener(
     private val onStatus: (DigiStatus) -> Unit,
     private val onLogged: (List<Qso>, String) -> Unit,
     private val retryMs: Long = 5000,
+    /** The program's dial frequency and mode (its Status message): the radio's state when the app has no CAT of its own. */
+    private val onDial: (Wsjtx.Message.Status) -> Unit = {},
 ) {
     @Volatile private var running = false
     @Volatile private var socket: DatagramSocket? = null
@@ -118,6 +120,7 @@ class DigiListener(
                         onStatus(DigiStatus.Listening(config.port, program, heardAt))
                     }
                     if (m is Wsjtx.Message.Logged) onLogged(m.qsos, m.id)
+                    if (m is Wsjtx.Message.Status && m.dialHz > 0) onDial(m)
                 }
                 s.close()
             } catch (e: Exception) {

@@ -467,7 +467,7 @@ fun HistoryMenuItem(vm: AppState, onOpen: () -> Unit) {
         text = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(tr("История поиска"), fontSize = 18.sp)
-                Text("   " + (if (ru.r3xed.qsolog.IS_MAC) "⌘H" else "Ctrl+H"), fontFamily = Mono, fontSize = 14.sp, color = LocalExtra.current.muted)
+                Text("   " + ru.r3xed.qsolog.keys.KeyMap.label(ru.r3xed.qsolog.keys.KeyAction.HISTORY, ru.r3xed.qsolog.IS_MAC), fontFamily = Mono, fontSize = 14.sp, color = LocalExtra.current.muted)
             }
         },
         leadingIcon = { Icon(Icons.Filled.History, null) },

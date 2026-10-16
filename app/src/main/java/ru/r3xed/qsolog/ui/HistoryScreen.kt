@@ -464,7 +464,7 @@ fun HistoryMenuItem(vm: AppViewModel, onOpen: () -> Unit) {
         text = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(tr("История поиска"), fontSize = 18.sp)
-                if (vm.hardKeyboard) Text("   Ctrl+H", fontFamily = Mono, fontSize = 14.sp, color = LocalExtra.current.muted)
+                if (vm.hardKeyboard) Text("   " + ru.r3xed.qsolog.keys.KeyMap.label(ru.r3xed.qsolog.keys.KeyAction.HISTORY, false), fontFamily = Mono, fontSize = 14.sp, color = LocalExtra.current.muted)
             }
         },
         leadingIcon = { Icon(Icons.Filled.History, null) },

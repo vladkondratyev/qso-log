@@ -1,5 +1,9 @@
 package ru.r3xed.qsolog
 
+import ru.r3xed.qsolog.keys.Chord
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
+import ru.r3xed.qsolog.ui.chord
 import androidx.compose.runtime.key
 import android.Manifest
 import android.content.pm.PackageManager
@@ -76,33 +80,41 @@ class MainActivity : ComponentActivity() {
         val inCard = vm.screen == Screen.Edit || vm.screen == Screen.Contest
         val inLog = vm.screen == Screen.Log
         val ctrl = event.isCtrlPressed || event.isMetaPressed
+        // The keys are the user's (Настройки → Дополнительные настройки → Клавиши); the defaults are those of KeyAction.
+        val c = event.chord()
+        fun hit(a: KeyAction) = KeyMap.hit(a, c)
         val handled = when {
-            event.keyCode == KeyEvent.KEYCODE_F9 || (ctrl && event.keyCode == KeyEvent.KEYCODE_N) -> {
+            // The card in CW with the key line on: F1–F8 send the messages, on top of the card's own keys.
+            inCard && vm.cwKey(c) -> true
+            hit(KeyAction.NEW_QSO) -> {
                 if (!inCard) vm.addQso()
                 true
             }
-            ctrl && !event.isShiftPressed && event.keyCode == KeyEvent.KEYCODE_E -> {
+            hit(KeyAction.EDIT_LAST) -> {
                 if (inLog || inCard) vm.editLast()
                 true
             }
-            ctrl && event.keyCode == KeyEvent.KEYCODE_F -> {
+            hit(KeyAction.SEARCH) -> {
                 // From a card: only an untouched one is left for the log.
                 if (inCard && !vm.hasUnsavedChanges) vm.closeEditor()
                 if (vm.screen == Screen.Log) vm.requestSearchFocus()
                 true
             }
-            event.keyCode == KeyEvent.KEYCODE_F1 || (ctrl && event.keyCode == KeyEvent.KEYCODE_SLASH) -> { vm.showKeys = !vm.showKeys; true }
-            // Ctrl+D on a picked record or the cursor's row deletes it (a dialog asks, Enter confirms); otherwise the dashboard.
-            ctrl && event.keyCode == KeyEvent.KEYCODE_D && inLog -> { if (vm.logDeleteAsk == null && !vm.askDeleteLog()) vm.openDashboard(); true }
-            ctrl && event.keyCode == KeyEvent.KEYCODE_M && inLog -> { vm.openMap(); true }
-            ctrl && event.keyCode == KeyEvent.KEYCODE_COMMA && inLog -> { vm.openSettings(); true }
-            ctrl && event.keyCode == KeyEvent.KEYCODE_H && inLog -> { vm.openHistory(); true }
-            ctrl && event.keyCode == KeyEvent.KEYCODE_K && !inCard -> { vm.toggleContestMode(); true }
-            ctrl && event.keyCode == KeyEvent.KEYCODE_R && !inCard -> { vm.syncByKey(); true }
-            ctrl && event.isShiftPressed && event.keyCode == KeyEvent.KEYCODE_E && inLog -> { vm.openExport(ExportFormat.ADIF, selectedOnly = false); true }
+            hit(KeyAction.KEYS_HELP) -> { vm.showKeys = !vm.showKeys; true }
+            hit(KeyAction.RIG_PANEL) -> { vm.showRigPanel = !vm.showRigPanel; true }
+            // The dashboard key on a picked record or the cursor's row deletes it (a dialog asks, Enter confirms).
+            hit(KeyAction.DASHBOARD) && inLog -> { if (vm.logDeleteAsk == null && !vm.askDeleteLog()) vm.openDashboard(); true }
+            hit(KeyAction.MAP) && inLog -> { vm.openMap(); true }
+            hit(KeyAction.SETTINGS) && inLog -> { vm.openSettings(); true }
+            hit(KeyAction.HISTORY) && inLog -> { vm.openHistory(); true }
+            hit(KeyAction.CONTEST_MODE) && !inCard -> { vm.toggleContestMode(); true }
+            hit(KeyAction.SYNC) && !inCard -> { vm.syncByKey(); true }
+            hit(KeyAction.EXPORT_ADIF) && inLog -> { vm.openExport(ExportFormat.ADIF, selectedOnly = false); true }
             ctrl && event.keyCode == KeyEvent.KEYCODE_A && inLog && !vm.searchFocused -> { vm.selectAllShown(); true }
+            // Delete, and Backspace that many keyboards label "Delete": asks first, Enter confirms.
+            hit(KeyAction.LOG_DELETE) && inLog && !vm.searchFocused && vm.logDeleteAsk == null -> vm.askDeleteLog()
             inLog && !vm.searchFocused && !ctrl && vm.logDeleteAsk == null -> logKey(event)
-            vm.screen == Screen.History && !vm.historyTyping && vm.historyEditCalls == null && vm.historyDeleteAsk == null -> historyKey(event, ctrl)
+            vm.screen == Screen.History && !vm.historyTyping && vm.historyEditCalls == null && vm.historyDeleteAsk == null -> historyKey(event, ctrl, c)
             vm.screen == Screen.Dashboard && event.keyCode in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_4 -> {
                 vm.changeDashFilter(vm.dashFilter.copy(period = ru.r3xed.qsolog.data.StatPeriod.entries[event.keyCode - KeyEvent.KEYCODE_1]))
                 true
@@ -129,8 +141,6 @@ class MainActivity : ComponentActivity() {
             KeyEvent.KEYCODE_MOVE_END -> vm.moveLogCursor(0, to = 1)
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> vm.openLogCursor()
             KeyEvent.KEYCODE_SPACE -> vm.toggleLogCursor()
-            // Delete, and Backspace that many keyboards label "Delete": asks first, Enter confirms.
-            KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_DEL -> if (vm.logDeleteAsk == null && !vm.askDeleteLog()) return false
             KeyEvent.KEYCODE_ESCAPE -> if (vm.selecting) vm.clearSelection() else if (vm.logCursor != null) vm.logCursor = null else return false
             else -> return false
         }
@@ -138,27 +148,52 @@ class MainActivity : ComponentActivity() {
     }
 
     /** The search history: arrows, Enter, Space, and one letter per action on the row, the picked ones or the open entry. */
-    private fun historyKey(e: KeyEvent, ctrl: Boolean): Boolean {
+    private fun historyKey(e: KeyEvent, ctrl: Boolean, c: Chord?): Boolean {
         val open = vm.historyOpen != null
         when {
             ctrl && e.keyCode == KeyEvent.KEYCODE_A && !open -> vm.selectAllHistory()
+            KeyMap.hit(KeyAction.H_FAVORITE, c) -> vm.historyTargets().ifEmpty { null }?.let(vm::toggleFavorite)
+            KeyMap.hit(KeyAction.H_EDIT, c) -> vm.historyTargets().ifEmpty { null }?.let { vm.historyEditCalls = it }
+            KeyMap.hit(KeyAction.H_DELETE, c) -> vm.historyTargets().ifEmpty { null }?.let { vm.historyDeleteAsk = it }
+            KeyMap.hit(KeyAction.H_NEW, c) -> vm.newQsoFromHistoryTarget()
+            KeyMap.hit(KeyAction.H_MAP, c) && !open -> vm.historyMap = !vm.historyMap
             ctrl -> return false
             e.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && !open -> vm.moveHistoryCursor(1)
             e.keyCode == KeyEvent.KEYCODE_DPAD_UP && !open -> vm.moveHistoryCursor(-1)
             (e.keyCode == KeyEvent.KEYCODE_ENTER || e.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) && !open -> vm.openHistoryCursor()
             e.keyCode == KeyEvent.KEYCODE_SPACE && !open -> vm.historyCursor?.let(vm::toggleHistorySelected)
-            e.keyCode == KeyEvent.KEYCODE_F -> vm.historyTargets().ifEmpty { null }?.let(vm::toggleFavorite)
-            e.keyCode == KeyEvent.KEYCODE_E -> vm.historyTargets().ifEmpty { null }?.let { vm.historyEditCalls = it }
-            e.keyCode == KeyEvent.KEYCODE_FORWARD_DEL -> vm.historyTargets().ifEmpty { null }?.let { vm.historyDeleteAsk = it }
-            e.keyCode == KeyEvent.KEYCODE_N -> vm.newQsoFromHistoryTarget()
-            e.keyCode == KeyEvent.KEYCODE_M && !open -> vm.historyMap = !vm.historyMap
             else -> return false
         }
         return true
     }
 
+    /**
+     * "Запускать вместе с QSO-LOG": the picked apps are opened, and QSO-LOG comes straight back in front, while its window
+     * is still shown — Android does not let an app that has gone to the background bring itself back. The apps keep
+     * running behind it and are a swipe away in the recent apps.
+     */
+    private fun launchStartApps() {
+        var started = 0
+        vm.startApps.filter { it.enabled }.forEach { a ->
+            val intent = packageManager.getLaunchIntentForPackage(a.target) ?: return@forEach
+            if (runCatching { startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) started++
+        }
+        if (started == 0) return
+        runCatching {
+            startActivity(
+                android.content.Intent(this, MainActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
+            )
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Once per run of the app: not after a turn of the screen or a return from another app.
+        if (savedInstanceState == null && !vm.startAppsDone) {
+            vm.startAppsDone = true
+            window.decorView.post { launchStartApps() }
+        }
         Configuration.getInstance().apply {
             userAgentValue = packageName
             osmdroidBasePath = File(cacheDir, "osmdroid")
@@ -261,9 +296,12 @@ class MainActivity : ComponentActivity() {
                                 onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
                                 onImportAdif = { importAdif.launch(arrayOf("*/*")) },
                                 onImportContest = { importContest.launch(arrayOf("*/*")) },
+                                onLaunchApps = ::launchStartApps,
                             )
                         }
-                        if (vm.showKeys) HardwareKeysDialog(onClose = { vm.showKeys = false })
+                        if (vm.showKeys) HardwareKeysDialog(cwMessages = vm.cwConfig.messages.takeIf { vm.cwConfig.enabled }, onClose = { vm.showKeys = false })
+                        if (vm.showRigPanel) ru.r3xed.qsolog.ui.RigPanel(vm)
+                        if (vm.showKeysEditor && vm.screen == Screen.Settings) ru.r3xed.qsolog.ui.KeysEditor(vm) { vm.showKeysEditor = false }
                         if (vm.showTransfer) ru.r3xed.qsolog.ui.TransferDialog(
                             total = vm.total,
                             onExport = { vm.showTransfer = false; vm.openExport(it, selectedOnly = false) },

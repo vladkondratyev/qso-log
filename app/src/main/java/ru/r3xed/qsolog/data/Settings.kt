@@ -189,6 +189,27 @@ class Settings(context: Context) {
     var lastPower: String
         get() = prefs.getString("last_power", "") ?: ""
         set(v) = prefs.edit().putString("last_power", v).apply()
+
+    /** Keys the user gave the actions (see ru.r3xed.qsolog.keys.KeyMap.encode). */
+    var keymap: String
+        get() = prefs.getString("keymap", "") ?: ""
+        set(v) = prefs.edit().putString("keymap", v).apply()
+    /** Telegraph on the DTR or RTS line of a USB adapter (see ru.r3xed.qsolog.cw). */
+    var cw: ru.r3xed.qsolog.cw.CwConfig
+        get() = ru.r3xed.qsolog.cw.CwConfig.fromMap(ru.r3xed.qsolog.cw.CwConfig.KEYS.associateWith { prefs.getString(it, null) })
+        set(v) = prefs.edit().apply { v.toMap().forEach { (k, x) -> putString(k, x) } }.apply()
+    /** Apps started together with QSO-LOG (see ru.r3xed.qsolog.data.StartApps.encode). */
+    var startApps: String
+        get() = prefs.getString("start_apps", "") ?: ""
+        set(v) = prefs.edit().putString("start_apps", v).apply()
+    /** The radio's last frequency on each band, "20m=14025000,40m=7074000": a band picked on the panel goes back there. */
+    var bandMemory: String
+        get() = prefs.getString("cat_band_memory", "") ?: ""
+        set(v) = prefs.edit().putString("cat_band_memory", v).apply()
+    /** The tuning step of the transceiver panel, Hz. */
+    var tuneStep: Int
+        get() = prefs.getInt("cat_tune_step", 100)
+        set(v) = prefs.edit().putInt("cat_tune_step", v).apply()
 }
 
 /** The app's keyboard in the QSO cards: off (the system one), full size or compact (keys 30% lower). */

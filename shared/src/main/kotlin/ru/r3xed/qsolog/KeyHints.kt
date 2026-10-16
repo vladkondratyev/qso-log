@@ -1,66 +1,63 @@
 package ru.r3xed.qsolog
 
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
+
 /**
  * Every key of the app in one place, by screen: the F1 list on the computer and on a phone with an external keyboard
- * shows exactly this. [mac]: ⌘ instead of Ctrl+.
+ * shows exactly this. The keys of [KeyAction]s are the user's (see [KeyMap]); arrows, Tab and the like are fixed.
+ * [mac]: ⌘ instead of Ctrl+. [cwMessages]: the telegraph messages, shown when the key line is on.
  */
 object KeyHints {
     class Section(val title: String, val keys: List<Pair<String, String>>)
 
-    fun sections(mac: Boolean): List<Section> {
+    fun sections(mac: Boolean, cwMessages: List<String>? = null): List<Section> {
         val m = if (mac) "⌘" else "Ctrl+"
-        return listOf(
-            Section(tr("Везде"), listOf(
-                "${m}N · F9" to tr("новая связь"),
-                "${m}E" to tr("исправить последнюю записанную связь"),
-                "${m}F" to tr("поиск по журналу; Enter в поиске — новая связь с найденным, ↓ — к списку"),
-                "${m}H" to tr("история поиска"),
-                "${m}D · ${m}M · $m," to tr("дашборд (%sD на выбранной записи — удалить её) · карта QSO · настройки", m),
-                "${m}K" to tr("CONTEST MODE: включить или выключить"),
-                "${m}R" to tr("синхронизировать с Google Таблицей"),
-                (if (mac) "⇧⌘E" else "Ctrl+Shift+E") to tr("экспорт журнала в ADIF"),
-                ("F1" + if (mac) "" else " · Ctrl+/") to tr("эта подсказка"),
+        fun k(a: KeyAction, what: String = a.title): Pair<String, String>? = KeyMap.label(a, mac).ifEmpty { null }?.let { it to what }
+        return listOfNotNull(
+            Section(tr("Везде"), listOfNotNull(
+                k(KeyAction.NEW_QSO), k(KeyAction.EDIT_LAST), k(KeyAction.SEARCH), k(KeyAction.CONTEST_MODE), k(KeyAction.SYNC),
+                k(KeyAction.RIG_PANEL), k(KeyAction.KEYS_HELP),
             )),
-            Section(tr("Журнал"), listOf(
+            Section(tr("Журнал"), listOfNotNull(
                 "↑ ↓" to tr("по записям"),
                 "PgUp · PgDn · Home · End" to tr("на 10 записей, к первой, к последней"),
                 "Enter" to tr("открыть запись"),
                 (tr("Пробел") + " · ${m}A") to tr("отметить запись · отметить все"),
-                "Delete · ${m}D" to tr("удалить запись или отмеченные: окно спросит, Enter — удалить"),
+                k(KeyAction.LOG_DELETE),
                 "Esc" to tr("снять отметки"),
+                k(KeyAction.HISTORY), k(KeyAction.DASHBOARD), k(KeyAction.MAP), k(KeyAction.SETTINGS), k(KeyAction.EXPORT_ADIF),
             )),
             Section(tr("Карточка связи"), listOfNotNull(
-                tr("Пробел") to tr("по кругу: позывной → RST отправлен → RST принят → позывной (у контест-связи: позывной ↔ код принят)"),
-                "Enter" to tr("из любого поля — записать (новая карточка — записать и открыть следующую)"),
+                k(KeyAction.SPACE_NEXT), k(KeyAction.LOG_ENTER),
                 "Tab · Shift+Tab" to tr("следующее и предыдущее поле"),
                 "↑" to tr("в пустом позывном — исправить последнюю связь"),
-                "Alt+W · ${m}Esc" to tr("очистить новую карточку: курсор — в позывной"),
-                "Esc" to tr("закрыть карточку (с изменениями — спросит, Enter — закрыть)"),
-                "${m}D" to tr("удалить сохранённую связь (Enter — подтвердить)"),
-                "F2 · F3 · F4 · F5" to tr("к позывному, частоте, RST отправлен, RST принят"),
-                "F6" to tr("текущее время UTC"),
-                "F7" to tr("голосовая заметка: начать или остановить"),
-                ("F8" + if (mac) " · ⇧⌘S" else "") to tr("сохранить и открыть следующую"),
-                ("F12" + if (mac) " · ⌘S" else "") to tr("сохранить"),
+                k(KeyAction.CLEAR_CARD), k(KeyAction.CLOSE_CARD), k(KeyAction.DELETE_SAVED),
+                k(KeyAction.FOCUS_CALL), k(KeyAction.FOCUS_FREQ), k(KeyAction.FOCUS_RST_SENT), k(KeyAction.FOCUS_RST_RCVD),
+                k(KeyAction.TIME_NOW), k(KeyAction.VOICE), k(KeyAction.SAVE_NEXT), k(KeyAction.SAVE),
                 "Alt+1…9 · Alt+Shift+1…9" to tr("диапазон · вид связи (n-й из включённых)"),
                 "Shift+Enter" to tr("новая строка в комментарии"),
             )),
             Section(tr("Режим соревнований"), listOfNotNull(
-                tr("Пробел") to tr("позывной ↔ принятый код (RST пропускается)"),
-                "Enter · F12" to tr("записать связь из любого поля"),
-                "↑ · PgUp" to tr("предыдущая связь (↑ — в пустом позывном)"),
-                "PgDn" to tr("следующая связь"),
-                "Alt+W · ${m}Esc" to tr("очистить карточку"),
-                "Esc" to tr("закрыть карточку"),
+                k(KeyAction.SPACE_NEXT, tr("позывной ↔ принятый код (RST пропускается)")),
+                (listOf(KeyMap.label(KeyAction.LOG_ENTER, mac), KeyMap.label(KeyAction.SAVE, mac)).filter { it.isNotEmpty() }.joinToString(" · ")
+                    .ifEmpty { null })?.let { it to tr("записать связь из любого поля") },
+                k(KeyAction.CONTEST_PREV, tr("предыдущая связь (↑ — в пустом позывном)")), k(KeyAction.CONTEST_NEXT),
+                k(KeyAction.CLEAR_CARD, tr("очистить карточку")), k(KeyAction.CLOSE_CARD, tr("закрыть карточку")),
             )),
-            Section(tr("История поиска"), listOf(
+            cwMessages?.let { msgs ->
+                Section(tr("Телеграф (CW)"), listOfNotNull(
+                    *(0 until 8).map { i ->
+                        val a = KeyAction.entries.first { it.cwMessage == i }
+                        msgs.getOrNull(i)?.takeIf { it.isNotBlank() }?.let { k(a, it) }
+                    }.toTypedArray(),
+                    k(KeyAction.CW_STOP), k(KeyAction.CW_FASTER), k(KeyAction.CW_SLOWER),
+                ))
+            },
+            Section(tr("История поиска"), listOfNotNull(
                 "↑ ↓ · Enter" to tr("по записям · открыть с картой"),
                 (tr("Пробел") + " · ${m}A") to tr("отметить запись · отметить все"),
-                "F" to tr("в избранное или из избранного"),
-                "E" to tr("изменить (отмеченные — все сразу)"),
-                "N" to tr("новый QSO с этой станцией"),
-                "M" to tr("все на карте или списком"),
-                "Delete" to tr("удалить из истории"),
+                k(KeyAction.H_FAVORITE), k(KeyAction.H_EDIT), k(KeyAction.H_NEW), k(KeyAction.H_MAP), k(KeyAction.H_DELETE),
                 "Esc" to tr("назад"),
             )),
             Section(tr("Дашборд"), listOf(

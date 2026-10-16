@@ -263,4 +263,88 @@ class CatTest {
         assertEquals(7_100_000, s.freqHz)
         assertEquals("CW", s.radioMode)
     }
+
+    @Test
+    fun icomSetsFrequencyAndDataMode() {
+        val radio = FakeRadio(::whole) { f ->
+            val cmd = f[4].toInt() and 0xFF
+            if (cmd == 0x05 || cmd == 0x06 || cmd == 0x1A) CivDriver.frame(0xE0, 0x94, 0xFB) else null
+        }
+        val d = CivDriver(0x94)
+        assertTrue(d.setFreq(CatIo(radio), 14_074_000))
+        assertTrue(d.setMode(CatIo(radio), RadioMode.DATA))
+        assertEquals(listOf(0x05, 0x00, 0x40, 0x07, 0x14, 0x00), radio.heard[0].drop(4).dropLast(1).map { it.toInt() and 0xFF })
+        assertEquals(listOf(0x06, 0x01), radio.heard[1].drop(4).dropLast(1).map { it.toInt() and 0xFF })
+        assertEquals(listOf(0x1A, 0x06, 0x01, 0x01), radio.heard[2].drop(4).dropLast(1).map { it.toInt() and 0xFF })
+    }
+
+    @Test
+    fun icomWithoutDataModeIsNotAskedAgain() {
+        val radio = FakeRadio(::whole) { f ->
+            when (f[4].toInt() and 0xFF) {
+                0x06 -> CivDriver.frame(0xE0, 0x88, 0xFB)
+                else -> CivDriver.frame(0xE0, 0x88, 0xFA)
+            }
+        }
+        val d = CivDriver(0x88)
+        d.setMode(CatIo(radio), RadioMode.DATA)
+        d.setMode(CatIo(radio), RadioMode.DATA)
+        assertEquals(3, radio.heard.size) // 06, 1A (refused), 06
+    }
+
+    @Test
+    fun textProtocolsSetFrequencyAndMode() {
+        val k = FakeRadio(::text) { null }
+        KenwoodDriver("TS-590S", false).apply { setFreq(CatIo(k), 7_012_500); setMode(CatIo(k), RadioMode.DATA) }
+        assertEquals(listOf("FA00007012500", "MD2", "DA1"), k.heard.map { String(it) })
+
+        val y = FakeRadio(::text) { c -> if (String(c) == "FA") "FA14074000;".toByteArray() else null }
+        val yd = YaesuDriver("FT-950")
+        yd.poll(CatIo(y), RigState())
+        yd.setFreq(CatIo(y), 7_074_000)
+        yd.setMode(CatIo(y), RadioMode.LSB)
+        assertTrue("FA07074000" in y.heard.map { String(it) }) // eight digits, as the radio sent them
+        assertTrue("MD01" in y.heard.map { String(it) })
+
+        val r = FakeRadio(::text) { "RPRT 0\n".toByteArray() }
+        assertTrue(RigctldDriver().setFreq(CatIo(r), 3_573_000))
+        assertTrue(RigctldDriver().setMode(CatIo(r), RadioMode.DATA))
+        assertEquals(listOf("F 3573000", "M PKTUSB 0"), r.heard.map { String(it) })
+    }
+
+    @Test
+    fun yaesuOldSetsFrequency() {
+        val radio = FakeRadio(::whole) { null }
+        YaesuOldDriver("FT-817").setFreq(CatIo(radio), 14_195_000)
+        assertEquals(listOf(0x01, 0x41, 0x95, 0x00, 0x01), radio.heard[0].map { it.toInt() and 0xFF })
+    }
+
+    @Test
+    fun logModeToRadio() {
+        assertEquals(RadioMode.LSB, CatModes.toRadio("SSB", 7_100_000))
+        assertEquals(RadioMode.USB, CatModes.toRadio("SSB", 5_360_000))
+        assertEquals(RadioMode.USB, CatModes.toRadio("SSB", 14_200_000))
+        assertEquals(RadioMode.DATA, CatModes.toRadio("FT8", 14_074_000))
+        assertNull(CatModes.toRadio("DMR", 145_000_000))
+        assertEquals("FT4", CatModes.toLog("FT4", "SSB"))
+        assertEquals(14_080_000, BandPlan.freq("20m", "FT4"))
+        assertEquals(3_530_000, BandPlan.freq("80m", "CW"))
+    }
+
+    @Test
+    fun sessionSendsCommandsBetweenPolls() {
+        val radio = FakeRadio(::text) { c -> if (String(c) == "f") "14074000\n".toByteArray() else "RPRT 0\n".toByteArray() }
+        val session = CatSession(CatConfig(rig = Rigs.RIGCTLD), { radio }, {}, pollMs = 5000)
+        session.start()
+        try {
+            val deadline = System.currentTimeMillis() + 3000
+            while (radio.heard.none { String(it) == "f" } && System.currentTimeMillis() < deadline) Thread.sleep(10)
+            session.send(CatCommand.Freq(7_074_000))
+            // The command wakes the loop: no waiting for the 5-second pause.
+            while (radio.heard.none { String(it) == "F 7074000" } && System.currentTimeMillis() < deadline) Thread.sleep(10)
+            assertTrue(radio.heard.any { String(it) == "F 7074000" })
+        } finally {
+            session.stop()
+        }
+    }
 }

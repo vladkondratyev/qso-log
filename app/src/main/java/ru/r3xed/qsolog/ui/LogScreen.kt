@@ -1,5 +1,8 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.material.icons.filled.Tune
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
 import ru.r3xed.qsolog.tr
 import ru.r3xed.qsolog.data.ExportFormat
 import androidx.compose.material.icons.filled.Check
@@ -169,12 +172,12 @@ fun LogScreen(
                     // Grouped: the log's views, files, help, the contest mode, then the keys and the settings.
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(
-                            text = { MenuText(tr("Дашборд"), "Ctrl+D", vm.hardKeyboard) },
+                            text = { MenuText(tr("Дашборд"), KeyMap.label(KeyAction.DASHBOARD, false), vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.BarChart, null) },
                             onClick = { menu = false; vm.openDashboard() },
                         )
                         DropdownMenuItem(
-                            text = { MenuText(tr("Карта QSO"), "Ctrl+M", vm.hardKeyboard) },
+                            text = { MenuText(tr("Карта QSO"), KeyMap.label(KeyAction.MAP, false), vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.Map, null) },
                             onClick = { menu = false; vm.openMap() },
                         )
@@ -188,7 +191,7 @@ fun LogScreen(
                         // Shown once the table is set up in the settings; the sync runs only from here or there.
                         if (SheetSync.isScriptUrl(vm.sheetUrl)) {
                             DropdownMenuItem(
-                                text = { MenuText(if (vm.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), "Ctrl+R", vm.hardKeyboard) },
+                                text = { MenuText(if (vm.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), KeyMap.label(KeyAction.SYNC, false), vm.hardKeyboard) },
                                 leadingIcon = { Icon(Icons.Filled.Sync, null) },
                                 enabled = !vm.sheetSyncing,
                                 onClick = { menu = false; vm.syncSheet() },
@@ -203,7 +206,7 @@ fun LogScreen(
                         HorizontalDivider()
                         // The whole row switches contest mode; the menu stays open so the contest book shows up under it.
                         DropdownMenuItem(
-                            text = { MenuText("CONTEST MODE", "Ctrl+K", vm.hardKeyboard) },
+                            text = { MenuText("CONTEST MODE", KeyMap.label(KeyAction.CONTEST_MODE, false), vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.Flag, null) },
                             trailingIcon = { Switch(checked = vm.contestMode, onCheckedChange = null) },
                             onClick = { vm.toggleContestMode() },
@@ -219,13 +222,18 @@ fun LogScreen(
                         // The list of keys matters only with a keyboard attached (F1 opens it as well).
                         if (vm.hardKeyboard) {
                             DropdownMenuItem(
-                                text = { MenuText(tr("Клавиши"), "F1", true) },
+                                text = { MenuText(tr("Клавиши"), KeyMap.label(KeyAction.KEYS_HELP, false), true) },
                                 leadingIcon = { Icon(Icons.Filled.Keyboard, null) },
                                 onClick = { menu = false; vm.showKeys = true },
                             )
                         }
+                        if (vm.catConfig.enabled || vm.rig != null) DropdownMenuItem(
+                            text = { MenuText(tr("Пульт трансивера"), KeyMap.label(KeyAction.RIG_PANEL, false), vm.hardKeyboard) },
+                            leadingIcon = { Icon(Icons.Filled.Tune, null) },
+                            onClick = { menu = false; vm.showRigPanel = true },
+                        )
                         DropdownMenuItem(
-                            text = { MenuText(tr("Настройки"), "Ctrl+,", vm.hardKeyboard) },
+                            text = { MenuText(tr("Настройки"), KeyMap.label(KeyAction.SETTINGS, false), vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.Settings, null) },
                             onClick = { menu = false; vm.openSettings() },
                         )
@@ -270,6 +278,9 @@ fun LogScreen(
                     unfocusedBorderColor = Color.Transparent,
                 ),
             )
+
+            // The transceiver (CAT, or the dial WSJT-X / JTDX reports): a tap opens its panel.
+            RigBadge(vm, Modifier.padding(horizontal = 16.dp).padding(bottom = 6.dp))
 
             // One station found: the bands it was worked on, with the last date on each.
             val station = remember(vm.query, vm.qsos, vm.allQsos) { vm.searchedHistory() }

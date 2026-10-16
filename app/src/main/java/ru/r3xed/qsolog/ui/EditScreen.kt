@@ -1,6 +1,8 @@
 package ru.r3xed.qsolog.ui
 
 
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
 import ru.r3xed.qsolog.tr
 import ru.r3xed.qsolog.data.ExportFormat
 import androidx.compose.material3.FilledTonalButton
@@ -252,11 +254,12 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
     }
     val hardKeys = Modifier.onPreviewKeyEvent { e ->
         if (e.type != KeyEventType.KeyDown || !e.fromHardware()) return@onPreviewKeyEvent false
-        val plain = !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed
+        val c = e.chord()
+        fun hit(a: KeyAction) = KeyMap.hit(a, c)
         val digit = DIGIT_KEYS.indexOf(e.key)
         val form = vm.form
         when {
-            (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
+            hit(KeyAction.LOG_ENTER) -> {
                 // The callsign has the cursor: the text field's, or the app keypad's. A command there is not a contact.
                 val inCall = callFocused || (keypad && active == KeyTarget.CALL)
                 when {
@@ -266,28 +269,28 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                 }
                 true
             }
-            e.key == Key.Spacebar && plain -> spaceNext()
+            hit(KeyAction.SPACE_NEXT) -> spaceNext()
             e.key == Key.DirectionUp && callFocused && form.isNew && form.call.isEmpty() -> { vm.editLast(); true }
             // Wipe: the contact fell into QSB — a clean card on the same band, mode and frequency, the cursor in the callsign.
-            (e.key == Key.W && e.isAltPressed && !e.isCtrlPressed) || (e.key == Key.Escape && e.isCtrlPressed) -> {
+            hit(KeyAction.CLEAR_CARD) -> {
                 if (form.isNew) vm.clearCard()
                 true
             }
-            e.key == Key.Escape -> { close(); true }
-            e.key == Key.D && e.isCtrlPressed && !form.isNew -> { confirmDelete = true; true }
-            e.key == Key.F2 -> { callFocus.requestFocus(); true }
-            e.key == Key.F3 -> { freqFocus.requestFocus(); true }
-            e.key == Key.F4 -> { rstFocus.requestFocus(); true }
-            e.key == Key.F5 -> { rstRcvdFocus.requestFocus(); true }
-            e.key == Key.F6 -> { vm.setNow(); true }
+            hit(KeyAction.CLOSE_CARD) -> { close(); true }
+            hit(KeyAction.DELETE_SAVED) && !form.isNew -> { confirmDelete = true; true }
+            hit(KeyAction.FOCUS_CALL) -> { callFocus.requestFocus(); true }
+            hit(KeyAction.FOCUS_FREQ) -> { freqFocus.requestFocus(); true }
+            hit(KeyAction.FOCUS_RST_SENT) -> { rstFocus.requestFocus(); true }
+            hit(KeyAction.FOCUS_RST_RCVD) -> { rstRcvdFocus.requestFocus(); true }
+            hit(KeyAction.TIME_NOW) -> { vm.setNow(); true }
             // F7: a voice note for this card, as the microphone button above does.
-            e.key == Key.F7 -> {
+            hit(KeyAction.VOICE) -> {
                 if (vm.cardRecordingSince != null) vm.stopCardRecording()
                 else if (form.isNew && form.audio.isBlank()) { if (hasMicPermission()) vm.startCardRecording() else requestMicPermission() }
                 true
             }
-            e.key == Key.F8 -> { if (form.isNew) saveNext(); true }
-            e.key == Key.F12 -> { saveIt(); true }
+            hit(KeyAction.SAVE_NEXT) -> { if (form.isNew) saveNext(); true }
+            hit(KeyAction.SAVE) -> { saveIt(); true }
             e.isAltPressed && digit >= 0 && !e.isShiftPressed -> { BANDS.filter { it in vm.enabledBands }.getOrNull(digit)?.let(vm::setBand); true }
             e.isAltPressed && digit >= 0 && e.isShiftPressed -> { MODES.filter { it in vm.enabledModes }.getOrNull(digit)?.let(vm::setMode); true }
             else -> false
@@ -413,6 +416,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             ) { activate(KeyTarget.FREQ) }
             else Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
             RigBadge(vm)
+            CwBar(vm)
 
             // One scrolling row each: what is switched on in the settings, plus the record's own value if that one is off.
             // Nothing to choose from (one value on, and the record has it) — the label alone shows it.

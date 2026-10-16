@@ -40,6 +40,7 @@ class WsjtxTest {
 
         fun long(v: Long) = apply { out.writeLong(v) }
         fun int(v: Int) = apply { out.writeInt(v) }
+        fun bool(v: Boolean) = apply { out.writeBoolean(v) }
         fun build(): ByteArray = bytes.toByteArray()
     }
 
@@ -136,5 +137,16 @@ class WsjtxTest {
         } finally {
             l.stop()
         }
+    }
+
+    @Test
+    fun statusGivesTheDialAndMode() {
+        val m = Msg(1, "JTDX").long(14_074_000).utf8("FT8").utf8("UA9DEMO").utf8("-12").utf8("FT8")
+            .bool(true).bool(false).bool(true).int(1500).int(1500).utf8("UA3DEMO").utf8("KO85").utf8("").build()
+        val s = Wsjtx.parse(m) as Wsjtx.Message.Status
+        assertEquals(14_074_000, s.dialHz)
+        assertEquals("FT8", s.mode)
+        assertEquals("UA9DEMO", s.dxCall)
+        assertEquals(false, s.transmitting)
     }
 }

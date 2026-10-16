@@ -1,5 +1,7 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
 import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -161,12 +163,12 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                 // Grouped: the log's views, files, help, the contest mode, then the keys and the settings.
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
-                        text = { MenuText(tr("Дашборд"), (if (IS_MAC) "⌘" else "Ctrl+") + "D") },
+                        text = { MenuText(tr("Дашборд"), KeyMap.label(KeyAction.DASHBOARD, IS_MAC)) },
                         leadingIcon = { Icon(Icons.Filled.BarChart, null) },
                         onClick = { menu = false; state.openDashboard() },
                     )
                     DropdownMenuItem(
-                        text = { MenuText(tr("Карта QSO"), (if (IS_MAC) "⌘" else "Ctrl+") + "M") },
+                        text = { MenuText(tr("Карта QSO"), KeyMap.label(KeyAction.MAP, IS_MAC)) },
                         leadingIcon = { Icon(Icons.Filled.Map, null) },
                         onClick = { menu = false; state.openMap() },
                     )
@@ -180,7 +182,7 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                     // Shown once the table is set up in the settings; the sync runs only from here or there.
                     if (SheetSync.isScriptUrl(state.sheetUrl)) {
                         DropdownMenuItem(
-                            text = { MenuText(if (state.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), (if (IS_MAC) "⌘" else "Ctrl+") + "R") },
+                            text = { MenuText(if (state.sheetSyncing) tr("Синхронизация…") else tr("Синхронизировать"), KeyMap.label(KeyAction.SYNC, IS_MAC)) },
                             leadingIcon = { Icon(Icons.Filled.Sync, null) },
                             enabled = !state.sheetSyncing,
                             onClick = { menu = false; state.syncSheet() },
@@ -195,7 +197,7 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                     HorizontalDivider()
                     // The whole row switches contest mode; the menu stays open so the contest book shows up under it.
                     DropdownMenuItem(
-                        text = { MenuText("CONTEST MODE", (if (IS_MAC) "⌘" else "Ctrl+") + "K") },
+                        text = { MenuText("CONTEST MODE", KeyMap.label(KeyAction.CONTEST_MODE, IS_MAC)) },
                         leadingIcon = { Icon(Icons.Filled.Flag, null) },
                         trailingIcon = { Switch(checked = state.contestMode, onCheckedChange = null) },
                         onClick = { state.toggleContestMode() },
@@ -214,7 +216,7 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                         onClick = { menu = false; state.showKeys = true },
                     )
                     DropdownMenuItem(
-                        text = { MenuText(tr("Настройки"), (if (IS_MAC) "⌘" else "Ctrl+") + ",") },
+                        text = { MenuText(tr("Настройки"), KeyMap.label(KeyAction.SETTINGS, IS_MAC)) },
                         leadingIcon = { Icon(Icons.Filled.Settings, null) },
                         onClick = { menu = false; state.openSettings() },
                     )

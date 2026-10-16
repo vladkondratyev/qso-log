@@ -420,6 +420,34 @@ class Settings {
         get() = get("last_power")
         set(v) = put("last_power", v)
 
+    /** Keys the user gave the actions (see ru.r3xed.qsolog.keys.KeyMap.encode). */
+    var keymap: String
+        get() = get("keymap")
+        set(v) = put("keymap", v)
+
+    /** Telegraph on the DTR or RTS line of a COM port (see ru.r3xed.qsolog.cw). */
+    var cw: ru.r3xed.qsolog.cw.CwConfig
+        get() = ru.r3xed.qsolog.cw.CwConfig.fromMap(ru.r3xed.qsolog.cw.CwConfig.KEYS.associateWith { props.getProperty(it) })
+        set(v) {
+            v.toMap().forEach { (k, x) -> props.setProperty(k, x) }
+            file.outputStream().use { props.store(it, "QSO Log") }
+        }
+
+    /** Programs started together with QSO-LOG (see ru.r3xed.qsolog.data.StartApps.encode). */
+    var startApps: String
+        get() = get("start_apps")
+        set(v) = put("start_apps", v)
+
+    /** The radio's last frequency on each band, "20m=14025000,40m=7074000". */
+    var bandMemory: String
+        get() = get("cat_band_memory")
+        set(v) = put("cat_band_memory", v)
+
+    /** The tuning step of the transceiver panel, Hz. */
+    var tuneStep: Int
+        get() = get("cat_tune_step").toIntOrNull() ?: 100
+        set(v) = put("cat_tune_step", v.toString())
+
     /** Bands and modes shown as buttons in the contact card. */
     var enabledBands: Set<String>
         get() = props.getProperty("enabled_bands")?.let(::splitSet)?.takeIf { s -> s.any { it in BANDS } } ?: DEFAULT_BANDS.toSet()

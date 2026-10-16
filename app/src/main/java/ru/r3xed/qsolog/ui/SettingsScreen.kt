@@ -124,6 +124,7 @@ fun SettingsScreen(
     onImportCsv: () -> Unit,
     onImportAdif: () -> Unit,
     onImportContest: () -> Unit,
+    onLaunchApps: () -> Unit = {},
 ) {
     val s = vm.settings
     val x = LocalExtra.current
@@ -320,6 +321,10 @@ fun SettingsScreen(
                 DigiSettings(vm)
             }
 
+            SettingsBlock(tr("Телеграф (CW) — ключ на DTR/RTS"), cwSummary(vm)) {
+                CwSettings(vm)
+            }
+
             SettingsBlock(
                 tr("Ввод связи"),
                 (if (vm.contestMode) "CONTEST MODE · " else "") + tr("клавиатура: %s", vm.keypad.label().lowercase()) + " · " +
@@ -408,6 +413,15 @@ fun SettingsScreen(
                     }
                 }
                 Note(tr("«Как в системе» переключается вместе с тёмной темой Android."))
+            }
+            SettingsBlock(
+                tr("Дополнительные настройки"),
+                listOfNotNull(
+                    tr("клавиши: %s", if (vm.keymap.isEmpty()) tr("как в программе") else tr("свои")),
+                    vm.startApps.count { it.enabled }.takeIf { it > 0 }?.let { tr("автозапуск: %s", it) },
+                ).joinToString(" · "),
+            ) {
+                AdvancedSettings(vm, onLaunchApps)
             }
             SettingsBlock(
                 tr("Журнал связей"),
@@ -599,7 +613,7 @@ private fun QrzApiHelp(expandedByDefault: Boolean) {
 
 /** A collapsible settings block: title, one-line summary of what is set, chevron. */
 @Composable
-private fun SettingsBlock(title: String, summary: String, open: Boolean = false, content: @Composable () -> Unit) {
+internal fun SettingsBlock(title: String, summary: String, open: Boolean = false, content: @Composable () -> Unit) {
     val x = LocalExtra.current
     var expanded by rememberSaveable(title) { mutableStateOf(open) }
     Column(
@@ -734,7 +748,7 @@ private fun SheetSyncSettings(vm: AppViewModel) {
 }
 
 @Composable
-private fun Section(text: String) {
+internal fun Section(text: String) {
     Text(
         text.uppercase(),
         style = MaterialTheme.typography.labelMedium,
@@ -745,12 +759,12 @@ private fun Section(text: String) {
 }
 
 @Composable
-private fun Note(text: String) {
+internal fun Note(text: String) {
     Text(text, style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
 }
 
 @Composable
-private fun ActionButton(text: String, icon: ImageVector?, onClick: () -> Unit) {
+internal fun ActionButton(text: String, icon: ImageVector?, onClick: () -> Unit) {
     OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(14.dp)) {
         if (icon != null) {
             Icon(icon, null)
@@ -1046,16 +1060,17 @@ private fun CatSettings(vm: AppViewModel) {
     SwitchRow(tr("Частоту и диапазон"), c.followFreq) { vm.changeCat(c.copy(followFreq = it)) }
     SwitchRow(tr("Вид связи"), c.followMode) { vm.changeCat(c.copy(followMode = it)) }
     SwitchRow(tr("S-метр — в RST отправленный"), c.sMeterToRst) { vm.changeCat(c.copy(sMeterToRst = it)) }
+    SwitchRow(tr("Кнопки диапазона и вида в карточке перестраивают трансивер"), c.control) { vm.changeCat(c.copy(control = it)) }
     Note(tr("Пока открыта новая карточка, частота, диапазон и вид связи меняются вслед за трансивером, а с включённым S-метром — и цифра S в отправленном RST (59 → 57). Поле, исправленное вручную, трансивер в этой карточке больше не трогает. Сохранённые связи не меняются. Цифровые виды трансивер не различает: в режиме DATA (USB-D) остаётся FT8, FT4 или другой цифровой вид из карточки."))
 
     Section(tr("Поддерживаемые трансиверы"))
     Note(tr("ICOM (протокол CI-V): IC-705, IC-7300, IC-7610, IC-9700, IC-905, IC-7100, IC-7851, IC-7800, IC-7700, IC-7600, IC-7410, IC-7200, IC-9100, IC-7000, IC-756PRO, IC-746PRO, IC-910H, IC-718, IC-706MKIIG, IC-703, IC-R8600 и другие с CI-V — адрес можно задать вручную. Совместимые с CI-V: Xiegu X6100, X6200, G90, X5105, X108G."))
     Note(tr("Другие стандарты: Kenwood (TS-590, TS-890, TS-990, TS-480, TS-2000), Elecraft (K3, K4, KX2, KX3), FlexRadio через SmartSDR CAT, Yaesu с новым CAT (FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450) и со старым (FT-817, FT-818, FT-857, FT-897), а также любой трансивер через Hamlib rigctld по сети."))
-    Note(tr("Как это сделано: как в N1MM, Log4OM, WSJT-X и FT8CN — программа несколько раз в секунду спрашивает у трансивера частоту, вид связи и S-метр и ничего не передаёт в эфир: команд управления она не шлёт, линии DTR и RTS USB-порта держит выключенными, чтобы трансивер не перешёл на передачу. Подключение: кабель USB от трансивера к телефону через переходник OTG (у ICOM с USB-разъёмом — напрямую, у остальных — кабель CI-V/CAT с адаптером CP210x, FTDI, CH340 или PL2303), Bluetooth или сеть."))
+    Note(tr("Как это сделано: как в N1MM, Log4OM, WSJT-X и FT8CN — программа несколько раз в секунду спрашивает у трансивера частоту, вид связи и S-метр, а частоту, диапазон и вид меняет по вашей команде с пульта (нажмите на строку TRX в карточке) или кнопками карточки. В эфир она сама ничего не передаёт: линии DTR и RTS USB-порта держит выключенными, чтобы трансивер не перешёл на передачу. Подключение: кабель USB от трансивера к телефону через переходник OTG (у ICOM с USB-разъёмом — напрямую, у остальных — кабель CI-V/CAT с адаптером CP210x, FTDI, CH340 или PL2303), Bluetooth или сеть."))
 }
 
 @Composable
-private fun DeviceList(devices: List<ru.r3xed.qsolog.data.CatDevice>, chosen: String, empty: String, onPick: (String) -> Unit) {
+internal fun DeviceList(devices: List<ru.r3xed.qsolog.data.CatDevice>, chosen: String, empty: String, onPick: (String) -> Unit) {
     val x = LocalExtra.current
     if (devices.isEmpty()) {
         Note(empty)

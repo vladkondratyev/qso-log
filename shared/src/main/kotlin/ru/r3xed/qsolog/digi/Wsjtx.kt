@@ -33,6 +33,12 @@ object Wsjtx {
         /** Type 5 ("QSO Logged") or 12 ("Logged ADIF"), or a plain ADIF datagram. */
         data class Logged(override val id: String, val qsos: List<Qso>) : Message
 
+        /**
+         * Type 1: the program's state, sent when anything in it changes. [dialHz] is the radio's dial (the program
+         * reads it over its own CAT), [mode] "FT8", "FT4", "JT65"…, [dxCall] who is being worked.
+         */
+        data class Status(override val id: String, val dialHz: Long, val mode: String, val dxCall: String, val transmitting: Boolean) : Message
+
         /** Type 6: the program was closed. */
         data class Close(override val id: String) : Message
 
@@ -56,6 +62,16 @@ object Wsjtx {
             0 -> {
                 r.int() // max schema
                 Message.Heartbeat(id, r.utf8())
+            }
+            1 -> {
+                val dial = r.long()
+                val mode = r.utf8()
+                val dx = r.utf8()
+                r.utf8() // report
+                r.utf8() // Tx mode
+                r.bool() // Tx enabled
+                val tx = r.bool()
+                Message.Status(id, dial, mode, dx, tx)
             }
             5 -> Message.Logged(id, listOfNotNull(qsoLogged(r)))
             6 -> Message.Close(id)
@@ -133,6 +149,7 @@ object Wsjtx {
         private val s = DataInputStream(ByteArrayInputStream(data))
         fun int() = s.readInt()
         fun long() = s.readLong()
+        fun bool() = s.readBoolean()
 
         fun utf8(): String {
             val n = s.readInt()

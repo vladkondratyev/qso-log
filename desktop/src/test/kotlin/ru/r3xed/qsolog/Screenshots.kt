@@ -187,6 +187,20 @@ fun main(args: Array<String>) {
             shot("23-whats-new", 1000)
             state.closeWhatsNew()
 
+            // The transceiver panel over a new card; then the card in CW with the telegraph messages.
+            state.newQso()
+            state.setCall("UA9DEMO")
+            state.showRigPanel = true
+            shot("27-rig-panel", 1500)
+            state.showRigPanel = false
+            state.changeCw(state.cwConfig.copy(enabled = true, wpm = 26))
+            state.setMode("CW")
+            shot("28-cw", 2000)
+            state.changeCw(state.cwConfig.copy(enabled = false))
+            state.closeEditor()
+            rigFreq = null
+            rigMode = null
+
             dark = true
             state.edit(log().first { it.call == "R9DEMO" })
             shot("10-dark", 3000)
@@ -255,6 +269,9 @@ private fun fakeWsjtxLogged(port: Int, call: String, grid: String, hz: Long, mod
 /** rigctld of a made-up transceiver: 14.195 MHz, USB, S8. */
 /** The made-up transceiver is on the FT8 frequency in data mode (for the main picture), else on 14.195 USB. */
 @Volatile private var rigOnFt8 = false
+/** Where the app tuned the made-up transceiver; null — where [rigOnFt8] says. */
+@Volatile private var rigFreq: Long? = null
+@Volatile private var rigMode: String? = null
 
 private fun fakeRigctld(): java.net.ServerSocket {
     val server = runCatching { java.net.ServerSocket(4532, 5, java.net.InetAddress.getLoopbackAddress()) }.getOrElse { java.net.ServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress()) }
@@ -266,12 +283,15 @@ private fun fakeRigctld(): java.net.ServerSocket {
                     val r = it.getInputStream().bufferedReader()
                     val w = it.getOutputStream()
                     while (true) {
-                        val l = r.readLine() ?: break
+                        val l = r.readLine()?.trim() ?: break
                         val ft8 = rigOnFt8
-                        w.write(when (l.trim()) {
-                            "f" -> if (ft8) "14074000\n" else "14195000\n"
-                            "m" -> if (ft8) "PKTUSB\n3000\n" else "USB\n2400\n"
-                            "l STRENGTH" -> if (ft8) "-18\n" else "-6\n"
+                        w.write(when {
+                            l == "f" -> rigFreq?.let { "$it\n" } ?: if (ft8) "14074000\n" else "14195000\n"
+                            l == "m" -> rigMode?.let { "$it\n500\n" } ?: if (ft8) "PKTUSB\n3000\n" else "USB\n2400\n"
+                            l == "l STRENGTH" -> if (ft8) "-18\n" else "-6\n"
+                            // The panel and the card tune it: it goes where it is told.
+                            l.startsWith("F ") -> { rigFreq = l.substring(2).trim().toLongOrNull(); "RPRT 0\n" }
+                            l.startsWith("M ") -> { rigMode = l.split(' ').getOrNull(1); "RPRT 0\n" }
                             else -> "RPRT -11\n"
                         }.toByteArray())
                         w.flush()

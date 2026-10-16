@@ -128,6 +128,8 @@ data class CatConfig(
     val followMode: Boolean = true,
     /** The S digit of the report sent follows the S-meter while the card is open. */
     val sMeterToRst: Boolean = false,
+    /** Band, mode and frequency changed in the new QSO card are sent to the radio too. */
+    val control: Boolean = true,
 ) {
     val model get() = Rigs.byName(rig)
     val protocol get() = model.protocol
@@ -136,7 +138,7 @@ data class CatConfig(
         "cat_enabled" to enabled.toString(), "cat_rig" to rig, "cat_civ" to civAddress.toString(16),
         "cat_baud" to baud.toString(), "cat_link" to link.name, "cat_device" to device, "cat_host" to host,
         "cat_port" to port.toString(), "cat_follow_freq" to followFreq.toString(), "cat_follow_mode" to followMode.toString(),
-        "cat_smeter_rst" to sMeterToRst.toString(),
+        "cat_smeter_rst" to sMeterToRst.toString(), "cat_control" to control.toString(),
     )
 
     companion object {
@@ -154,6 +156,7 @@ data class CatConfig(
                 followFreq = m["cat_follow_freq"]?.toBooleanStrictOrNull() ?: d.followFreq,
                 followMode = m["cat_follow_mode"]?.toBooleanStrictOrNull() ?: d.followMode,
                 sMeterToRst = m["cat_smeter_rst"]?.toBooleanStrictOrNull() ?: d.sMeterToRst,
+                control = m["cat_control"]?.toBooleanStrictOrNull() ?: d.control,
             )
         }
 
@@ -215,9 +218,27 @@ object CatFormat {
     fun scale(v: Int, s9: Int, max: Int): Int = if (v <= s9) v * 54 / s9 else 54 + (v - s9) * 60 / (max - s9)
 }
 
-/** The radio's mode → the log's. */
+/** What the app can switch the radio to. DATA — USB with the data switch (USB-D, DATA-U, PKTUSB, DIG). */
+enum class RadioMode { LSB, USB, CW, AM, FM, RTTY, DATA }
+
+/** The radio's mode → the log's, and the log's → the radio's. */
 object CatModes {
     private val DIGITAL = setOf("FT8", "FT4", "PSK31", "JT65", "JS8", "Q65", "OLIVIA", "SSTV", "DIGI", "RTTY")
+
+    /**
+     * The radio mode for the log's [mode] at [hz]: SSB is LSB below 10 MHz (except 60 m) and USB above, digital modes are
+     * USB with data on. Null — the radio has nothing for it (DMR, C4FM, D-STAR).
+     */
+    fun toRadio(mode: String, hz: Long?): RadioMode? = when (mode.uppercase()) {
+        "SSB" -> if (hz != null && hz < 10_000_000 && hz !in 5_250_000..5_450_000) RadioMode.LSB else RadioMode.USB
+        "CW" -> RadioMode.CW
+        "AM" -> RadioMode.AM
+        "FM" -> RadioMode.FM
+        "RTTY" -> RadioMode.RTTY
+        "SSTV" -> if (hz != null && hz < 10_000_000) RadioMode.LSB else RadioMode.USB
+        "FT8", "FT4", "PSK31", "JT65", "JS8", "Q65", "OLIVIA", "DIGI" -> RadioMode.DATA
+        else -> null
+    }
 
     /**
      * The log's mode for [radio], or null for one the log has no name for. Data modes (USB-D, PKTUSB, DATA-U) keep
@@ -226,6 +247,8 @@ object CatModes {
     fun toLog(radio: String, current: String): String? {
         val r = radio.uppercase()
         return when {
+            // WSJT-X and JTDX name the mode itself.
+            r in DIGITAL && r != "DIGI" -> r
             r == "LSB" || r == "USB" || r == "SSB" -> "SSB"
             r.startsWith("CW") -> "CW"
             r.startsWith("RTTY") || r.startsWith("FSK") -> "RTTY"
@@ -254,3 +277,52 @@ fun CatStatus.describe(): String = when (this) {
 
 /** The radio's line in the QSO card: "14 074.000 · USB-D · S7". */
 fun RigState.short(): String = listOfNotNull(freqHz?.let { CatFormat.khz(it) }, radioMode, sDb?.let { CatFormat.sMeter(it) }).joinToString(" · ")
+
+/**
+ * Where the radio goes when a band is picked and the app does not yet know where the user last was on it: the CW,
+ * phone and FT8/FT4 calling frequencies (IARU Region 1).
+ */
+object BandPlan {
+    private class Band(val cw: Long, val phone: Long, val ft8: Long, val ft4: Long? = null, val fm: Long? = null)
+
+    private val BANDS = mapOf(
+        "2200m" to Band(135_700, 137_400, 136_130),
+        "630m" to Band(472_500, 475_000, 474_200),
+        "160m" to Band(1_830_000, 1_850_000, 1_840_000),
+        "80m" to Band(3_530_000, 3_700_000, 3_573_000, 3_575_000),
+        "60m" to Band(5_352_000, 5_360_000, 5_357_000),
+        "40m" to Band(7_020_000, 7_100_000, 7_074_000, 7_047_500),
+        "30m" to Band(10_115_000, 10_130_000, 10_136_000, 10_140_000),
+        "20m" to Band(14_020_000, 14_200_000, 14_074_000, 14_080_000),
+        "17m" to Band(18_080_000, 18_130_000, 18_100_000, 18_104_000),
+        "15m" to Band(21_020_000, 21_250_000, 21_074_000, 21_140_000),
+        "12m" to Band(24_900_000, 24_950_000, 24_915_000, 24_919_000),
+        "10m" to Band(28_020_000, 28_500_000, 28_074_000, 28_180_000, 29_600_000),
+        "6m" to Band(50_090_000, 50_150_000, 50_313_000, 50_318_000, 51_510_000),
+        "4m" to Band(70_090_000, 70_200_000, 70_154_000),
+        "2m" to Band(144_050_000, 144_300_000, 144_174_000, 144_170_000, 145_500_000),
+        "70cm" to Band(432_050_000, 432_200_000, 432_174_000, null, 433_500_000),
+        "23cm" to Band(1_296_050_000, 1_296_200_000, 1_296_174_000),
+    )
+
+    val bands: Set<String> get() = BANDS.keys
+
+    /** The frequency for [band] in the log's [mode], Hz; null for a band the plan does not know. */
+    fun freq(band: String, mode: String): Long? {
+        val b = BANDS[band] ?: return null
+        return when (mode.uppercase()) {
+            "CW" -> b.cw
+            "FT8", "JT65", "JS8", "Q65" -> b.ft8
+            "FT4" -> b.ft4 ?: b.ft8
+            "PSK31", "OLIVIA", "DIGI", "RTTY" -> b.ft8
+            "FM" -> b.fm ?: b.phone
+            else -> b.phone
+        }
+    }
+}
+
+/** Something the app asks the radio to do (see [CatSession.send]). */
+sealed interface CatCommand {
+    data class Freq(val hz: Long) : CatCommand
+    data class Mode(val mode: RadioMode) : CatCommand
+}

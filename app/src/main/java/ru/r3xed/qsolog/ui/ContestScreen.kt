@@ -1,5 +1,7 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.mutableLongStateOf
@@ -236,25 +238,26 @@ fun ContestScreen(vm: AppViewModel) {
     fun Modifier.other(name: String) = onFocusChanged { if (it.isFocused) otherFocused = name else if (otherFocused == name) otherFocused = null }
     val hardKeys = Modifier.onPreviewKeyEvent { e ->
         if (e.type != KeyEventType.KeyDown || !e.fromHardware()) return@onPreviewKeyEvent false
-        val plain = !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed
+        val c = e.chord()
+        fun hit(a: KeyAction) = KeyMap.hit(a, c)
         val form = vm.form
         when {
-            (e.key == Key.Enter || e.key == Key.NumPadEnter) && plain -> {
+            hit(KeyAction.LOG_ENTER) -> {
                 if (!(callFocused && vm.runCallCommand())) next()
                 true
             }
-            e.key == Key.Spacebar && plain && callFocused -> { if (!vm.runCallCommand()) rcvdFocus.requestFocus(); true }
-            e.key == Key.Spacebar && plain && (rcvdFocused || otherFocused != null) -> { callFocus.requestFocus(); true }
+            hit(KeyAction.SPACE_NEXT) && callFocused -> { if (!vm.runCallCommand()) rcvdFocus.requestFocus(); true }
+            hit(KeyAction.SPACE_NEXT) && (rcvdFocused || otherFocused != null) -> { callFocus.requestFocus(); true }
             e.key == Key.DirectionUp && callFocused && form.isNew && form.call.isEmpty() -> { prev(); true }
-            e.key == Key.PageUp || (e.isAltPressed && e.key == Key.DirectionLeft) -> { prev(); true }
-            e.key == Key.PageDown || (e.isAltPressed && e.key == Key.DirectionRight) -> { next(); true }
-            e.key == Key.F12 -> { next(); true }
-            (e.key == Key.W && e.isAltPressed && !e.isCtrlPressed) || (e.key == Key.Escape && e.isCtrlPressed) -> {
+            hit(KeyAction.CONTEST_PREV) -> { prev(); true }
+            hit(KeyAction.CONTEST_NEXT) -> { next(); true }
+            hit(KeyAction.SAVE) -> { next(); true }
+            hit(KeyAction.CLEAR_CARD) -> {
                 if (form.isNew) { vm.clearCard(); error = null; dupeArmed = false; callFocus.requestFocus() }
                 true
             }
-            e.key == Key.Escape -> { close(); true }
-            e.key == Key.D && e.isCtrlPressed && !form.isNew -> { confirmDelete = true; true }
+            hit(KeyAction.CLOSE_CARD) -> { close(); true }
+            hit(KeyAction.DELETE_SAVED) && !form.isNew -> { confirmDelete = true; true }
             else -> false
         }
     }
@@ -276,6 +279,7 @@ fun ContestScreen(vm: AppViewModel) {
             Spacer(Modifier.weight(1f))
             ContestRate(vm)
         }
+        CwBar(vm, Modifier.padding(horizontal = 12.dp))
         // Where this card is among the contest contacts; the arrows do what the swipes do.
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = prev, enabled = hasPrev) {

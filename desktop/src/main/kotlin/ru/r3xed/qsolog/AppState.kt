@@ -22,6 +22,18 @@ import ru.r3xed.qsolog.cat.CatModes
 import ru.r3xed.qsolog.cat.CatSession
 import ru.r3xed.qsolog.cat.CatStatus
 import ru.r3xed.qsolog.cat.RigState
+import ru.r3xed.qsolog.cat.BandPlan
+import ru.r3xed.qsolog.cat.CatCommand
+import ru.r3xed.qsolog.cat.RadioMode
+import ru.r3xed.qsolog.cw.CwConfig
+import ru.r3xed.qsolog.cw.CwKeyer
+import ru.r3xed.qsolog.cw.CwMacros
+import ru.r3xed.qsolog.cw.CwState
+import ru.r3xed.qsolog.data.StartApp
+import ru.r3xed.qsolog.data.StartApps
+import ru.r3xed.qsolog.keys.Chord
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
 import ru.r3xed.qsolog.data.Adif
 import ru.r3xed.qsolog.digi.DigiConfig
 import ru.r3xed.qsolog.digi.DigiListener
@@ -399,8 +411,11 @@ class AppState {
             if (firstInstall) prefs.whatsNewSeen = APP_VERSION else showWhatsNew = true
         }
         reload()
+        KeyMap.custom = KeyMap.decode(prefs.keymap)
         scope.launch { restartCat() }
         scope.launch { restartDigi() }
+        scope.launch { restartCw() }
+        scope.launch { launchStartApps() }
         // First start: a short three-step setup; later, without a callsign, the settings as before.
         if (settings.myCall.isBlank()) pane = if (prefs.welcomeDone) Pane.Settings else Pane.Welcome
         scope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
@@ -924,6 +939,10 @@ class AppState {
 
     fun setBand(band: String) {
         form = form.copy(band = band)
+        if (controlsRig()) {
+            rigBand(band)?.let { form = form.copy(freq = CatFormat.mhz(it)) }
+            catTrackCard()
+        }
     }
 
     fun setAdif(key: String, value: String) {
@@ -954,6 +973,10 @@ class AppState {
 
     fun setMode(mode: String) {
         form = withMode(form, mode)
+        if (controlsRig()) {
+            rigMode(mode)?.let { hz -> form = form.copy(freq = CatFormat.mhz(hz), band = bandForFreq(hz / 1e6) ?: form.band) }
+            catTrackCard()
+        }
     }
 
     private fun withMode(f: Form, mode: String): Form {
@@ -1569,7 +1592,13 @@ class AppState {
         when (c) {
             is CallCommand.Band -> setBand(c.band)
             is CallCommand.Mode -> setMode(c.mode)
-            is CallCommand.Freq -> setFreq(c.freq)
+            is CallCommand.Freq -> {
+                setFreq(c.freq)
+                if (controlsRig()) {
+                    freqMhz(c.freq)?.let { rigTune(Math.round(it * 1_000_000)) }
+                    catTrackCard()
+                }
+            }
         }
         // A fresh card stays "untouched": closing it does not ask.
         if (untouched) formOriginal = form
@@ -1968,6 +1997,10 @@ class AppState {
 
     // ---------- CAT ----------
 
+    private companion object {
+        const val RIG_HOLD_MS = 700L
+    }
+
     var catConfig by mutableStateOf(prefs.cat); private set
     var catStatus by mutableStateOf<CatStatus>(CatStatus.Off); private set
     private var catSession: CatSession? = null
@@ -2015,12 +2048,244 @@ class AppState {
 
     fun catPorts(): List<CatDevice> = CatDesktop.ports()
 
-    /** The radio's latest state, while it answers. */
-    val rig: RigState? get() = (catStatus as? CatStatus.Connected)?.takeIf { !it.silent }?.state
+    /** The radio's latest state over CAT, while it answers. */
+    val catRig: RigState? get() = (catStatus as? CatStatus.Connected)?.takeIf { !it.silent }?.state
+
+    /** The dial WSJT-X or JTDX reported (its Status message), and who sent it. */
+    var digiRig by mutableStateOf<RigState?>(null); private set
+    var digiRigFrom by mutableStateOf(""); private set
+
+    /**
+     * The radio's state: from CAT when it answers, else from WSJT-X or JTDX — they hold the radio's port themselves and
+     * tell its dial over UDP. Their state counts while the program is heard (a heartbeat every 15 s).
+     */
+    val rig: RigState? get() = catRig ?: digiRig?.takeIf { d ->
+        val heard = (digiStatus as? DigiStatus.Listening)?.heardAt ?: 0
+        System.currentTimeMillis() - maxOf(d.at, heard) < 45_000
+    }
+
+    /** Where [rig] comes from: "TRX" for CAT, the program's name for WSJT-X / JTDX. */
+    val rigSource: String get() = if (catRig != null) "TRX" else digiRigFrom.substringBefore(' ').ifBlank { "UDP" }
+
+    private fun onDigiDial(m: ru.r3xed.qsolog.digi.Wsjtx.Message.Status) {
+        digiRig = RigState(freqHz = m.dialHz, radioMode = m.mode.ifBlank { null })
+        digiRigFrom = m.id
+        if (catRig == null) rig?.let(::applyRig)
+    }
 
     private fun onCat(st: CatStatus) {
         catStatus = st
-        rig?.let(::applyRig)
+        catRig?.let { r ->
+            rememberBand(r)
+            applyRig(r)
+        }
+    }
+
+    // ---------- the transceiver panel: the app tunes the radio ----------
+
+    /** The transceiver panel (a click on the TRX line, or its key) is open. */
+    var showRigPanel by mutableStateOf(false)
+
+    /** The radio takes commands: CAT is on and the radio answers. */
+    val rigControllable: Boolean get() = catRig != null
+
+    /** The new card's band and mode chips (and "14025" typed as the callsign) tune the radio too. */
+    private fun controlsRig(): Boolean =
+        catConfig.control && rigControllable && (pane == Pane.Edit || pane == Pane.Contest) && form.isNew
+
+    var tuneStep by mutableStateOf(prefs.tuneStep); private set
+
+    fun changeTuneStep(hz: Int) {
+        tuneStep = hz
+        prefs.tuneStep = hz
+    }
+
+    /** Where the radio was on each band: a band picked again goes back there. */
+    private val bandMemory: MutableMap<String, Long> = prefs.bandMemory.split(',').mapNotNull { p ->
+        val (b, f) = p.split('=').takeIf { it.size == 2 } ?: return@mapNotNull null
+        f.toLongOrNull()?.let { b to it }
+    }.toMap().toMutableMap()
+    private var saveBandJob: Job? = null
+
+    private fun rememberBand(r: RigState) {
+        val hz = r.freqHz ?: return
+        val band = bandForFreq(hz / 1e6) ?: return
+        if (bandMemory[band] == hz) return
+        bandMemory[band] = hz
+        // Saved once the dial rests for a moment, not on every step of it.
+        saveBandJob?.cancel()
+        saveBandJob = scope.launch {
+            delay(2000)
+            prefs.bandMemory = bandMemory.entries.joinToString(",") { "${it.key}=${it.value}" }
+        }
+    }
+
+    /**
+     * Until then the card does not take the radio's state: an answer to a poll sent before the command would bring the
+     * old frequency back for a moment.
+     */
+    private var rigHoldUntil = 0L
+
+    fun rigTune(hz: Long) {
+        if (hz <= 0) return
+        catSession?.send(CatCommand.Freq(hz))
+        rigHoldUntil = System.currentTimeMillis() + RIG_HOLD_MS
+    }
+
+    private fun rigSend(m: RadioMode) {
+        catSession?.send(CatCommand.Mode(m))
+        rigHoldUntil = System.currentTimeMillis() + RIG_HOLD_MS
+    }
+
+    /** The radio goes to [band]: where it was last on it, or the calling frequency of the mode it is in. Returns the frequency. */
+    fun rigBand(band: String): Long? {
+        val logMode = catRig?.radioMode?.let { CatModes.toLog(it, form.mode) } ?: form.mode
+        val hz = bandMemory[band] ?: BandPlan.freq(band, logMode) ?: return null
+        rigTune(hz)
+        // LSB below 10 MHz, USB above: SSB is set again for the new band.
+        if (logMode == "SSB") CatModes.toRadio("SSB", hz)?.let(::rigSend)
+        return hz
+    }
+
+    /**
+     * The radio goes to the log's [mode]. A digital mode away from its frequencies (FT8 picked on 14.200) also moves the
+     * radio to the mode's calling frequency on that band; that frequency is returned.
+     */
+    fun rigMode(mode: String): Long? {
+        val hz = catRig?.freqHz
+        val band = hz?.let { bandForFreq(it / 1e6) }
+        val target = band?.let { BandPlan.freq(it, mode) }
+        val move = mode in setOf("FT8", "FT4") && target != null && hz != null && kotlin.math.abs(hz - target) > 3_000
+        if (move) rigTune(target!!)
+        CatModes.toRadio(mode, if (move) target else hz)?.let(::rigSend)
+        return if (move) target else null
+    }
+
+    /**
+     * The card has just sent its band, mode or frequency to the radio: it keeps following the radio (the field changed
+     * by the user is not "changed by hand" for it), without taking the radio's old state back in the meantime.
+     */
+    private fun catTrackCard() {
+        val f = form
+        if (catWrote != null) catWrote = CatWrote(f.freq, f.band, f.mode, f.rstSent)
+    }
+
+    // ---------- telegraph: F1–F8 on the DTR or RTS line of a COM port ----------
+
+    var cwConfig by mutableStateOf(prefs.cw); private set
+    var cwState by mutableStateOf<CwState>(CwState.Idle); private set
+    private var keyer: CwKeyer? = null
+
+    fun changeCw(c: CwConfig) {
+        val old = cwConfig
+        cwConfig = c
+        prefs.cw = c
+        keyer?.wpm = c.wpm
+        if (c.copy(wpm = old.wpm, messages = old.messages) != old) restartCw()
+    }
+
+    fun restartCw() {
+        keyer?.close()
+        keyer = null
+        cwState = CwState.Idle
+        val c = cwConfig
+        if (!c.enabled) return
+        lateinit var k: CwKeyer
+        k = CwKeyer({ CatDesktop.openKeyLine(c) }, { st -> scope.launch { if (keyer === k) cwState = st } }, c.wpm, c.ptt)
+        keyer = k
+    }
+
+    fun stopCw() {
+        keyer?.stop()
+    }
+
+    fun closeCw() {
+        keyer?.close()
+        keyer = null
+    }
+
+    /** The card is in CW and the key line is on: F1–F8 send the messages. */
+    val cwActive: Boolean
+        get() = cwConfig.enabled && form.mode == "CW" && (pane == Pane.Edit || pane == Pane.Contest)
+
+    fun cwText(i: Int): String {
+        val f = form
+        return CwMacros.expand(
+            cwConfig.messages.getOrNull(i).orEmpty(), settings.myCall.trim(), f.call, f.rstSent,
+            f.adif[ContestMode.SENT].orEmpty(), f.name.substringBefore(' '), settings.myLocator.trim(),
+        )
+    }
+
+    fun sendCw(i: Int) {
+        val text = cwText(i)
+        if (text.isBlank()) return
+        keyer?.send(text) ?: say(tr("Телеграф выключен: включите его в настройках"))
+    }
+
+    /** "Проверить" in the settings: VVV at the set speed. */
+    fun testCw() {
+        keyer?.send("VVV") ?: say(tr("Сначала включите передачу телеграфом"))
+    }
+
+    val cwSending: Boolean get() = cwState is CwState.Sending
+
+    fun changeCwSpeed(delta: Int) {
+        changeCw(cwConfig.copy(wpm = (cwConfig.wpm + delta).coerceIn(CwConfig.MIN_WPM, CwConfig.MAX_WPM)))
+    }
+
+    /** The telegraph keys of the card: true when [c] was one of them and has been done. */
+    fun cwKey(c: Chord?): Boolean {
+        if (!cwActive || c == null) return false
+        when {
+            KeyMap.hit(KeyAction.CW_STOP, c) -> if (cwSending) stopCw() else return false
+            KeyMap.hit(KeyAction.CW_FASTER, c) -> changeCwSpeed(2)
+            KeyMap.hit(KeyAction.CW_SLOWER, c) -> changeCwSpeed(-2)
+            else -> {
+                val a = KeyAction.entries.firstOrNull { it.cwMessage >= 0 && KeyMap.hit(it, c) } ?: return false
+                sendCw(a.cwMessage)
+            }
+        }
+        return true
+    }
+
+    // ---------- additional settings: keys, programs started with QSO-LOG ----------
+
+    var keymap by mutableStateOf(KeyMap.custom); private set
+
+    fun changeKeymap(m: Map<KeyAction, List<Chord>>) {
+        KeyMap.custom = m
+        keymap = m
+        prefs.keymap = KeyMap.encode(m)
+    }
+
+    var startApps by mutableStateOf(StartApps.decode(prefs.startApps)); private set
+
+    fun changeStartApps(list: List<StartApp>) {
+        startApps = list
+        prefs.startApps = StartApps.encode(list)
+    }
+
+    /** The programs this run of QSO-LOG started, to close the ones marked "закрывать вместе с QSO-LOG". */
+    private val started = mutableListOf<Pair<StartApp, Process>>()
+
+    /** Starts the enabled programs that are not running yet; says which could not start. */
+    fun launchStartApps() {
+        val failed = mutableListOf<String>()
+        startApps.filter { it.enabled }.forEach { a ->
+            if (started.any { it.first.target == a.target && it.second.isAlive } || StartLauncher.running(a)) return@forEach
+            try {
+                started += a to StartLauncher.start(a)
+            } catch (e: Exception) {
+                failed += a.title + ": " + (e.message ?: e.javaClass.simpleName)
+            }
+        }
+        if (failed.isNotEmpty()) say(tr("Не удалось запустить: %s", failed.joinToString("; ")))
+    }
+
+    /** On exit: the programs marked so are closed. */
+    fun stopStartApps() {
+        started.filter { it.first.closeOnExit }.forEach { (_, p) -> runCatching { p.destroy() } }
+        started.clear()
     }
 
     private fun catFollowNewCard() {
@@ -2031,6 +2296,7 @@ class AppState {
 
     /** The open new card takes the radio's frequency, band, mode and S-meter — the fields not changed by hand. */
     private fun applyRig(s: RigState) {
+        if (System.currentTimeMillis() < rigHoldUntil) return
         val w = catWrote ?: return
         if ((pane != Pane.Edit && pane != Pane.Contest) || !form.isNew) return
         val c = catConfig
@@ -2085,6 +2351,7 @@ class AppState {
             c,
             { st -> scope.launch { if (digiListener === l) digiStatus = st } },
             { qsos, from -> scope.launch { if (digiListener === l) logDigi(qsos, from) } },
+            onDial = { m -> scope.launch { if (digiListener === l) onDigiDial(m) } },
         )
         digiListener = l
         l.start()

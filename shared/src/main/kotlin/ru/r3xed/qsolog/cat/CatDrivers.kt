@@ -66,6 +66,12 @@ interface RigDriver {
     /** Whether the last [poll] got any answer. */
     val answered: Boolean
 
+    /** Tunes the radio to [hz]. False when the radio refused (or this protocol cannot). */
+    fun setFreq(io: CatIo, hz: Long): Boolean
+
+    /** Switches the radio to [mode] (see [RadioMode]). */
+    fun setMode(io: CatIo, mode: RadioMode): Boolean
+
     companion object {
         fun of(c: CatConfig, sMeter: Boolean = true): RigDriver = when (c.protocol) {
             CatProtocol.ICOM -> CivDriver(c.civAddress, true, c.model.name, sMeter)
@@ -166,6 +172,45 @@ class CivDriver(
 
     private fun mode(): String? = baseMode?.let { if (dataOn && it in setOf("LSB", "USB", "AM", "FM")) "$it-D" else it }
 
+    override fun setFreq(io: CatIo, hz: Long): Boolean = command(io, 0x05, null, civFreqBytes(hz))
+
+    override fun setMode(io: CatIo, mode: RadioMode): Boolean {
+        val m = when (mode) {
+            RadioMode.LSB -> 0x00
+            RadioMode.USB, RadioMode.DATA -> 0x01
+            RadioMode.AM -> 0x02
+            RadioMode.CW -> 0x03
+            RadioMode.RTTY -> 0x04
+            RadioMode.FM -> 0x05
+        }
+        val ok = command(io, 0x06, null, byteArrayOf(m.toByte()))
+        // Data mode (USB-D) is a switch of its own; radios without it (Xiegu, old Icoms) answer FA once and are not asked again.
+        if (ok && dataSupported && (mode == RadioMode.DATA || dataOn)) {
+            val on = if (mode == RadioMode.DATA) 1 else 0
+            if (!command(io, 0x1A, 0x06, byteArrayOf(on.toByte(), on.toByte()))) dataSupported = false
+        }
+        return ok
+    }
+
+    /** A command that changes something: the radio answers FB (done) or FA (refused). */
+    private fun command(io: CatIo, cmd: Int, sub: Int?, data: ByteArray): Boolean {
+        io.send(frame(address, controller, cmd, sub, data))
+        while (true) {
+            val f = io.next(TIMEOUT, ::civEnd) ?: return false
+            if (f.size < 6) continue
+            val to = f[2].u
+            val from = f[3].u
+            if (from == controller) continue
+            if (to != controller && to != 0x00) continue
+            answered = true
+            when (f[4].u) {
+                0xFB -> return true
+                0xFA -> return false
+                else -> take(f)
+            }
+        }
+    }
+
     companion object {
         val CIV_MODES = mapOf(
             0x00 to "LSB", 0x01 to "USB", 0x02 to "AM", 0x03 to "CW", 0x04 to "RTTY", 0x05 to "FM", 0x06 to "WFM",
@@ -249,6 +294,28 @@ class KenwoodDriver(private val name: String, private val elecraft: Boolean, pri
         }
     }
 
+    // Kenwood radios do not answer a command that sets something; a refused one comes as "?;" and is dropped by the next poll.
+    override fun setFreq(io: CatIo, hz: Long): Boolean {
+        io.send("FA%011d;".format(hz).toByteArray(Charsets.US_ASCII))
+        return true
+    }
+
+    override fun setMode(io: CatIo, mode: RadioMode): Boolean {
+        val c = when (mode) {
+            RadioMode.LSB -> '1'
+            RadioMode.USB -> '2'
+            RadioMode.CW -> '3'
+            RadioMode.FM -> '4'
+            RadioMode.AM -> '5'
+            RadioMode.RTTY -> '6'
+            RadioMode.DATA -> if (elecraft) '6' else '2'
+        }
+        io.send("MD$c;".toByteArray(Charsets.US_ASCII))
+        // TS-590, TS-890, TS-990: USB with the data switch on (DA1); radios without it answer "?;", which is dropped.
+        if (!elecraft && (c == '1' || c == '2')) io.send("DA${if (mode == RadioMode.DATA) 1 else 0};".toByteArray(Charsets.US_ASCII))
+        return true
+    }
+
     companion object {
         val MODES = mapOf('1' to "LSB", '2' to "USB", '3' to "CW", '4' to "FM", '5' to "AM", '6' to "FSK", '7' to "CW-R", '9' to "FSK-R")
         val ELECRAFT_MODES = mapOf('1' to "LSB", '2' to "USB", '3' to "CW", '4' to "FM", '5' to "AM", '6' to "DATA", '7' to "CW-R", '9' to "DATA-R")
@@ -263,7 +330,10 @@ class YaesuDriver(private val name: String, private val sMeter: Boolean = true) 
     override fun poll(io: CatIo, last: RigState): RigState {
         var s = last
         answered = false
-        ask(io, "FA;")?.let { r -> digits(r.removePrefix("FA"))?.let { s = s.copy(freqHz = it, at = System.currentTimeMillis()) } }
+        ask(io, "FA;")?.let { r ->
+            val d = r.removePrefix("FA")
+            digits(d)?.let { s = s.copy(freqHz = it, at = System.currentTimeMillis()); faDigits = d.length }
+        }
         if (!answered) return s
         ask(io, "MD0;")?.let { r -> r.getOrNull(3)?.let { c -> s = s.copy(radioMode = MODES[c.uppercaseChar()] ?: s.radioMode) } }
         if (sMeter) ask(io, "SM0;")?.removePrefix("SM0")?.toIntOrNull()?.let { v -> s = s.copy(sDb = CatFormat.scale(v, 130, 255)) }
@@ -278,6 +348,28 @@ class YaesuDriver(private val name: String, private val sMeter: Boolean = true) 
             if (r == "?;") return null.also { answered = true }
             if (r.startsWith(head)) return r.removeSuffix(";").also { answered = true }
         }
+    }
+
+    /** FT-991, FT-891, FT-710, FTDX10, FTDX101 send the frequency in 9 digits, FT-950, FT-2000, FT-450 in 8: set it the same way. */
+    private var faDigits = 9
+
+    override fun setFreq(io: CatIo, hz: Long): Boolean {
+        io.send(("FA" + hz.toString().padStart(faDigits, '0') + ";").toByteArray(Charsets.US_ASCII))
+        return true
+    }
+
+    override fun setMode(io: CatIo, mode: RadioMode): Boolean {
+        val c = when (mode) {
+            RadioMode.LSB -> '1'
+            RadioMode.USB -> '2'
+            RadioMode.CW -> '3'
+            RadioMode.FM -> '4'
+            RadioMode.AM -> '5'
+            RadioMode.RTTY -> '6'
+            RadioMode.DATA -> 'C'
+        }
+        io.send("MD0$c;".toByteArray(Charsets.US_ASCII))
+        return true
     }
 
     companion object {
@@ -317,6 +409,35 @@ class YaesuOldDriver(private val name: String, private val sMeter: Boolean = tru
         return s
     }
 
+    /** 01: four BCD bytes of the frequency in tens of hertz, the highest first. */
+    override fun setFreq(io: CatIo, hz: Long): Boolean {
+        var v = hz / 10
+        val b = ByteArray(4)
+        for (i in 3 downTo 0) {
+            val two = (v % 100).toInt()
+            v /= 100
+            b[i] = ((two / 10) shl 4 or (two % 10)).toByte()
+        }
+        io.send(b + byteArrayOf(0x01))
+        // The radio answers some commands with one byte: dropped so that it is not taken for the next poll's answer.
+        io.next(100) { 1 }
+        return true
+    }
+
+    override fun setMode(io: CatIo, mode: RadioMode): Boolean {
+        val m = when (mode) {
+            RadioMode.LSB -> 0x00
+            RadioMode.USB -> 0x01
+            RadioMode.CW -> 0x02
+            RadioMode.AM -> 0x04
+            RadioMode.FM -> 0x08
+            RadioMode.RTTY, RadioMode.DATA -> 0x0A
+        }
+        io.send(byteArrayOf(m.toByte(), 0, 0, 0, 0x07))
+        io.next(100) { 1 }
+        return true
+    }
+
     companion object {
         val MODES = mapOf(
             0x00 to "LSB", 0x01 to "USB", 0x02 to "CW", 0x03 to "CW-R", 0x04 to "AM", 0x06 to "WFM", 0x08 to "FM",
@@ -333,11 +454,29 @@ class RigctldDriver(private val sMeter: Boolean = true) : RigDriver {
     override fun poll(io: CatIo, last: RigState): RigState {
         var s = last
         answered = false
+        // rigctld's answers carry no name: a late one would be taken for the answer to the next question, and every
+        // poll after it would be one line behind. Whatever came late is dropped first.
+        io.clear()
         ask(io, "f", 1)?.firstOrNull()?.trim()?.toDoubleOrNull()?.let { s = s.copy(freqHz = it.toLong(), at = System.currentTimeMillis()) }
         if (!answered) return s
         ask(io, "m", 2)?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.let { s = s.copy(radioMode = it) }
         if (sMeter) ask(io, "l STRENGTH", 1)?.firstOrNull()?.trim()?.toIntOrNull()?.let { s = s.copy(sDb = (54 + it).coerceAtLeast(0)) }
         return s
+    }
+
+    override fun setFreq(io: CatIo, hz: Long): Boolean = report(io, "F $hz")
+
+    override fun setMode(io: CatIo, mode: RadioMode): Boolean = report(io, "M " + when (mode) {
+        RadioMode.DATA -> "PKTUSB"
+        else -> mode.name
+    } + " 0")
+
+    /** A command that sets something: rigctld answers "RPRT 0" when done, "RPRT -n" when not. */
+    private fun report(io: CatIo, cmd: String): Boolean {
+        io.send("$cmd\n".toByteArray(Charsets.US_ASCII))
+        val l = io.line(TIMEOUT, '\n')?.trim() ?: return false
+        answered = true
+        return l == "RPRT 0"
     }
 
     private fun ask(io: CatIo, cmd: String, lines: Int): List<String>? {

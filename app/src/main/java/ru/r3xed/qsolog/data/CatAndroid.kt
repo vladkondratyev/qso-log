@@ -22,6 +22,9 @@ import ru.r3xed.qsolog.cat.CatLinkType
 import ru.r3xed.qsolog.cat.CatProtocol
 import ru.r3xed.qsolog.cat.StreamLink
 import ru.r3xed.qsolog.cat.tcpLink
+import ru.r3xed.qsolog.cw.CwConfig
+import ru.r3xed.qsolog.cw.CwLine
+import ru.r3xed.qsolog.cw.KeyLine
 import ru.r3xed.qsolog.tr
 import java.io.IOException
 import java.util.UUID
@@ -78,11 +81,31 @@ class CatAndroid(private val context: Context) {
     }
 
     private fun openUsb(c: CatConfig): CatLink {
+        val (p, key) = openUsbPort(c.device, c.baud, twoStops = c.protocol == CatProtocol.YAESU_OLD)
+        catUsb = key to p
+        return object : CatLink {
+            override fun write(b: ByteArray) = p.write(b, 1000)
+            override fun read(buf: ByteArray, timeoutMs: Int): Int = p.read(buf, timeoutMs.coerceAtLeast(1))
+            override fun close() {
+                if (catUsb?.second === p) catUsb = null
+                runCatching { p.close() }
+            }
+        }
+    }
+
+    /** The CAT's open USB port and its key: the CW key line on the same adapter switches its DTR or RTS. */
+    @Volatile private var catUsb: Pair<String, UsbSerialPort>? = null
+
+    /** Opens the USB serial port [device] (a [usbKey]; the first adapter when not found). Returns it and its key. */
+    private fun openUsbPort(
+        device: String, baud: Int, twoStops: Boolean,
+        missing: () -> String = { tr("Трансивер не подключён по USB. Нужен кабель OTG (USB-C или micro-USB → USB трансивера)") },
+    ): Pair<UsbSerialPort, String> {
         val drivers = usbDrivers()
-        if (drivers.isEmpty()) throw IOException(tr("Трансивер не подключён по USB. Нужен кабель OTG (USB-C или micro-USB → USB трансивера)"))
-        val parts = c.device.split(':')
+        if (drivers.isEmpty()) throw IOException(missing())
+        val parts = device.split(':')
         val port = parts.getOrNull(2)?.toIntOrNull() ?: 0
-        val driver = drivers.firstOrNull { usbKey(it.device, 0).substringBeforeLast(':') == c.device.substringBeforeLast(':') && port < it.ports.size }
+        val driver = drivers.firstOrNull { usbKey(it.device, 0).substringBeforeLast(':') == device.substringBeforeLast(':') && port < it.ports.size }
             ?: drivers.first()
         val dev = driver.device
         if (!usb.hasPermission(dev)) {
@@ -94,11 +117,11 @@ class CatAndroid(private val context: Context) {
             throw IOException(tr("Разрешите QSO-LOG доступ к USB-устройству в появившемся окне"))
         }
         val conn = usb.openDevice(dev) ?: throw IOException(tr("Не удалось открыть USB-устройство"))
-        val p = driver.ports[port.coerceIn(0, driver.ports.size - 1)]
+        val index = port.coerceIn(0, driver.ports.size - 1)
+        val p = driver.ports[index]
         try {
             p.open(conn)
-            val twoStops = c.protocol == CatProtocol.YAESU_OLD
-            p.setParameters(c.baud, 8, if (twoStops) UsbSerialPort.STOPBITS_2 else UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            p.setParameters(baud, 8, if (twoStops) UsbSerialPort.STOPBITS_2 else UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
             // DTR and RTS may key the transmitter or send CW (the radio's "USB SEND / USB keying" settings): keep them low.
             runCatching { p.dtr = false }
             runCatching { p.rts = false }
@@ -106,10 +129,28 @@ class CatAndroid(private val context: Context) {
             runCatching { p.close() }
             throw IOException(tr("Не удалось открыть USB-устройство") + ": " + (e.message ?: e.javaClass.simpleName))
         }
-        return object : CatLink {
-            override fun write(b: ByteArray) = p.write(b, 1000)
-            override fun read(buf: ByteArray, timeoutMs: Int): Int = p.read(buf, timeoutMs.coerceAtLeast(1))
-            override fun close() = runCatching { p.close() }.let { }
+        return p to usbKey(dev, index)
+    }
+
+    /**
+     * The CW key line: [CwConfig.line] of the USB adapter [CwConfig.device]. When CAT already has that adapter open (one
+     * CP2102 cable for both CI-V and the key), its port is shared; otherwise the adapter is opened for the key alone.
+     */
+    fun openKeyLine(c: CwConfig): KeyLine {
+        val shared = catUsb?.takeIf { (key, _) -> c.device.isBlank() || key == c.device }?.second
+        val p = shared ?: openUsbPort(c.device, 9600, twoStops = false) { tr("USB-адаптер ключа не подключён. Нужен кабель OTG и адаптер CP2102, CH340 или FTDI") }.first
+        fun set(line: CwLine, on: Boolean) {
+            if (line == CwLine.DTR) p.dtr = on else p.rts = on
+        }
+        val other = if (c.line == CwLine.DTR) CwLine.RTS else CwLine.DTR
+        set(c.line, c.invert)
+        return object : KeyLine {
+            override fun key(down: Boolean) = set(c.line, down != c.invert)
+            override fun ptt(on: Boolean) = set(other, on)
+            override fun close() {
+                runCatching { set(c.line, false) }
+                if (shared == null) runCatching { p.close() }
+            }
         }
     }
 

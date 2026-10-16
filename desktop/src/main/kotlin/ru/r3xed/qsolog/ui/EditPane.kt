@@ -1,5 +1,7 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.keys.KeyAction
+import ru.r3xed.qsolog.keys.KeyMap
 import ru.r3xed.qsolog.data.ExportFormat
 
 import androidx.compose.foundation.layout.heightIn
@@ -194,8 +196,10 @@ fun EditPane(vm: AppState) {
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).onPreviewKeyEvent { e ->
             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
             val digit = DIGIT_KEYS.indexOf(e.key)
+            val c = e.chord()
+            fun hit(a: KeyAction) = KeyMap.hit(a, c)
             when {
-                (e.key == Key.Enter || e.key == Key.NumPadEnter) && !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed -> {
+                hit(KeyAction.LOG_ENTER) -> {
                     when {
                         callFocused && vm.runCallCommand() -> {}
                         vm.form.isNew -> showSaveError(vm.saveAndNext())
@@ -203,18 +207,18 @@ fun EditPane(vm: AppState) {
                     }
                     true
                 }
-                e.key == Key.Spacebar && !e.isAltPressed && !e.isCtrlPressed && !e.isMetaPressed && !e.isShiftPressed -> spaceNext()
-                e.key == Key.D && (if (ru.r3xed.qsolog.IS_MAC) e.isMetaPressed else e.isCtrlPressed) && !vm.form.isNew -> { confirmDelete = true; true }
+                hit(KeyAction.SPACE_NEXT) -> spaceNext()
+                hit(KeyAction.DELETE_SAVED) && !vm.form.isNew -> { confirmDelete = true; true }
                 e.key == Key.DirectionUp && callFocused && f.isNew && f.call.isEmpty() -> { vm.editLast(); true }
-                e.key == Key.F2 -> { callFocus.requestFocus(); true }
-                e.key == Key.F3 -> { freqFocus.requestFocus(); true }
-                e.key == Key.F4 -> { rstFocus.requestFocus(); true }
-                e.key == Key.F5 -> { rstRcvdFocus.requestFocus(); true }
-                e.key == Key.F6 -> { vm.setNow(); true }
+                hit(KeyAction.FOCUS_CALL) -> { callFocus.requestFocus(); true }
+                hit(KeyAction.FOCUS_FREQ) -> { freqFocus.requestFocus(); true }
+                hit(KeyAction.FOCUS_RST_SENT) -> { rstFocus.requestFocus(); true }
+                hit(KeyAction.FOCUS_RST_RCVD) -> { rstRcvdFocus.requestFocus(); true }
+                hit(KeyAction.TIME_NOW) -> { vm.setNow(); true }
                 // F7: a voice note for this card, as the microphone button above does.
-                e.key == Key.F7 -> { if (vm.cardRecordingSince != null) vm.stopCardRecording() else if (f.isNew && f.audio.isBlank()) vm.startCardRecording(); true }
-                e.key == Key.F8 -> { if (f.isNew) showSaveError(vm.saveAndNext()); true }
-                e.key == Key.F12 -> { showSaveError(vm.trySave()); true }
+                hit(KeyAction.VOICE) -> { if (vm.cardRecordingSince != null) vm.stopCardRecording() else if (f.isNew && f.audio.isBlank()) vm.startCardRecording(); true }
+                hit(KeyAction.SAVE_NEXT) -> { if (f.isNew) showSaveError(vm.saveAndNext()); true }
+                hit(KeyAction.SAVE) -> { showSaveError(vm.trySave()); true }
                 e.isAltPressed && digit >= 0 && !e.isShiftPressed -> {
                     BANDS.filter { it in vm.enabledBands }.getOrNull(digit)?.let(vm::setBand)
                     true
@@ -313,6 +317,7 @@ fun EditPane(vm: AppState) {
                 }
             }
             RigBadge(vm)
+            CwBar(vm)
             LaunchedEffect(vm.editSession) { if (f.isNew || vm.openedByKeys) callFocus.requestFocus() }
             // Callsigns from the log that start with what is typed: one click instead of the rest.
             if (f.isNew) CallSuggestions(vm) { call ->
@@ -454,7 +459,7 @@ fun EditPane(vm: AppState) {
                     Spacer(Modifier.width(4.dp))
                     Text(tr("Следующая"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(8.dp))
-                    Text("F8 · $NEXT_SHORTCUT", fontSize = 13.sp, color = LocalContentColor.current.copy(alpha = 0.7f))
+                    Text(listOf(KeyMap.label(KeyAction.SAVE_NEXT, ru.r3xed.qsolog.IS_MAC), NEXT_SHORTCUT).filter { it.isNotEmpty() }.joinToString(" · "), fontSize = 13.sp, color = LocalContentColor.current.copy(alpha = 0.7f))
                 }
                 Button(
                     onClick = { showSaveError(vm.trySave()) },
@@ -463,7 +468,7 @@ fun EditPane(vm: AppState) {
                 ) {
                     Text(tr("Сохранить"), fontSize = 21.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(10.dp))
-                    Text("F12 · $SAVE_SHORTCUT", fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f))
+                    Text(listOf(KeyMap.label(KeyAction.SAVE, ru.r3xed.qsolog.IS_MAC), SAVE_SHORTCUT).filter { it.isNotEmpty() }.joinToString(" · "), fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f))
                 }
             }
         }

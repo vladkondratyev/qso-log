@@ -11,7 +11,8 @@ QSO-LOG is a logbook for radio amateurs. It runs on Android, macOS, Windows and 
 on the phone and on the computer.
 
 A QSO takes a few taps: callsign, frequency, RST. The frequency, band and mode can come from the transceiver over CAT
-(ICOM CI-V, Kenwood, Elecraft, Yaesu, Hamlib rigctld), and FT8 and FT4 QSOs come in by themselves from WSJT-X, JTDX
+(ICOM CI-V, Kenwood, Elecraft, Yaesu, Hamlib rigctld), and the app tunes it from its own panel; CW messages — CQ,
+callsigns, exchange numbers — go out from the F1–F8 keys; FT8 and FT4 QSOs come in by themselves from WSJT-X, JTDX
 and MSHV. The app looks up the other station's name and city on QRZ.ru
 or QRZ.com, works out the distance and draws the path on a map. You can attach a voice note to a QSO. Contest mode
 gives fast entry with exchange numbers, and the log exports to Cabrillo and to ЕРМАК, the Russian contest format.
@@ -22,18 +23,18 @@ without touching the screen at all.
 The app is free and open source. The interface is in Russian and English.
 
 <p align="center">
-<img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG on a computer and a phone: CAT with the transceiver, FT8 and FT4 QSOs from WSJT-X">
+<img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG on a computer and a phone: the transceiver panel over CAT, CW from the F1–F8 keys, FT8 and FT4 QSOs from WSJT-X and JTDX">
 </p>
 
 ## Download
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.1.0 | [QSO-LOG-2.1.0.apk](../../releases/tag/v2.1.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.1.0 | [QSO-LOG-2.1.0-macos-arm64.dmg](../../releases/tag/desktop-v2.1.0) |
-| macOS 11 or newer, Intel | 2.1.0 | [QSO-LOG-2.1.0-macos-x64.dmg](../../releases/tag/desktop-v2.1.0) |
-| Windows 10 and 11, 64-bit | 2.1.0 | [QSO-LOG-2.1.0-windows-x64.zip](../../releases/tag/desktop-v2.1.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.1.0 | [QSO-LOG-2.1.0-linux-amd64.deb](../../releases/tag/desktop-v2.1.0) |
+| Android 8.0 or newer | 2.2.0 | [QSO-LOG-2.2.0.apk](../../releases/tag/v2.2.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.2.0 | [QSO-LOG-2.2.0-macos-arm64.dmg](../../releases/tag/desktop-v2.2.0) |
+| macOS 11 or newer, Intel | 2.2.0 | [QSO-LOG-2.2.0-macos-x64.dmg](../../releases/tag/desktop-v2.2.0) |
+| Windows 10 and 11, 64-bit | 2.2.0 | [QSO-LOG-2.2.0-windows-x64.zip](../../releases/tag/desktop-v2.2.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.2.0 | [QSO-LOG-2.2.0-linux-amd64.deb](../../releases/tag/desktop-v2.2.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -46,6 +47,7 @@ is switched in Settings and changes at once.
 - [First start](#first-start)
 - [New QSO](#new-qso)
 - [CAT — transceiver](#cat--transceiver)
+- [CW from the F1–F8 keys](#cw-from-the-f1f8-keys)
 - [Digital modes — WSJT-X, JTDX, MSHV](#digital-modes--wsjt-x-jtdx-mshv)
 - [Contest mode](#contest-mode)
 - [Keyboard only](#keyboard-only)
@@ -133,10 +135,18 @@ an iPhone; the next key inserts there. The hold time (0.2–1.5 s) is set in "QS
 QSO-LOG talks to the transceiver the way N1MM, Log4OM, WSJT-X or FT8CN do: a few times a second it asks for the
 frequency, mode and S-meter. While a new card is open, its frequency, band and mode follow the dial; optionally the
 S digit of the RST sent follows the S-meter (59 → 57). A field changed by hand is left alone in that card, saved QSOs
-never change. The card shows a line "TRX 14 195.000 · USB · S8" — tap it to open the CAT settings.
+never change. The card and the log show a line "TRX 14 195.000 · USB · S8".
 
-The app only reads: it sends no control commands, never transmits, and keeps the port's DTR and RTS lines low. A
-transceiver cannot tell digital modes apart, so in DATA (USB-D) the card keeps FT8, FT4 or whatever digital mode it has.
+**The transceiver panel** (since 2.2.0) opens with a tap on that line, from the ⋮ menu or with **Ctrl+T**, the same on
+the phone and the computer. It has a large frequency you drag left or right like a tuning knob (a finger or the mouse),
+turn with the mouse wheel or step with ± by 10 Hz, 100 Hz, 1 or 10 kHz; a field for a frequency ("14195" or "7.074");
+band and mode buttons. A band takes the transceiver back to where it last was on it (the first time — to the CW, SSB
+or FT8 calling frequency). SSB becomes LSB below 10 MHz and USB above; FT8 and FT4 switch data mode (USB-D) on and
+move to the mode's frequency. The band and mode buttons of a new QSO card, and a frequency typed as the callsign
+("14025", then Enter), tune the transceiver too — this can be switched off in the CAT settings.
+
+The app never transmits by itself and keeps the CAT port's DTR and RTS lines low. A transceiver cannot tell digital
+modes apart, so in DATA (USB-D) the card keeps FT8, FT4 or whatever digital mode it has.
 
 Settings → **"CAT — transceiver"**: the model, the connection, the port speed and the CI-V address (if the radio does
 not answer at the set address, the app tries the factory ones), and what the card takes. The status line shows what
@@ -158,14 +168,42 @@ Connection:
   adapter paired in the Android settings, SPP profile — an IC-705, for one) or the **network** (rigctld, a network CAT
   adapter, ser2net).
 - **Computer** — a **COM port** (the transceiver's USB cable or a CAT/CI-V interface; some need a CP210x, FTDI or CH340
-  driver) or the **network**. Only one program can open a COM port: if WSJT-X already controls the transceiver, run
-  Hamlib rigctld and connect both programs to it.
+  driver) or the **network**. Only one program can open a COM port: if WSJT-X or JTDX already controls the
+  transceiver, run Hamlib rigctld and connect both programs to it. On the computer rigctld can be started with
+  QSO-LOG: Settings → "Additional settings" → "Add Hamlib rigctld" — QSO-LOG starts it and connects its CAT to it.
+  In JTDX then: Settings → Radio → Rig "Hamlib NET rigctl", Network Server `127.0.0.1:4532`.
 
 <p>
+<img src="docs/screenshots/73-rig-panel.png" width="200" alt="The transceiver panel on the phone">
 <img src="docs/screenshots/69-cat-card.png" width="200" alt="New QSO: frequency and mode from the transceiver">
 <img src="docs/screenshots/70-cat-settings.png" width="200" alt="CAT settings on the phone">
 <img src="docs/screenshots/71-cat-rigs.png" width="200" alt="Choosing the transceiver">
 <img src="docs/screenshots/desktop-24-cat.png" width="440" alt="CAT settings on the computer">
+<img src="docs/screenshots/desktop-27-rig-panel.png" width="440" alt="The transceiver panel on the computer">
+</p>
+
+## CW from the F1–F8 keys
+
+As in N1MM, QSO-LOG sends stored CW messages by keying the transmitter with the DTR or RTS line of a USB adapter
+(CP2102, CH340, FTDI). Eight messages on **F1–F8** — CQ, exchange, "TU", my and his callsign, repeat, "?", "AGN?" —
+take the card's fields: `{MYCALL}`, `{CALL}`, `{RST}`, `{NR}` (serial number sent), `{NAME}`, `{MYLOC}`. The keys work
+while the QSO card (the usual or the contest one) is in CW; on a phone without a keyboard the same messages are
+buttons under the frequency. **Esc** stops sending, **Alt+↑ / Alt+↓** change the speed (10–50 WPM). The keys can be
+reassigned.
+
+Settings → **"Telegraph (CW) — key on DTR/RTS"**: the adapter (through OTG on the phone), the key line, the speed, the
+message texts, "The other line is PTT" for radios without break-in, and "Test: send VVV". If CAT uses the same
+adapter (one CP2102 cable for both CI-V and the key), choose it here too — the port is shared.
+
+**Xiegu G90** and other radios keyed by shorting to ground: the DTR and RTS pins of a CP2102 go to 0 V while sending.
+Wire the pin to the dot (or straight key) contact of the KEY jack through a transistor or an optocoupler (PC817),
+ground to ground, and choose the straight key in the radio's menu. If the key is closed when nothing is sent, switch
+on "Invert the key line".
+
+<p>
+<img src="docs/screenshots/74-cw-card.png" width="200" alt="The card in CW: messages F1–F8">
+<img src="docs/screenshots/75-cw-settings.png" width="200" alt="CW settings">
+<img src="docs/screenshots/desktop-28-cw.png" width="440" alt="Messages F1–F8 on the computer">
 </p>
 
 ## Digital modes — WSJT-X, JTDX, MSHV
@@ -185,6 +223,10 @@ Settings → **“Digital modes — WSJT-X, JTDX, MSHV”** → “Take QSOs”.
   settings block. QSOs are taken while QSO-LOG is running.
 - If another program (JTAlert, GridTracker) already listens on port 2237, set a multicast group in WSJT-X, `224.0.0.1`
   for one, and the same group in QSO-LOG: every program gets the QSOs.
+- **Frequency and mode from JTDX** (since 2.2.0). Without CAT in QSO-LOG, while JTDX or WSJT-X controls the
+  transceiver, the app takes the frequency and mode from their messages on the same UDP port: the card and the log
+  show "JTDX 14 074.000 · FT8", and a new card follows it. Only JTDX can tune the transceiver then; to tune it from
+  QSO-LOG too, connect both programs to Hamlib rigctld (see [CAT](#cat--transceiver)).
 
 <p>
 <img src="docs/screenshots/72-wsjtx.png" width="200" alt="QSOs from WSJT-X on the phone">
@@ -250,6 +292,9 @@ only. Dupes count over the whole contest, or within the current tour when they r
 A whole outing or contest can be done without touching the screen: on the computer with its keyboard, on a phone or
 tablet with an external one (Bluetooth or USB OTG). Handy in the field: phone on a stand, small keyboard on your lap.
 With an external keyboard attached, the built-in on-screen keyboard hides and the cursor is in the callsign.
+
+All the keys below are the defaults: any of them can be replaced in Settings → "Additional settings" → "Assign keys"
+(since 2.2.0), and the key list (F1) then shows yours.
 
 It works as in classic loggers (on the phone since 0.40.0, on the computer since 2.0.0): **Space** goes round the fields: callsign → RST sent →
 RST received → callsign again (in a contest RST is skipped: callsign ↔ received exchange). **Enter** in any field,
@@ -531,13 +576,19 @@ understood), and assignment: press "Assign" and then the key, so an adapter send
 
 Settings are grouped in blocks; each header says briefly what is chosen. My station; station data sources; QSO entry
 (time, keyboard and its hold time, keep the screen on, CONTEST MODE); bands and modes shown in the card; language (system, Russian, English — changes at once);
-theme; logbook (export, import, sync — its header says whether Google sync is on, delete all). At the bottom: version, "What's new", "Report a problem" and
+theme; additional settings (since 2.2.0: "Assign keys" — any key of an external keyboard can be replaced, added or
+taken off; "Start together with QSO-LOG" — on the phone, apps such as FT8CN or an SDR app that open with QSO-LOG and
+keep running in the background while QSO-LOG comes back in front; on the computer, any programs with their arguments,
+such as JTDX, WSJT-X or Hamlib rigctld, not opened twice and optionally closed with QSO-LOG); logbook (export, import,
+sync — its header says whether Google sync is on, delete all). At the bottom: version, "What's new", "Report a problem" and
 "Check for updates". "Report a problem" opens a new GitHub issue in the browser with a template, the app version and
 the device model — no log, callsign or passwords; you send it yourself (a GitHub account is needed).
 
 <p>
 <img src="docs/screenshots/en-03-language.png" width="200" alt="Language">
 <img src="docs/screenshots/11-dark.png" width="200" alt="Dark theme">
+<img src="docs/screenshots/76-advanced.png" width="200" alt="Additional settings: keys and auto-start">
+<img src="docs/screenshots/77-keys-editor.png" width="200" alt="Assigning keys">
 </p>
 
 All `*DEMO` callsigns in the screenshots are made up.
@@ -567,21 +618,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.1.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.1.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.2.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.2.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.1.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.1.0), unpack the
+Download `QSO-LOG-2.2.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.2.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.1.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.1.0) and install it:
+Download `QSO-LOG-2.2.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.2.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.1.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.2.0-linux-amd64.deb
 ```
 
 ## Where the data is kept
@@ -607,6 +658,9 @@ GitHub when checking for updates, and your Google Sheet (script.google.com) when
 - On Linux "system" theme is always light; switch to dark by hand.
 - On the phone, QSOs from WSJT-X are taken only while QSO-LOG is running: Android may stop an app left in the
   background for long. Missed QSOs move over with the ADIF file from WSJT-X.
+- Tuning the transceiver and CW have been tested on protocol simulators, not on live radios of every model. Old Yaesu
+  radios with their own 5-byte CAT (FT-840, FT-890, FT-990, FT-1000) are not supported yet; they can be reached through
+  Hamlib rigctld on a computer.
 
 ## For developers
 

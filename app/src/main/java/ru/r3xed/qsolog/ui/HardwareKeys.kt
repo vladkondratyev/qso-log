@@ -29,6 +29,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.r3xed.qsolog.KeyHints
+import ru.r3xed.qsolog.keys.Chord
 import ru.r3xed.qsolog.tr
 
 /**
@@ -56,16 +57,47 @@ internal fun ClearButton(onClear: () -> Unit) {
     IconButton(onClick = onClear) { Icon(Icons.AutoMirrored.Filled.Backspace, tr("Стереть всё"), tint = LocalExtra.current.muted) }
 }
 
+/** The name of an Android key code in a [Chord] (see [Chord.key]); null for modifiers and keys a chord cannot have. */
+fun androidKeyName(code: Int): String? = when (code) {
+    in android.view.KeyEvent.KEYCODE_A..android.view.KeyEvent.KEYCODE_Z -> ('A' + (code - android.view.KeyEvent.KEYCODE_A)).toString()
+    in android.view.KeyEvent.KEYCODE_0..android.view.KeyEvent.KEYCODE_9 -> ('0' + (code - android.view.KeyEvent.KEYCODE_0)).toString()
+    in android.view.KeyEvent.KEYCODE_F1..android.view.KeyEvent.KEYCODE_F12 -> "F" + (code - android.view.KeyEvent.KEYCODE_F1 + 1)
+    else -> ANDROID_NAMES[code]
+}
+
+private val ANDROID_NAMES = mapOf(
+    android.view.KeyEvent.KEYCODE_ESCAPE to "Esc", android.view.KeyEvent.KEYCODE_ENTER to "Enter",
+    android.view.KeyEvent.KEYCODE_NUMPAD_ENTER to "Enter", android.view.KeyEvent.KEYCODE_SPACE to "Space",
+    android.view.KeyEvent.KEYCODE_TAB to "Tab", android.view.KeyEvent.KEYCODE_DPAD_UP to "Up",
+    android.view.KeyEvent.KEYCODE_DPAD_DOWN to "Down", android.view.KeyEvent.KEYCODE_DPAD_LEFT to "Left",
+    android.view.KeyEvent.KEYCODE_DPAD_RIGHT to "Right", android.view.KeyEvent.KEYCODE_PAGE_UP to "PgUp",
+    android.view.KeyEvent.KEYCODE_PAGE_DOWN to "PgDn", android.view.KeyEvent.KEYCODE_MOVE_HOME to "Home",
+    android.view.KeyEvent.KEYCODE_MOVE_END to "End", android.view.KeyEvent.KEYCODE_FORWARD_DEL to "Delete",
+    android.view.KeyEvent.KEYCODE_DEL to "Backspace", android.view.KeyEvent.KEYCODE_SLASH to "/",
+    android.view.KeyEvent.KEYCODE_COMMA to ",", android.view.KeyEvent.KEYCODE_PERIOD to ".",
+    android.view.KeyEvent.KEYCODE_MINUS to "-", android.view.KeyEvent.KEYCODE_EQUALS to "=",
+    android.view.KeyEvent.KEYCODE_SEMICOLON to ";", android.view.KeyEvent.KEYCODE_APOSTROPHE to "'",
+    android.view.KeyEvent.KEYCODE_LEFT_BRACKET to "[", android.view.KeyEvent.KEYCODE_RIGHT_BRACKET to "]",
+    android.view.KeyEvent.KEYCODE_BACKSLASH to "\\", android.view.KeyEvent.KEYCODE_GRAVE to "`",
+    android.view.KeyEvent.KEYCODE_PLUS to "+",
+)
+
+/** The key pressed as a [Chord] (Ctrl and ⌘ count the same), or null for a modifier alone. */
+fun android.view.KeyEvent.chord(): Chord? =
+    androidKeyName(keyCode)?.let { Chord(it, ctrl = isCtrlPressed || isMetaPressed, alt = isAltPressed, shift = isShiftPressed) }
+
+fun KeyEvent.chord(): Chord? = nativeKeyEvent.chord()
+
 internal val DIGIT_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine)
 
 /** F1 or Ctrl+/: every key of an external keyboard, by screen (the same list as on the computer). */
 @Composable
-fun HardwareKeysDialog(onClose: () -> Unit) {
+fun HardwareKeysDialog(cwMessages: List<String>? = null, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text(tr("Внешняя клавиатура")) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) { KeysList() }
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) { KeysList(cwMessages) }
         },
         confirmButton = { TextButton(onClick = onClose) { Text(tr("Закрыть")) } },
     )
@@ -73,9 +105,9 @@ fun HardwareKeysDialog(onClose: () -> Unit) {
 
 /** The keys by screen, then the callsign commands: in the F1 dialog and on the first tab of the reference. */
 @Composable
-fun KeysList() {
+fun KeysList(cwMessages: List<String>? = null) {
     val x = LocalExtra.current
-    KeyHints.sections(mac = false).forEach { sec ->
+    KeyHints.sections(mac = false, cwMessages).forEach { sec ->
         Text(sec.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
         // The key on its own line, what it does under it: long combinations fit on a phone.
         sec.keys.forEach { (k, what) ->

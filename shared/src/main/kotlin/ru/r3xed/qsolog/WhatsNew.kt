@@ -9,12 +9,13 @@ import java.net.URLEncoder
 object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
-    /** Points of this release (2.1.0 on the phone and the computer). */
+    /** Points of this release (2.2.0 on the phone and the computer). */
     fun items(desktop: Boolean): List<String> = listOf(
-        tr("Цифровые виды связи: связи из WSJT-X, JTDX и MSHV сами попадают в журнал — с частотой, видом (FT8, FT4 и другими), отчётами в дБ и локатором. Имя и QTH подтягиваются с QRZ.ru, повторы не записываются."),
-        if (desktop) tr("Включается в Настройки → «Цифровые виды — WSJT-X, JTDX, MSHV». В WSJT-X: Settings → Reporting → UDP Server — 127.0.0.1, порт 2237; связь записывается по OK в окне «Log QSO».")
-        else tr("На телефоне: WSJT-X, JTDX или MSHV на компьютере в той же сети Wi-Fi шлёт связи на адрес телефона — он показан в Настройки → «Цифровые виды — WSJT-X, JTDX, MSHV»."),
-        tr("Можно слушать групповой адрес (multicast), если связи из WSJT-X нужны ещё и JTAlert или GridTracker. Принимается и простой ADIF по UDP."),
+        tr("Пульт трансивера: нажмите на строку TRX (или Ctrl+T) — частота крупно, её можно вести пальцем или мышью как ручку, кнопки диапазонов и видов. Кнопки диапазона и вида в новой карточке тоже перестраивают трансивер."),
+        tr("Телеграф с клавиш F1–F8, как в N1MM: CQ, позывные, RST и контрольный номер передаются линией DTR или RTS USB-адаптера (CP2102 и другие). Настройки → «Телеграф (CW)»."),
+        if (desktop) tr("Дополнительные настройки: свои сочетания клавиш и программы, которые запускаются вместе с QSO-LOG, — например, JTDX и Hamlib rigctld, чтобы JTDX и QSO-LOG работали с одним трансивером.")
+        else tr("Дополнительные настройки: свои сочетания клавиш внешней клавиатуры и приложения, которые запускаются вместе с QSO-LOG."),
+        tr("Без CAT частота и вид берутся из JTDX и WSJT-X по UDP — в карточке видно «JTDX 14 074.000 · FT8»."),
     )
 }
 

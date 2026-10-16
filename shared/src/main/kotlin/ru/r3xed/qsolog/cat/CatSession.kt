@@ -7,7 +7,9 @@ import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Talks to the radio on its own thread: opens the link with [open], polls every [pollMs] and reports to [onStatus]
@@ -23,6 +25,21 @@ class CatSession(
     @Volatile private var running = false
     @Volatile private var link: CatLink? = null
     private var thread: Thread? = null
+    private val freq = AtomicReference<CatCommand.Freq?>(null)
+    private val mode = AtomicReference<CatCommand.Mode?>(null)
+    private val wake = Semaphore(0)
+
+    /**
+     * Asks the radio to change something, between two polls. While the dial is dragged only the last frequency is sent;
+     * the frequency goes before the mode (LSB or USB depends on it).
+     */
+    fun send(c: CatCommand) {
+        when (c) {
+            is CatCommand.Freq -> freq.set(c)
+            is CatCommand.Mode -> mode.set(c)
+        }
+        wake.release()
+    }
 
     fun start() {
         if (running) return
@@ -51,7 +68,12 @@ class CatSession(
                 var silentPolls = 0
                 var heard = false
                 onStatus(CatStatus.Connected(driver.what, null))
+                // Asked while there was no link: the user has moved on.
+                freq.set(null)
+                mode.set(null)
                 while (running) {
+                    freq.getAndSet(null)?.let { io.clear(); driver.setFreq(io, it.hz) }
+                    mode.getAndSet(null)?.let { io.clear(); driver.setMode(io, it.mode) }
                     state = driver.poll(io, state)
                     if (driver.answered) {
                         heard = true
@@ -59,7 +81,9 @@ class CatSession(
                     } else silentPolls++
                     val silent = silentPolls >= 3
                     onStatus(CatStatus.Connected(driver.what, if (heard) state else null, silent))
-                    Thread.sleep(pollMs)
+                    // A command wakes the loop at once; otherwise the next poll comes after the pause.
+                    wake.tryAcquire(pollMs, TimeUnit.MILLISECONDS)
+                    wake.drainPermits()
                 }
                 l.close()
             } catch (e: InterruptedException) {
