@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.material.icons.filled.CloudUpload
 import ru.r3xed.qsolog.keys.KeyAction
 import ru.r3xed.qsolog.keys.KeyMap
 import ru.r3xed.qsolog.data.ExportFormat
@@ -415,11 +416,11 @@ fun EditPane(vm: AppState) {
             }
             FieldGroup(tr("Прохождение"), filled(AdifLabels.SPACE_WEATHER.keys)) { AdifFields(vm, AdifLabels.SPACE_WEATHER, perRow = 3) }
             // Anything else the imported log carried, shown under its ADIF name.
-            val other = f.adif.keys.filter { it !in AdifLabels.KNOWN && it !in ExportFormat.FIELDS }
+            val other = f.adif.keys.filter { it !in AdifLabels.KNOWN && it !in ExportFormat.FIELDS && it !in ru.r3xed.qsolog.data.OnlineLog.FIELDS }
             if (other.isNotEmpty()) FieldGroup(tr("Другие поля ADIF"), filled(other)) { AdifFields(vm, other.associateWith { it }) }
 
             // --- at the very bottom: when this contact went into ADIF, CSV and contest-report files ---
-            if (!f.isNew) ExportMarks(f.adif, onClear = vm::clearExportMark)
+            if (!f.isNew) ExportMarks(f.adif, onClear = vm::clearExportMark, onClearOnline = vm::clearUploadMark)
             Spacer(Modifier.height(8.dp))
         }
 
@@ -863,7 +864,7 @@ private fun ChoiceRow(label: String, items: List<String>, selected: String, onPi
 
 /** One line per export format: when the contact was exported to it, or that it has not been; a mark can be taken off. */
 @Composable
-private fun ExportMarks(adif: Map<String, String>, onClear: (ExportFormat) -> Unit) {
+private fun ExportMarks(adif: Map<String, String>, onClear: (ExportFormat) -> Unit, onClearOnline: (ru.r3xed.qsolog.data.OnlineLog) -> Unit) {
     val x = LocalExtra.current
     Label(tr("Экспорт"))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field).padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -877,6 +878,26 @@ private fun ExportMarks(adif: Map<String, String>, onClear: (ExportFormat) -> Un
                     Text(at ?: tr("не экспортировалась"), style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
                 }
                 if (at != null) TextButton(onClick = { onClear(format) }) { Text(tr("Снять")) }
+            }
+        }
+        // The online logbooks: when the contact went there (LoTW on the phone: saved for TQSL, "Q").
+        ru.r3xed.qsolog.data.OnlineLog.entries.forEach { log ->
+            val at = log.sentAt(adif)
+            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.CloudUpload, null, Modifier.size(16.dp), tint = if (at != null) MaterialTheme.colorScheme.primary else LocalExtra.current.muted)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
+                    Text(log.title, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        when {
+                            at == null -> tr("не выгружалась")
+                            log.isQueued(adif) -> tr("сохранена для TQSL %s", at)
+                            else -> at.ifBlank { tr("выгружена") }
+                        },
+                        style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted,
+                    )
+                }
+                if (at != null) TextButton(onClick = { onClearOnline(log) }) { Text(tr("Снять")) }
             }
         }
     }

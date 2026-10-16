@@ -122,6 +122,9 @@ data class ContestTarget(val only: Set<Long>?)
 /** The ADIF / CSV export dialog: which format, for [only] records picked in the log (null = the whole log). */
 data class ExportTarget(val format: ExportFormat, val only: Set<Long>?)
 
+/** Records the online-logbook upload is for; null = the whole log. */
+data class UploadTarget(val only: Set<Long>?)
+
 enum class ThemeMode(private val ru: String) {
     SYSTEM("Как в системе"), // no-tr
     LIGHT("Светлая"), // no-tr
@@ -427,7 +430,7 @@ class AppState {
             if (settings.qrzSitePassword.isEmpty()) settings = settings.copy(qrzSitePassword = sitePw)
             val comPw = withContext(Dispatchers.IO) { prefs.comPassword() }
             if (settings.qrzComPassword.isEmpty()) settings = settings.copy(qrzComPassword = comPw)
-            withContext(Dispatchers.IO) { prefs.forgetOnlineLogAccounts() }
+            online = withContext(Dispatchers.IO) { prefs.loadOnline() }
         }
     }
 
@@ -2246,6 +2249,125 @@ class AppState {
             }
         }
         return true
+    }
+
+    // ---------- online logbooks: LoTW (through TQSL), QRZ.com, Club Log ----------
+
+    var online by mutableStateOf(ru.r3xed.qsolog.data.OnlineConfig()); private set
+    private var saveOnlineJob: Job? = null
+
+    fun changeOnline(c: ru.r3xed.qsolog.data.OnlineConfig) {
+        online = c
+        // The keychain is slow: saved once the typing pauses.
+        saveOnlineJob?.cancel()
+        saveOnlineJob = scope.launch {
+            delay(700)
+            withContext(Dispatchers.IO) { prefs.saveOnline(c) }
+        }
+    }
+
+    /** The upload dialog is open: for [UploadTarget.only] records picked in the log, or the whole log when null. */
+    var uploadTarget by mutableStateOf<UploadTarget?>(null); private set
+
+    /** The logbook being uploaded to right now (a spinner in the dialog). */
+    var uploading by mutableStateOf<ru.r3xed.qsolog.data.OnlineLog?>(null); private set
+
+    fun openUpload(selectedOnly: Boolean) {
+        uploadTarget = UploadTarget(if (selectedOnly) selected else null)
+    }
+
+    fun closeUpload() {
+        if (uploading == null) uploadTarget = null
+    }
+
+    fun uploadCandidates(log: ru.r3xed.qsolog.data.OnlineLog, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
+        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !log.isSent(it)) }
+
+    fun uploadProblem(log: ru.r3xed.qsolog.data.OnlineLog): String? =
+        if (log == ru.r3xed.qsolog.data.OnlineLog.LOTW) lotwProblem else online.problem(log, settings.myCall)
+
+    /** Sends the dialog's contacts to [log]; with [mark] the sent ones get the logbook's mark (date and time) in the card. */
+    fun upload(log: ru.r3xed.qsolog.data.OnlineLog, onlyNew: Boolean, mark: Boolean) {
+        val target = uploadTarget ?: return
+        if (uploading != null) return
+        uploadProblem(log)?.let { say(it); return }
+        val c = online
+        val call = settings.myCall.trim()
+        val list = uploadCandidates(log, target.only, onlyNew)
+        if (list.isEmpty()) { say(tr("Новых связей для %s нет", log.title)); return }
+        uploading = log
+        scope.launch {
+            val r = when (log) {
+                ru.r3xed.qsolog.data.OnlineLog.QRZCOM -> ru.r3xed.qsolog.data.OnlineLogs.uploadQrzCom(c.qrzcomKey, list, USER_AGENT)
+                ru.r3xed.qsolog.data.OnlineLog.CLUBLOG -> ru.r3xed.qsolog.data.OnlineLogs.uploadClubLog(c.clublogEmail, c.clublogPassword, call, c.clublogAppKey, list, USER_AGENT)
+                ru.r3xed.qsolog.data.OnlineLog.LOTW -> uploadLotw(list)
+            }
+            if (mark) withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
+            reload()
+            uploading = null
+            uploadTarget = null
+            if (target.only != null && r.error == null) clearSelection()
+            say(buildString {
+                append(tr("%s: отправлено %s", log.title, r.sent.size))
+                if (r.duplicates > 0) append(tr(", уже были там: %s", r.duplicates))
+                if (mark && r.sent.isNotEmpty()) append(tr(", отметка поставлена"))
+                r.error?.let { append(". ").append(it) }
+            })
+        }
+    }
+
+    /** Takes [log]'s mark off the open card (saved with the card), so the contact goes again next time. */
+    fun clearUploadMark(log: ru.r3xed.qsolog.data.OnlineLog) {
+        form = form.copy(adif = log.unmarkFields(form.adif))
+    }
+
+    /** LoTW: the contacts are signed and sent by ARRL's TQSL, run in batch mode. */
+    private val lotwProblem: String?
+        get() = when {
+            tqslExecutable() == null -> tr("Не найдена программа TQSL. Установите её с lotw.arrl.org или укажите путь к ней")
+            online.lotwLocation.isBlank() -> tr("Укажите Station Location — название места станции из TQSL")
+            else -> null
+        }
+
+    /** tqsl from the settings, else the usual install places. */
+    fun tqslExecutable(): String? = listOfNotNull(
+        online.tqslPath.trim().ifBlank { null },
+        "/Applications/TrustedQSL/tqsl.app/Contents/MacOS/tqsl",
+        "/Applications/tqsl.app/Contents/MacOS/tqsl",
+        "C:\\Program Files (x86)\\TrustedQSL\\tqsl.exe",
+        "C:\\Program Files\\TrustedQSL\\tqsl.exe",
+        "/usr/bin/tqsl", "/usr/local/bin/tqsl", "/opt/homebrew/bin/tqsl",
+    ).firstOrNull { java.io.File(it).canExecute() }
+
+    /**
+     * `tqsl -d -u -a compliant -x -l LOCATION file`: sign, upload, exit. Exit codes (TQSL manual): 0 — done,
+     * 8 — all already in LoTW (or out of the certificate's dates), 9 — some of them; anything else is an error.
+     */
+    private suspend fun uploadLotw(list: List<Qso>): ru.r3xed.qsolog.data.UploadResult = withContext(Dispatchers.IO) {
+        val exe = tqslExecutable() ?: return@withContext ru.r3xed.qsolog.data.UploadResult(emptyList(), 0, lotwProblem)
+        val f = java.io.File.createTempFile("qsolog-lotw", ".adi")
+        try {
+            f.writeText(ru.r3xed.qsolog.data.OnlineLogs.file(list), Charsets.UTF_8)
+            val p = ProcessBuilder(exe, "-d", "-u", "-a", "compliant", "-x", "-l", online.lotwLocation.trim(), f.absolutePath)
+                .redirectErrorStream(true).start()
+            val out = StringBuilder()
+            val reader = kotlin.concurrent.thread(isDaemon = true) { p.inputStream.bufferedReader().forEachLine { out.appendLine(it) } }
+            if (!p.waitFor(10, java.util.concurrent.TimeUnit.MINUTES)) {
+                p.destroyForcibly()
+                return@withContext ru.r3xed.qsolog.data.UploadResult(emptyList(), 0, tr("TQSL не закончил работу за 10 минут"))
+            }
+            reader.join(1000)
+            when (val code = p.exitValue()) {
+                0 -> ru.r3xed.qsolog.data.UploadResult(list, 0, null)
+                8 -> ru.r3xed.qsolog.data.UploadResult(list, list.size, null)
+                9 -> ru.r3xed.qsolog.data.UploadResult(list, 0, tr("часть связей LoTW уже получал раньше"))
+                else -> ru.r3xed.qsolog.data.UploadResult(emptyList(), 0, tr("TQSL завершился с кодом %s: %s", code, out.lines().lastOrNull { it.isNotBlank() }.orEmpty().take(160)))
+            }
+        } catch (e: Exception) {
+            ru.r3xed.qsolog.data.UploadResult(emptyList(), 0, tr("Не удалось запустить TQSL: %s", e.message ?: e.javaClass.simpleName))
+        } finally {
+            f.delete()
+        }
     }
 
     // ---------- additional settings: keys, programs started with QSO-LOG ----------

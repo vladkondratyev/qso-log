@@ -347,4 +347,42 @@ class CatTest {
             session.stop()
         }
     }
+
+    @Test
+    fun icomOnTransmitReadsPowerSwrAlc() {
+        val radio = FakeRadio(::whole) { f ->
+            val cmd = f[4].toInt() and 0xFF
+            val sub = if (f.size > 6) f[5].toInt() and 0xFF else -1
+            when {
+                cmd == 0x03 -> CivDriver.frame(0xE0, 0x94, 0x03, data = CivDriver.civFreqBytes(14_025_000))
+                cmd == 0x04 -> CivDriver.frame(0xE0, 0x94, 0x04, data = byteArrayOf(0x03, 0x01))
+                cmd == 0x1C -> CivDriver.frame(0xE0, 0x94, 0x1C, 0x00, byteArrayOf(0x01))
+                cmd == 0x15 && sub == 0x11 -> CivDriver.frame(0xE0, 0x94, 0x15, 0x11, byteArrayOf(0x02, 0x13)) // 0213: 100%
+                cmd == 0x15 && sub == 0x12 -> CivDriver.frame(0xE0, 0x94, 0x15, 0x12, byteArrayOf(0x00, 0x48)) // 0048: 1.5
+                cmd == 0x15 && sub == 0x13 -> CivDriver.frame(0xE0, 0x94, 0x15, 0x13, byteArrayOf(0x00, 0x60))
+                else -> CivDriver.frame(0xE0, 0x94, 0xFA)
+            }
+        }
+        val s = CivDriver(0x94).poll(CatIo(radio), RigState())
+        assertEquals(true, s.tx)
+        assertEquals(100, s.powerPct)
+        assertEquals(1.5, s.swr!!, 0.01)
+        assertEquals(50, s.alcPct)
+        assertEquals("14 025.000 · CW · TX 100% · SWR 1.5", s.short())
+        assertTrue(radio.heard.none { (it[4].toInt() and 0xFF) == 0x15 && (it[5].toInt() and 0xFF) == 0x02 }) // no S-meter on transmit
+    }
+
+    @Test
+    fun bandScale() {
+        val b = BandScale.of(14_074_000)!!
+        assertEquals("20m", b.band)
+        assertEquals(14_000_000, b.fromHz)
+        assertEquals(BandUse.CW, b.parts.first().use)
+        assertTrue(b.marks.any { it.label == "FT8" && it.hz == 14_074_000L })
+        assertEquals(14_175_000, b.freqAt(0.5f))
+        assertEquals(listOf(14_000_000L, 14_050_000, 14_100_000, 14_150_000, 14_200_000, 14_250_000, 14_300_000, 14_350_000), b.ticks())
+        assertEquals(listOf(14_000_000L, 14_100_000, 14_200_000, 14_300_000), b.ticks(3))
+        assertNull(BandScale.of(15_000_000))
+        assertEquals(0.6f, RigMeterScale.sPosition(54), 0.001f)
+    }
 }

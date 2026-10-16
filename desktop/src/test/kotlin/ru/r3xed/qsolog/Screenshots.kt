@@ -192,6 +192,9 @@ fun main(args: Array<String>) {
             state.setCall("UA9DEMO")
             state.showRigPanel = true
             shot("27-rig-panel", 1500)
+            rigTx = true
+            shot("29-rig-tx", 1500)
+            rigTx = false
             state.showRigPanel = false
             state.changeCw(state.cwConfig.copy(enabled = true, wpm = 26))
             state.setMode("CW")
@@ -272,6 +275,8 @@ private fun fakeWsjtxLogged(port: Int, call: String, grid: String, hz: Long, mod
 /** Where the app tuned the made-up transceiver; null — where [rigOnFt8] says. */
 @Volatile private var rigFreq: Long? = null
 @Volatile private var rigMode: String? = null
+/** The made-up transceiver transmits: the panel shows power, SWR and ALC. */
+@Volatile private var rigTx = false
 
 private fun fakeRigctld(): java.net.ServerSocket {
     val server = runCatching { java.net.ServerSocket(4532, 5, java.net.InetAddress.getLoopbackAddress()) }.getOrElse { java.net.ServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress()) }
@@ -289,6 +294,10 @@ private fun fakeRigctld(): java.net.ServerSocket {
                             l == "f" -> rigFreq?.let { "$it\n" } ?: if (ft8) "14074000\n" else "14195000\n"
                             l == "m" -> rigMode?.let { "$it\n500\n" } ?: if (ft8) "PKTUSB\n3000\n" else "USB\n2400\n"
                             l == "l STRENGTH" -> if (ft8) "-18\n" else "-6\n"
+                            l == "t" -> if (rigTx) "1\n" else "0\n"
+                            l == "l RFPOWER_METER" -> "0.82\n"
+                            l == "l SWR" -> "1.3\n"
+                            l == "l ALC" -> "0.35\n"
                             // The panel and the card tune it: it goes where it is told.
                             l.startsWith("F ") -> { rigFreq = l.substring(2).trim().toLongOrNull(); "RPRT 0\n" }
                             l.startsWith("M ") -> { rigMode = l.split(' ').getOrNull(1); "RPRT 0\n" }

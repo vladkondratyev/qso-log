@@ -414,6 +414,9 @@ fun SettingsScreen(
                 }
                 Note(tr("«Как в системе» переключается вместе с тёмной темой Android."))
             }
+            SettingsBlock(tr("Онлайн-журналы: LoTW, Club Log, QRZ.com"), onlineSummary(vm.online, s.myCall, lotwReady = true)) {
+                OnlineSettings(vm.online, vm::changeOnline, computer = false)
+            }
             SettingsBlock(
                 tr("Дополнительные настройки"),
                 listOfNotNull(

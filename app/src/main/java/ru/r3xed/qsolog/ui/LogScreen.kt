@@ -531,6 +531,7 @@ private fun SelectionBar(vm: AppViewModel) {
                 DropdownMenuItem(text = { Text("ADIF (.adi)", fontSize = 17.sp) }, onClick = { menu = false; vm.openExport(ExportFormat.ADIF, selectedOnly = true) })
                 DropdownMenuItem(text = { Text("CSV", fontSize = 17.sp) }, onClick = { menu = false; vm.openExport(ExportFormat.CSV, selectedOnly = true) })
                 DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; vm.openExport(ExportFormat.CONTEST, selectedOnly = true) })
+                DropdownMenuItem(text = { Text("LoTW · Club Log · QRZ.com", fontSize = 17.sp) }, onClick = { menu = false; vm.openUpload(selectedOnly = true) })
             }
         }
     }

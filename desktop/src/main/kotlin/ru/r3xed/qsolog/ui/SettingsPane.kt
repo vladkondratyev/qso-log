@@ -400,6 +400,9 @@ fun SettingsPane(
                 }
                 Note(tr("«Как в системе» переключается вместе с тёмной темой системы (в macOS и Windows; в Linux — светлая)."))
             }
+            SettingsBlock(tr("Онлайн-журналы: LoTW, Club Log, QRZ.com"), onlineSummary(vm.online, s.myCall, lotwReady = vm.uploadProblem(ru.r3xed.qsolog.data.OnlineLog.LOTW) == null)) {
+                OnlineSettings(vm.online, vm::changeOnline, computer = true, tqslFound = vm.tqslExecutable())
+            }
             SettingsBlock(
                 tr("Дополнительные настройки"),
                 listOfNotNull(

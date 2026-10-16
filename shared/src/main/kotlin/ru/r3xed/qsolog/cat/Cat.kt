@@ -173,6 +173,14 @@ data class RigState(
     val radioMode: String? = null,
     val sDb: Int? = null,
     val at: Long = System.currentTimeMillis(),
+    /** On transmit; null — the radio was not asked (or cannot say). */
+    val tx: Boolean? = null,
+    /** On transmit: output power, % of the radio's full power. */
+    val powerPct: Int? = null,
+    /** On transmit: SWR, 1.0 and up. */
+    val swr: Double? = null,
+    /** On transmit: ALC, % of its scale (the radio's ALC zone is the first part). */
+    val alcPct: Int? = null,
 ) {
     /** The frequency as the card keeps it: MHz, no trailing zeros ("14.074", "7.0125"). */
     val freqMhz: String? get() = freqHz?.let { CatFormat.mhz(it) }
@@ -198,6 +206,9 @@ object CatFormat {
         val ks = k.toString().reversed().chunked(3).joinToString(" ").reversed()
         return "%s.%03d".format(java.util.Locale.ROOT, ks, h)
     }
+
+    /** "1.3", "∞" above 9.9. */
+    fun swr(v: Double): String = if (v >= 9.95) "∞" else "%.1f".format(java.util.Locale.ROOT, v)
 
     /** "S7", "S9+20". */
     fun sMeter(db: Int): String {
@@ -275,8 +286,12 @@ fun CatStatus.describe(): String = when (this) {
     is CatStatus.Failed -> message
 }
 
-/** The radio's line in the QSO card: "14 074.000 · USB-D · S7". */
-fun RigState.short(): String = listOfNotNull(freqHz?.let { CatFormat.khz(it) }, radioMode, sDb?.let { CatFormat.sMeter(it) }).joinToString(" · ")
+/** The radio's line in the QSO card: "14 074.000 · USB-D · S7", on transmit "14 074.000 · CW · TX 80% · SWR 1.3". */
+fun RigState.short(): String = listOfNotNull(
+    freqHz?.let { CatFormat.khz(it) }, radioMode,
+    if (tx == true) "TX" + (powerPct?.let { " $it%" } ?: "") else sDb?.let { CatFormat.sMeter(it) },
+    swr?.takeIf { tx == true }?.let { "SWR " + CatFormat.swr(it) },
+).joinToString(" · ")
 
 /**
  * Where the radio goes when a band is picked and the app does not yet know where the user last was on it: the CW,

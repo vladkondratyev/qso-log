@@ -349,11 +349,26 @@ fun App(state: AppState, files: Exports) {
                     onUtf8 = state::chooseAdifUtf8,
                 )
             }
+            state.uploadTarget?.let { target ->
+                ru.r3xed.qsolog.ui.UploadDialog(
+                    selected = target.only?.size,
+                    total = state.total,
+                    count = { log, onlyNew -> state.uploadCandidates(log, target.only, onlyNew).size },
+                    problem = state::uploadProblem,
+                    busy = state.uploading,
+                    lotwNote = tr("Связи подписывает и отправляет программа TQSL от ARRL с вашим сертификатом: QSO-LOG запускает её сама, с Station Location из настроек."),
+                    lotwAction = tr("Отправить"),
+                    onOpenSettings = { state.closeUpload(); state.openSettings() },
+                    onDismiss = state::closeUpload,
+                    onConfirm = state::upload,
+                )
+            }
             if (state.showKeys) KeysDialog(state.cwConfig.messages.takeIf { state.cwConfig.enabled }, onClose = { state.showKeys = false })
             if (state.showRigPanel) ru.r3xed.qsolog.ui.RigPanel(state)
             if (state.showTransfer) TransferDialog(
                 total = state.total,
                 onExport = { format -> state.showTransfer = false; state.openExport(format, selectedOnly = false) },
+                onUpload = { state.showTransfer = false; state.openUpload(selectedOnly = false) },
                 onImportAdif = { state.showTransfer = false; files.importAdif() },
                 onImportCsv = { state.showTransfer = false; files.importCsv() },
                 onImportContest = { state.showTransfer = false; files.importContest() },

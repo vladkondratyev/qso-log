@@ -59,10 +59,14 @@ class Settings(context: Context) {
             .putString("qrzcom_password", s.qrzComPassword).apply()
     }
 
-    /** Accounts of the online logbooks the app no longer uploads to: removed from the phone on start. */
-    fun forgetOnlineLogAccounts() {
-        prefs.edit().remove("eqsl_user").remove("eqsl_nickname").remove("clublog_email").apply()
-        secret.edit().remove("qrzcom_key").remove("eqsl_password").remove("clublog_password").remove("clublog_key").apply()
+    /** The online logbooks' accounts: the e-mail and the TQSL location plain, the keys and the password encrypted. Slow — off the main thread. */
+    fun loadOnline(): OnlineConfig = OnlineConfig.from(
+        OnlineConfig.PUBLIC_KEYS.associateWith { prefs.getString(it, null) } + OnlineConfig.SECRET_KEYS.associateWith { secret.getString(it, null) },
+    )
+
+    fun saveOnline(c: OnlineConfig) {
+        prefs.edit().apply { c.publicMap().forEach { (k, v) -> putString(k, v.trim()) } }.apply()
+        secret.edit().apply { c.secretMap().forEach { (k, v) -> putString(k, v.trim()) } }.apply()
     }
 
     /** Band, mode and frequency from the previous contact, so the next one starts pre-filled. */

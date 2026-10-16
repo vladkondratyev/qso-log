@@ -151,11 +151,14 @@ fun RigPanel(vm: AppViewModel) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(CatFormat.khz(shown), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 40.sp, maxLines = 1)
                     Text(
-                        listOfNotNull(tr("кГц"), rig.radioMode, rig.sDb?.let { CatFormat.sMeter(it) }).joinToString(" · ") + " · " + tr("ведите пальцем влево-вправо"),
+                        listOfNotNull(tr("кГц"), rig.radioMode, if (rig.tx == true) "TX" else rig.sDb?.let { CatFormat.sMeter(it) }).joinToString(" · ") + " · " + tr("ведите пальцем влево-вправо"),
                         style = MaterialTheme.typography.bodyMedium, color = x.muted, textAlign = TextAlign.Center,
                     )
                 }
             }
+            // Receive: the S-meter; transmit: power, SWR, ALC. Then the band with the needle; a tap on it tunes there.
+            RigMeters(rig)
+            BandScaleBar(shown, ::tune, ticks = 3)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalIconButton(onClick = { tune((shown / step - 1) * step) }, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Remove, tr("Ниже на шаг")) }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

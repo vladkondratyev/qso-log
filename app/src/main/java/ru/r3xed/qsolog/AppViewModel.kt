@@ -1,5 +1,9 @@
 package ru.r3xed.qsolog
 
+import ru.r3xed.qsolog.data.OnlineConfig
+import ru.r3xed.qsolog.data.OnlineLog
+import ru.r3xed.qsolog.data.OnlineLogs
+import ru.r3xed.qsolog.data.UploadResult
 import android.app.Application
 import android.location.Geocoder
 import android.net.Uri
@@ -161,6 +165,10 @@ sealed interface Screen {
 }
 
 /** User-Agent for the online logbooks: they ask programs to name themselves. */
+private val ONLINE_AGENT = "QSO-LOG/" + BuildConfig.VERSION_NAME + " (Android)"
+
+/** Records the online-logbook upload is for; null = the whole log. */
+data class UploadTarget(val only: Set<Long>?)
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val db = QsoDb(app)
@@ -635,8 +643,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // After the constructor: the CAT fields are declared further down.
         android.os.Handler(android.os.Looper.getMainLooper()).post { restartCat(); restartDigi(); restartCw() }
         viewModelScope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
-        // Keys and passwords of the online logbooks the app no longer uploads to.
-        viewModelScope.launch(Dispatchers.IO) { prefs.forgetOnlineLogAccounts() }
+        // The online logbooks' keys and passwords: from the encrypted file, off the main thread.
+        viewModelScope.launch { online = withContext(Dispatchers.IO) { prefs.loadOnline() } }
     }
 
     override fun onCleared() {
@@ -2374,6 +2382,105 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The apps are started once per run of the app, not on every turn of the screen. */
     var startAppsDone = false
+
+    // ---------- online logbooks: LoTW, QRZ.com, Club Log ----------
+
+    var online by mutableStateOf(OnlineConfig()); private set
+
+    fun changeOnline(c: OnlineConfig) {
+        online = c
+        prefs.saveOnline(c)
+    }
+
+    /** The upload dialog is open: for [UploadTarget.only] records picked in the log, or the whole log when null. */
+    var uploadTarget by mutableStateOf<UploadTarget?>(null); private set
+
+    /** The logbook being uploaded to right now (a spinner in the dialog). */
+    var uploading by mutableStateOf<OnlineLog?>(null); private set
+
+    fun openUpload(selectedOnly: Boolean) {
+        uploadTarget = UploadTarget(if (selectedOnly) selected else null)
+    }
+
+    fun closeUpload() {
+        if (uploading == null) uploadTarget = null
+    }
+
+    /** The contacts an upload to [log] takes: the picked ones or the whole log, without those already sent when [onlyNew]. */
+    fun uploadCandidates(log: OnlineLog, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
+        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !log.isSent(it)) }
+
+    /** What is missing in the settings for [log], or null when it can be uploaded. */
+    fun uploadProblem(log: OnlineLog): String? = online.problem(log, settings.myCall)
+
+    /**
+     * Sends the dialog's contacts to [log]; with [mark] the sent ones get the logbook's mark (date and time) in the card.
+     * LoTW goes through [exportLotw] instead: TQSL, which signs the contacts, has no Android version.
+     */
+    fun upload(log: OnlineLog, onlyNew: Boolean, mark: Boolean) {
+        val target = uploadTarget ?: return
+        if (uploading != null || log == OnlineLog.LOTW) return
+        uploadProblem(log)?.let { say(it); return }
+        val c = online
+        val call = settings.myCall.trim()
+        val list = uploadCandidates(log, target.only, onlyNew)
+        if (list.isEmpty()) { say(tr("Новых связей для %s нет", log.title)); return }
+        uploading = log
+        viewModelScope.launch {
+            val r = when (log) {
+                OnlineLog.QRZCOM -> OnlineLogs.uploadQrzCom(c.qrzcomKey, list, ONLINE_AGENT)
+                OnlineLog.CLUBLOG -> OnlineLogs.uploadClubLog(c.clublogEmail, c.clublogPassword, call, c.clublogAppKey, list, ONLINE_AGENT)
+                OnlineLog.LOTW -> UploadResult(emptyList(), 0, null)
+            }
+            if (mark) withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
+            reload()
+            uploading = null
+            uploadTarget = null
+            if (target.only != null && r.error == null) clearSelection()
+            say(buildString {
+                append(tr("%s: отправлено %s", log.title, r.sent.size))
+                if (r.duplicates > 0) append(tr(", уже были там: %s", r.duplicates))
+                if (mark && r.sent.isNotEmpty()) append(tr(", отметка поставлена"))
+                r.error?.let { append(". ").append(it) }
+            })
+        }
+    }
+
+    /** The LoTW file chosen in the dialog, waiting for the file picker: which contacts and whether to mark them. */
+    private var pendingLotw: Triple<Set<Long>?, Boolean, Boolean>? = null
+
+    /** Remembers the dialog's choice and returns the file name to offer. */
+    fun prepareLotw(onlyNew: Boolean, mark: Boolean): String {
+        pendingLotw = Triple(uploadTarget?.only, onlyNew, mark)
+        uploadTarget = null
+        return "${settings.myCall.ifBlank { "log" }.replace('/', '-')}_lotw_${LocalDate.now()}.adi"
+    }
+
+    /** The ADIF file for TQSL; with the mark, the exported contacts are "queued" (Q) so the next export has only new ones. */
+    fun exportLotw(uri: Uri) {
+        val (only, onlyNew, mark) = pendingLotw ?: return
+        pendingLotw = null
+        if (only != null) clearSelection()
+        viewModelScope.launch {
+            val msg = try {
+                val list = uploadCandidates(OnlineLog.LOTW, only, onlyNew)
+                withContext(Dispatchers.IO) {
+                    getApplication<Application>().contentResolver.openOutputStream(uri)!!.use { it.write(OnlineLogs.file(list).toByteArray(Charsets.UTF_8)) }
+                    if (mark) list.forEach { db.save(OnlineLog.LOTW.mark(it, "Q")) }
+                }
+                reload()
+                tr("Для LoTW сохранено связей: %s. Подпишите файл в TQSL и отправьте в LoTW", list.size)
+            } catch (e: Exception) {
+                tr("Не удалось сохранить файл: %s", e.message)
+            }
+            say(msg)
+        }
+    }
+
+    /** Takes [log]'s mark off the open card (saved with the card), so the contact goes again next time. */
+    fun clearUploadMark(log: OnlineLog) {
+        form = form.copy(adif = log.unmarkFields(form.adif))
+    }
 
     // ---------- settings ----------
 

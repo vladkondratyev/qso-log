@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ import ru.r3xed.qsolog.tr
 fun TransferDialog(
     total: Int,
     onExport: (ExportFormat) -> Unit,
+    onUpload: () -> Unit,
     onImportAdif: () -> Unit,
     onImportCsv: () -> Unit,
     onImportContest: () -> Unit,
@@ -53,6 +55,8 @@ fun TransferDialog(
                 Choice("ADIF", tr("для LogHX, UR5EQF, QRZ.com, LoTW"), Icons.Filled.FileUpload) { onExport(ExportFormat.ADIF) }
                 Choice("CSV", tr("таблица для Excel и Google Таблиц"), Icons.Filled.FileUpload) { onExport(ExportFormat.CSV) }
                 Choice(tr("ЕРМАК / Cabrillo"), tr("отчёт для соревнований"), Icons.Filled.FileUpload) { onExport(ExportFormat.CONTEST) }
+                Text(tr("Онлайн-журналы"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                Choice("LoTW · Club Log · QRZ.com", tr("выгрузить новые связи"), Icons.Filled.CloudUpload, onUpload)
                 Text(tr("Импорт в журнал"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
                 Choice("ADIF", tr("файл .adi или .adif"), Icons.Filled.FileDownload, onImportAdif)
                 Choice("CSV", tr("таблица с разделителем «;»"), Icons.Filled.FileDownload, onImportCsv)

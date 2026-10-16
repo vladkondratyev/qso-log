@@ -15,14 +15,13 @@ class WhatsNewTest {
     }
 
     @Test
-    fun transceiverPanelOnBoth() {
-        // 2.2.0: the panel and CW on both; the computer also starts JTDX and rigctld.
+    fun scalesAndOnlineLogsOnBoth() {
+        // 2.3.0: the meters on both; LoTW through TQSL on the computer, a file for TQSL on the phone.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Пульт трансивера"))
-            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Пульт трансивера"))
-            assertTrue(WhatsNew.items(desktop = true).any { "rigctld" in it })
-            assertTrue(WhatsNew.items(desktop = false).none { "rigctld" in it })
+            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Шкалы"))
+            assertTrue(WhatsNew.items(desktop = true).any { "QSO-LOG запускает его сам" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "файл, который подписывает TQSL" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

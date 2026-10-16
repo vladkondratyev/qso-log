@@ -347,17 +347,18 @@ class Settings {
         }
 
     /**
-     * Once: removes the keys and passwords of the online logbooks (QRZ.com, eQSL, Club Log) the app no longer
-     * uploads to, from the keychain and the settings file.
+     * The online logbooks' accounts: the e-mail, the TQSL location and path in the settings file; the keys and the
+     * password in the system keychain (each under its own name), or the settings file when there is no keychain.
      */
-    fun forgetOnlineLogAccounts() {
-        if (get("online_logs_forgotten") == "1") return
-        for (k in listOf("qrzcom_key", "eqsl_password", "clublog_password", "clublog_key")) {
-            keyring?.let { try { it.deletePassword(SERVICE, k) } catch (e: Exception) { } }
-            props.remove(k)
-        }
-        for (k in listOf("eqsl_user", "eqsl_nickname", "clublog_email", "lotw_location", "tqsl_path")) props.remove(k)
-        put("online_logs_forgotten", "1")
+    fun loadOnline(): ru.r3xed.qsolog.data.OnlineConfig = ru.r3xed.qsolog.data.OnlineConfig.from(
+        ru.r3xed.qsolog.data.OnlineConfig.PUBLIC_KEYS.associateWith { get(it) } +
+            ru.r3xed.qsolog.data.OnlineConfig.SECRET_KEYS.associateWith { loadPassword(account = it, key = it) },
+    )
+
+    fun saveOnline(c: ru.r3xed.qsolog.data.OnlineConfig) {
+        c.publicMap().forEach { (k, v) -> props.setProperty(k, v.trim()) }
+        file.outputStream().use { props.store(it, "QSO Log") }
+        c.secretMap().forEach { (k, v) -> savePassword(v.trim(), account = k, key = k) }
     }
 
     private var cachedPassword: String? = null

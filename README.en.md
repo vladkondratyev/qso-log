@@ -11,12 +11,12 @@ QSO-LOG is a logbook for radio amateurs. It runs on Android, macOS, Windows and 
 on the phone and on the computer.
 
 A QSO takes a few taps: callsign, frequency, RST. The frequency, band and mode can come from the transceiver over CAT
-(ICOM CI-V, Kenwood, Elecraft, Yaesu, Hamlib rigctld), and the app tunes it from its own panel; CW messages — CQ,
+(ICOM CI-V, Kenwood, Elecraft, Yaesu, Hamlib rigctld), and the app tunes it from its own panel with meters and a band scale; CW messages — CQ,
 callsigns, exchange numbers — go out from the F1–F8 keys; FT8 and FT4 QSOs come in by themselves from WSJT-X, JTDX
 and MSHV. The app looks up the other station's name and city on QRZ.ru
 or QRZ.com, works out the distance and draws the path on a map. You can attach a voice note to a QSO. Contest mode
 gives fast entry with exchange numbers, and the log exports to Cabrillo and to ЕРМАК, the Russian contest format.
-A dashboard shows the log in charts. The log exports to ADIF and CSV, and several devices can keep one log through
+A dashboard shows the log in charts. The log exports to ADIF and CSV and uploads to LoTW, Club Log and QRZ.com, and several devices can keep one log through
 your own Google Sheet. Buttons and text are large, so you can log on the air; with an external keyboard you can log
 without touching the screen at all.
 
@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.2.0 | [QSO-LOG-2.2.0.apk](../../releases/tag/v2.2.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.2.0 | [QSO-LOG-2.2.0-macos-arm64.dmg](../../releases/tag/desktop-v2.2.0) |
-| macOS 11 or newer, Intel | 2.2.0 | [QSO-LOG-2.2.0-macos-x64.dmg](../../releases/tag/desktop-v2.2.0) |
-| Windows 10 and 11, 64-bit | 2.2.0 | [QSO-LOG-2.2.0-windows-x64.zip](../../releases/tag/desktop-v2.2.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.2.0 | [QSO-LOG-2.2.0-linux-amd64.deb](../../releases/tag/desktop-v2.2.0) |
+| Android 8.0 or newer | 2.3.0 | [QSO-LOG-2.3.0.apk](../../releases/tag/v2.3.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.3.0 | [QSO-LOG-2.3.0-macos-arm64.dmg](../../releases/tag/desktop-v2.3.0) |
+| macOS 11 or newer, Intel | 2.3.0 | [QSO-LOG-2.3.0-macos-x64.dmg](../../releases/tag/desktop-v2.3.0) |
+| Windows 10 and 11, 64-bit | 2.3.0 | [QSO-LOG-2.3.0-windows-x64.zip](../../releases/tag/desktop-v2.3.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.3.0 | [QSO-LOG-2.3.0-linux-amd64.deb](../../releases/tag/desktop-v2.3.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -58,6 +58,7 @@ is switched in Settings and changes at once.
 - [Voice notes](#voice-notes)
 - [Distance and maps](#distance-and-maps)
 - [Export and import](#export-and-import)
+- [Online logbooks: LoTW, Club Log, QRZ.com](#online-logbooks-lotw-club-log-qrzcom)
 - [Sync through a Google Sheet](#sync-through-a-google-sheet)
 - [Reference and calculators](#reference-and-calculators)
 - [Settings](#settings)
@@ -145,6 +146,11 @@ or FT8 calling frequency). SSB becomes LSB below 10 MHz and USB above; FT8 and F
 move to the mode's frequency. The band and mode buttons of a new QSO card, and a frequency typed as the callsign
 ("14025", then Enter), tune the transceiver too — this can be switched off in the CAT settings.
 
+**Scales** (since 2.3.0). Under the frequency the panel has the S-meter on receive, and power, SWR and ALC on transmit
+(ICOM and Hamlib rigctld; Kenwood and Yaesu only show that they transmit). Below it is the band scale: the CW,
+narrow-band digital, beacon and SSB parts of the IARU plan in colour, the FT8 and FT4 frequencies, and a red needle
+where the transceiver is. Tap the scale or drag along it, and the transceiver goes there.
+
 The app never transmits by itself and keeps the CAT port's DTR and RTS lines low. A transceiver cannot tell digital
 modes apart, so in DATA (USB-D) the card keeps FT8, FT4 or whatever digital mode it has.
 
@@ -174,12 +180,14 @@ Connection:
   In JTDX then: Settings → Radio → Rig "Hamlib NET rigctl", Network Server `127.0.0.1:4532`.
 
 <p>
-<img src="docs/screenshots/73-rig-panel.png" width="200" alt="The transceiver panel on the phone">
+<img src="docs/screenshots/73-rig-panel.png" width="200" alt="The transceiver panel on the phone: S-meter and band scale">
+<img src="docs/screenshots/78-rig-tx.png" width="200" alt="The panel on transmit: power, SWR, ALC">
 <img src="docs/screenshots/69-cat-card.png" width="200" alt="New QSO: frequency and mode from the transceiver">
 <img src="docs/screenshots/70-cat-settings.png" width="200" alt="CAT settings on the phone">
 <img src="docs/screenshots/71-cat-rigs.png" width="200" alt="Choosing the transceiver">
 <img src="docs/screenshots/desktop-24-cat.png" width="440" alt="CAT settings on the computer">
 <img src="docs/screenshots/desktop-27-rig-panel.png" width="440" alt="The transceiver panel on the computer">
+<img src="docs/screenshots/desktop-29-rig-tx.png" width="440" alt="The panel on transmit on the computer">
 </p>
 
 ## CW from the F1–F8 keys
@@ -518,6 +526,28 @@ whether to take only QSOs not yet exported in this format, and whether to mark t
 at the bottom of the card, and coloured dots next to the time in the log: blue ADIF, green CSV, orange contest report.
 Every QSO has a permanent GUID (ADIF `APP_QSOLOG_UID`), so duplicates are skipped on import.
 
+## Online logbooks: LoTW, Club Log, QRZ.com
+
+Since 2.3.0 QSOs go to LoTW (ARRL), Club Log and the QRZ.com logbook: ⋮ → "Export and import" → "Online logbooks",
+or "Export" on picked records. The dialog asks which logbook, only new QSOs (the default) or all, and whether to mark
+them. The mark with date and time shows in the QSO card; take it off and the QSO goes again.
+
+- **QRZ.com Logbook** needs the logbook's API key: qrz.com → My Logbook → Settings → "API Access Key" (logbook API
+  access comes with a QRZ.com subscription). Duplicates count as "already there".
+- **Club Log** needs the account's e-mail and password and an application key, which Club Log gives on request
+  (Help Desk → "Request an API key"). The callsign comes from "My station".
+- **LoTW**: ARRL's TQSL signs the QSOs with your certificate. On the computer QSO-LOG runs TQSL itself: enter the
+  Station Location (the name of the station location in TQSL); the app finds TQSL by itself. There is no TQSL for
+  the phone: QSO-LOG saves an ADIF file you sign in TQSL on a computer ("Sign a log and upload it"), and the QSOs
+  are marked "saved for TQSL".
+
+The accounts are in Settings → **"Online logbooks: LoTW, Club Log, QRZ.com"**. The password and keys are stored
+encrypted (Android's keystore on the phone, the system keychain on the computer).
+
+<p>
+<img src="docs/screenshots/79-upload.png" width="200" alt="Upload to an online logbook">
+</p>
+
 ## Sync through a Google Sheet
 
 One log on two or three devices. QSOs are collected in your own Google Sheet, and the app exchanges them when you press
@@ -576,7 +606,7 @@ understood), and assignment: press "Assign" and then the key, so an adapter send
 
 Settings are grouped in blocks; each header says briefly what is chosen. My station; station data sources; QSO entry
 (time, keyboard and its hold time, keep the screen on, CONTEST MODE); bands and modes shown in the card; language (system, Russian, English — changes at once);
-theme; additional settings (since 2.2.0: "Assign keys" — any key of an external keyboard can be replaced, added or
+theme; online logbooks (LoTW, Club Log, QRZ.com accounts); additional settings (since 2.2.0: "Assign keys" — any key of an external keyboard can be replaced, added or
 taken off; "Start together with QSO-LOG" — on the phone, apps such as FT8CN or an SDR app that open with QSO-LOG and
 keep running in the background while QSO-LOG comes back in front; on the computer, any programs with their arguments,
 such as JTDX, WSJT-X or Hamlib rigctld, not opened twice and optionally closed with QSO-LOG); logbook (export, import,
@@ -618,21 +648,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.2.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.2.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.3.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.3.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.2.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.2.0), unpack the
+Download `QSO-LOG-2.3.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.3.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.2.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.2.0) and install it:
+Download `QSO-LOG-2.3.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.3.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.2.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.3.0-linux-amd64.deb
 ```
 
 ## Where the data is kept

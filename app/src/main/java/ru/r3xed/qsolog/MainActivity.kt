@@ -231,6 +231,10 @@ class MainActivity : ComponentActivity() {
                 val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                     uri?.let(vm::importCsv)
                 }
+                // LoTW on the phone: a file for TQSL on the computer.
+                val exportLotw = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+                    uri?.let(vm::exportLotw)
+                }
                 // .adi has no registered MIME type; octet-stream keeps the file name as given.
                 val exportAdif = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
                     uri?.let(vm::exportFile)
@@ -305,6 +309,7 @@ class MainActivity : ComponentActivity() {
                         if (vm.showTransfer) ru.r3xed.qsolog.ui.TransferDialog(
                             total = vm.total,
                             onExport = { vm.showTransfer = false; vm.openExport(it, selectedOnly = false) },
+                            onUpload = { vm.showTransfer = false; vm.openUpload(selectedOnly = false) },
                             onImportAdif = { vm.showTransfer = false; importAdif.launch(arrayOf("*/*")) },
                             onImportCsv = { vm.showTransfer = false; import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
                             onImportContest = { vm.showTransfer = false; importContest.launch(arrayOf("*/*")) },
@@ -323,6 +328,22 @@ class MainActivity : ComponentActivity() {
                                 count = { onlyNew, contestOnly, ref -> vm.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew, contestOnly, ref).size },
                                 onDismiss = vm::closeContestExport,
                                 onConfirm = { h, onlyNew, mark, contestOnly, ref -> exportContest.launch(vm.prepareContest(h, onlyNew, mark, contestOnly, ref)) },
+                            )
+                        }
+                        vm.uploadTarget?.let { target ->
+                            ru.r3xed.qsolog.ui.UploadDialog(
+                                selected = target.only?.size,
+                                total = vm.total,
+                                count = { log, onlyNew -> vm.uploadCandidates(log, target.only, onlyNew).size },
+                                problem = vm::uploadProblem,
+                                busy = vm.uploading,
+                                lotwNote = tr("LoTW принимает только связи, подписанные вашим сертификатом в программе TQSL от ARRL. Для Android её нет: сохраните файл, перенесите на компьютер и подпишите в TQSL («Sign a log and upload it») — или выгружайте из QSO-LOG для компьютера, он вызывает TQSL сам."),
+                                lotwAction = tr("Сохранить файл"),
+                                onOpenSettings = { vm.closeUpload(); vm.openSettings() },
+                                onDismiss = vm::closeUpload,
+                                onConfirm = { log, onlyNew, mark ->
+                                    if (log == ru.r3xed.qsolog.data.OnlineLog.LOTW) exportLotw.launch(vm.prepareLotw(onlyNew, mark)) else vm.upload(log, onlyNew, mark)
+                                },
                             )
                         }
                         vm.exportTarget?.let { target ->

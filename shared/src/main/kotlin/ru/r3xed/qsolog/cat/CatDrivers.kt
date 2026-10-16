@@ -110,6 +110,9 @@ class CivDriver(
     private var dataOn = false
     private var baseMode: String? = null
 
+    /** The radio answers 1C 00 (transmitting or not); radios that refuse it once are not asked again. */
+    private var txSupported = true
+
     override fun poll(io: CatIo, last: RigState): RigState {
         state = last
         answered = false
@@ -118,7 +121,16 @@ class CivDriver(
             misses = 0
             ask(io, 0x04)
             if (dataSupported && cycle % 2 == 0) ask(io, 0x1A, 0x06)
-            if (sMeter) ask(io, 0x15, 0x02)
+            if (txSupported && !ask(io, 0x1C, 0x00)) txSupported = false
+            if (state.tx == true) {
+                // On transmit the meters that matter: output power, SWR, ALC.
+                ask(io, 0x15, 0x11)
+                ask(io, 0x15, 0x12)
+                ask(io, 0x15, 0x13)
+            } else {
+                if (state.powerPct != null) state = state.copy(powerPct = null, swr = null, alcPct = null)
+                if (sMeter) ask(io, 0x15, 0x02)
+            }
         } else if (probe && ++misses >= 3) {
             // Nobody at this address: next poll tries the next factory address.
             probeAt = (probeAt + 1) % Rigs.CIV_PROBE.size
@@ -144,7 +156,7 @@ class CivDriver(
             take(f)
             if (c == 0xFA) {
                 if (cmd == 0x1A) dataSupported = false
-                return cmd != 0x03
+                return cmd != 0x03 && cmd != 0x1C
             }
             if (c == cmd && (sub == null || (f.size > 6 && f[5].u == sub))) return true
         }
@@ -163,10 +175,18 @@ class CivDriver(
                 dataOn = body[1].u != 0
                 state = state.copy(radioMode = mode())
             }
-            0x15 -> if (body.size >= 3 && body[0].u == 0x02) {
+            0x15 -> if (body.size >= 3) {
                 val v = bcd(body[1]) * 100 + bcd(body[2])
-                state = state.copy(sDb = CatFormat.scale(v, 120, 241))
+                state = when (body[0].u) {
+                    0x02 -> state.copy(sDb = CatFormat.scale(v, 120, 241))
+                    // IC-7300 manual: 0143 = 50%, 0213 = 100% power; SWR 0048 = 1.5, 0080 = 2.0, 0120 = 3.0; ALC 0120 = top of the zone.
+                    0x11 -> state.copy(powerPct = (if (v <= 143) v * 50 / 143 else 50 + (v - 143) * 50 / 70).coerceIn(0, 120))
+                    0x12 -> state.copy(swr = civSwr(v))
+                    0x13 -> state.copy(alcPct = (v * 100 / 120).coerceIn(0, 200))
+                    else -> state
+                }
             }
+            0x1C -> if (body.size >= 2 && body[0].u == 0x00) state = state.copy(tx = body[1].u != 0)
         }
     }
 
@@ -256,6 +276,14 @@ class CivDriver(
         }
 
         private fun bcd(b: Byte): Int = (b.u shr 4) * 10 + (b.u and 0x0F)
+
+        /** The SWR meter's 0–255 as SWR: 0 → 1.0, 48 → 1.5, 80 → 2.0, 120 → 3.0, then up to ∞. */
+        fun civSwr(v: Int): Double = when {
+            v <= 48 -> 1.0 + v * 0.5 / 48
+            v <= 80 -> 1.5 + (v - 48) * 0.5 / 32
+            v <= 120 -> 2.0 + (v - 80) * 1.0 / 40
+            else -> (3.0 + (v - 120) * 7.0 / 135).coerceAtMost(10.0)
+        }
     }
 }
 
@@ -266,6 +294,7 @@ class KenwoodDriver(private val name: String, private val elecraft: Boolean, pri
     override var answered = false; private set
     override val what get() = name
     private var smCmd = if (elecraft) "SM;" else "SM0;"
+    private var ifSupported = true
 
     override fun poll(io: CatIo, last: RigState): RigState {
         var s = last
@@ -273,7 +302,11 @@ class KenwoodDriver(private val name: String, private val elecraft: Boolean, pri
         ask(io, "FA;")?.let { r -> digits(r.removePrefix("FA"))?.let { s = s.copy(freqHz = it, at = System.currentTimeMillis()) } }
         if (!answered) return s
         ask(io, "MD;")?.let { r -> r.getOrNull(2)?.let { c -> s = s.copy(radioMode = (if (elecraft) ELECRAFT_MODES else MODES)[c] ?: s.radioMode) } }
-        if (sMeter) {
+        // IF: the 29th character (after "IF", 11 digits of frequency, 5 spaces, RIT, flags, memory) is 1 on transmit.
+        if (ifSupported) ask(io, "IF;").let { r ->
+            if (r == null || r.length < 29) ifSupported = r != null && r.length >= 29 else s = s.copy(tx = r[28] == '1')
+        }
+        if (sMeter && s.tx != true) {
             val r = ask(io, smCmd)
             if (r == null && smCmd == "SM0;") smCmd = "SM;"
             r?.removePrefix("SM")?.takeLast(4)?.toIntOrNull()?.let { v ->
@@ -336,7 +369,12 @@ class YaesuDriver(private val name: String, private val sMeter: Boolean = true) 
         }
         if (!answered) return s
         ask(io, "MD0;")?.let { r -> r.getOrNull(3)?.let { c -> s = s.copy(radioMode = MODES[c.uppercaseChar()] ?: s.radioMode) } }
-        if (sMeter) ask(io, "SM0;")?.removePrefix("SM0")?.toIntOrNull()?.let { v -> s = s.copy(sDb = CatFormat.scale(v, 130, 255)) }
+        // "TX;" → TX0 receive, TX1 (PTT) or TX2 (CAT) transmit.
+        if (txSupported) ask(io, "TX;").let { r ->
+            val c = r?.getOrNull(2)
+            if (c == null) txSupported = false else s = s.copy(tx = c != '0')
+        }
+        if (sMeter && s.tx != true) ask(io, "SM0;")?.removePrefix("SM0")?.toIntOrNull()?.let { v -> s = s.copy(sDb = CatFormat.scale(v, 130, 255)) }
         return s
     }
 
@@ -349,6 +387,8 @@ class YaesuDriver(private val name: String, private val sMeter: Boolean = true) 
             if (r.startsWith(head)) return r.removeSuffix(";").also { answered = true }
         }
     }
+
+    private var txSupported = true
 
     /** FT-991, FT-891, FT-710, FTDX10, FTDX101 send the frequency in 9 digits, FT-950, FT-2000, FT-450 in 8: set it the same way. */
     private var faDigits = 9
@@ -460,8 +500,32 @@ class RigctldDriver(private val sMeter: Boolean = true) : RigDriver {
         ask(io, "f", 1)?.firstOrNull()?.trim()?.toDoubleOrNull()?.let { s = s.copy(freqHz = it.toLong(), at = System.currentTimeMillis()) }
         if (!answered) return s
         ask(io, "m", 2)?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.let { s = s.copy(radioMode = it) }
-        if (sMeter) ask(io, "l STRENGTH", 1)?.firstOrNull()?.trim()?.toIntOrNull()?.let { s = s.copy(sDb = (54 + it).coerceAtLeast(0)) }
+        if ("t" in supported) ask(io, "t", 1)?.firstOrNull()?.trim()?.toIntOrNull().let { v ->
+            if (v != null) s = s.copy(tx = v != 0) else if (refused) supported -= "t"
+        }
+        if (s.tx == true) {
+            s = s.copy(
+                powerPct = level(io, "RFPOWER_METER")?.let { (it * 100).toInt() },
+                swr = level(io, "SWR")?.takeIf { it >= 1.0 },
+                alcPct = level(io, "ALC")?.let { (it * 100).toInt() },
+            )
+        } else {
+            if (s.powerPct != null || s.swr != null) s = s.copy(powerPct = null, swr = null, alcPct = null)
+            if (sMeter) ask(io, "l STRENGTH", 1)?.firstOrNull()?.trim()?.toIntOrNull()?.let { s = s.copy(sDb = (54 + it).coerceAtLeast(0)) }
+        }
         return s
+    }
+
+    /** What this rigctld answers; a command it refuses once is not sent again. */
+    private val supported = mutableSetOf("t", "RFPOWER_METER", "SWR", "ALC")
+
+    /** "l NAME": a level as a number, or null (and not asked again) when the radio has no such meter. */
+    private fun level(io: CatIo, name: String): Double? {
+        if (name !in supported) return null
+        val v = ask(io, "l $name", 1)?.firstOrNull()?.trim()?.toDoubleOrNull()
+        // Only a refusal ("RPRT -11") means the radio has no such meter; a late answer is just late.
+        if (v == null && refused) supported -= name
+        return v
     }
 
     override fun setFreq(io: CatIo, hz: Long): Boolean = report(io, "F $hz")
@@ -479,13 +543,17 @@ class RigctldDriver(private val sMeter: Boolean = true) : RigDriver {
         return l == "RPRT 0"
     }
 
+    /** The last [ask] got "RPRT -n" instead of an answer. */
+    private var refused = false
+
     private fun ask(io: CatIo, cmd: String, lines: Int): List<String>? {
+        refused = false
         io.send("$cmd\n".toByteArray(Charsets.US_ASCII))
         val out = mutableListOf<String>()
         while (out.size < lines) {
             val l = io.line(TIMEOUT, '\n')?.trimEnd('\r', '\n') ?: return null
             answered = true
-            if (l.startsWith("RPRT")) return null
+            if (l.startsWith("RPRT")) return null.also { refused = true }
             out += l
         }
         return out
