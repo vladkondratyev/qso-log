@@ -855,6 +855,8 @@ private fun ContestModeSettings(vm: AppState) {
             )
         }
     }
+    SwitchRow(tr("Обмен QTH-локаторами (УКВ-соревнования)"), vm.contestGrids) { vm.changeContestGrids(it) }
+    Note(tr("В карточке появятся «Мой локатор» и «Локатор корр.». Свой берётся из «Моей станции»; если работаете с другого места, впишите его в карточке — он останется для следующих связей. Локатор корреспондента подставляется из его прошлой связи (предыдущего тура), QRZ.ru его не меняет. В отчёте ЕРМАК / Cabrillo локаторы идут после контрольных номеров, расстояние считается от вашего локатора."))
     Note(tr("Режим соревнований: «Добавить QSO» открывает упрощённую карточку — позывной, контрольные номера и RST; время ставится при записи. Принятый номер может быть любым: 015, MO69, EU, 16. Enter переходит из позывного в принятый код и там записывает связь; PgUp и PgDn листают связи контеста, чтобы их поправить. Такие связи отмечены в журнале флажком. Режим выключается при каждом запуске программы."))
 }
 
@@ -976,6 +978,23 @@ private fun CatSettings(vm: AppState) {
     SwitchRow(tr("Вид связи"), c.followMode) { vm.changeCat(c.copy(followMode = it)) }
     SwitchRow(tr("S-метр — в RST отправленный"), c.sMeterToRst) { vm.changeCat(c.copy(sMeterToRst = it)) }
     SwitchRow(tr("Кнопки диапазона и вида в карточке перестраивают трансивер"), c.control) { vm.changeCat(c.copy(control = it)) }
+
+    Section(tr("Для JTDX, WSJT-X и других программ"))
+    SwitchRow(tr("Делиться трансивером: сервер Hamlib rigctld"), c.serve) { vm.changeCat(c.copy(serve = it)) }
+    if (c.serve) {
+        val st = vm.rigServerStatus
+        Text(
+            st.describe(), style = MaterialTheme.typography.bodyMedium, fontFamily = Mono,
+            color = if (st is ru.r3xed.qsolog.cat.RigServerStatus.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        )
+        SettingField(tr("Порт сервера"), c.servePort.toString(), { v -> v.filter(Char::isDigit).take(5).toIntOrNull()?.takeIf { it in 1..65535 }?.let { vm.changeCat(c.copy(servePort = it)) } }, mono = true)
+        SwitchRow(tr("Пускать программы с других компьютеров сети"), c.serveLan) { vm.changeCat(c.copy(serveLan = it)) }
+        if (c.serveLan) {
+            val ips = remember(vm.rigServerStatus) { ru.r3xed.qsolog.digi.localAddresses() }
+            if (ips.isNotEmpty()) Note(tr("Адрес для других компьютеров: %s, порт %s", ips.joinToString(", "), c.servePort))
+        }
+    }
+    Note(tr("Порт трансивера держит QSO-LOG, а JTDX, WSJT-X, MSHV, GridTracker подключаются к нему как к Hamlib rigctld — выключать CAT в журнале не нужно. В JTDX: Settings → Radio → Rig «Hamlib NET rigctl», Network Server 127.0.0.1:%s, PTT Method «CAT», Split Operation «None» или «Fake It». Программа ставит частоту и вид, включает передачу, а QSO-LOG по-прежнему показывает частоту, пульт и шкалы.", c.servePort))
     Note(tr("Пока открыта новая карточка, частота, диапазон и вид связи меняются вслед за трансивером, а с включённым S-метром — и цифра S в отправленном RST (59 → 57). Поле, исправленное вручную, трансивер в этой карточке больше не трогает. Сохранённые связи не меняются. Цифровые виды трансивер не различает: в режиме DATA (USB-D) остаётся FT8, FT4 или другой цифровой вид из карточки."))
 
     Section(tr("Поддерживаемые трансиверы"))

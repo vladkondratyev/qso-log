@@ -72,6 +72,9 @@ interface RigDriver {
     /** Switches the radio to [mode] (see [RadioMode]). */
     fun setMode(io: CatIo, mode: RadioMode): Boolean
 
+    /** Transmit on or off (CAT PTT). */
+    fun setPtt(io: CatIo, on: Boolean): Boolean
+
     companion object {
         fun of(c: CatConfig, sMeter: Boolean = true): RigDriver = when (c.protocol) {
             CatProtocol.ICOM -> CivDriver(c.civAddress, true, c.model.name, sMeter)
@@ -212,6 +215,9 @@ class CivDriver(
         return ok
     }
 
+    /** 1C 00 01 — transmit, 1C 00 00 — receive. */
+    override fun setPtt(io: CatIo, on: Boolean): Boolean = command(io, 0x1C, 0x00, byteArrayOf(if (on) 1 else 0))
+
     /** A command that changes something: the radio answers FB (done) or FA (refused). */
     private fun command(io: CatIo, cmd: Int, sub: Int?, data: ByteArray): Boolean {
         io.send(frame(address, controller, cmd, sub, data))
@@ -349,6 +355,11 @@ class KenwoodDriver(private val name: String, private val elecraft: Boolean, pri
         return true
     }
 
+    override fun setPtt(io: CatIo, on: Boolean): Boolean {
+        io.send((if (on) "TX;" else "RX;").toByteArray(Charsets.US_ASCII))
+        return true
+    }
+
     companion object {
         val MODES = mapOf('1' to "LSB", '2' to "USB", '3' to "CW", '4' to "FM", '5' to "AM", '6' to "FSK", '7' to "CW-R", '9' to "FSK-R")
         val ELECRAFT_MODES = mapOf('1' to "LSB", '2' to "USB", '3' to "CW", '4' to "FM", '5' to "AM", '6' to "DATA", '7' to "CW-R", '9' to "DATA-R")
@@ -409,6 +420,12 @@ class YaesuDriver(private val name: String, private val sMeter: Boolean = true) 
             RadioMode.DATA -> 'C'
         }
         io.send("MD0$c;".toByteArray(Charsets.US_ASCII))
+        return true
+    }
+
+    /** TX1 — transmit by CAT, TX0 — receive. */
+    override fun setPtt(io: CatIo, on: Boolean): Boolean {
+        io.send((if (on) "TX1;" else "TX0;").toByteArray(Charsets.US_ASCII))
         return true
     }
 
@@ -478,6 +495,13 @@ class YaesuOldDriver(private val name: String, private val sMeter: Boolean = tru
         return true
     }
 
+    /** 08 — PTT on, 88 — PTT off. */
+    override fun setPtt(io: CatIo, on: Boolean): Boolean {
+        io.send(byteArrayOf(0, 0, 0, 0, (if (on) 0x08 else 0x88).toByte()))
+        io.next(100) { 1 }
+        return true
+    }
+
     companion object {
         val MODES = mapOf(
             0x00 to "LSB", 0x01 to "USB", 0x02 to "CW", 0x03 to "CW-R", 0x04 to "AM", 0x06 to "WFM", 0x08 to "FM",
@@ -529,6 +553,8 @@ class RigctldDriver(private val sMeter: Boolean = true) : RigDriver {
     }
 
     override fun setFreq(io: CatIo, hz: Long): Boolean = report(io, "F $hz")
+
+    override fun setPtt(io: CatIo, on: Boolean): Boolean = report(io, "T " + if (on) 1 else 0)
 
     override fun setMode(io: CatIo, mode: RadioMode): Boolean = report(io, "M " + when (mode) {
         RadioMode.DATA -> "PKTUSB"

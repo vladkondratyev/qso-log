@@ -178,6 +178,15 @@ class Settings(context: Context) {
             ?: if (prefs.getBoolean("contest_keypad", true)) KeypadMode.NORMAL else KeypadMode.OFF
         set(v) = prefs.edit().putString("keypad", v.name).apply()
 
+    /** Contest mode: the QTH locators are exchanged too (VHF contests): two more fields in the card. */
+    var contestGrids: Boolean
+        get() = prefs.getBoolean("contest_grids", false)
+        set(v) = prefs.edit().putBoolean("contest_grids", v).apply()
+    /** The locator the contest card sends, when it differs from the station's (a portable QTH); empty — the station's. */
+    var contestMyLocator: String
+        get() = prefs.getString("contest_my_locator", "") ?: ""
+        set(v) = prefs.edit().putString("contest_my_locator", v).apply()
+
     /** Contest card: the RST fields are shown (else folded into one line). */
     var contestRstShown: Boolean
         get() = prefs.getBoolean("contest_rst_shown", true)

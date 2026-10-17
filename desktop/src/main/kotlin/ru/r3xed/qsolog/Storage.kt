@@ -515,6 +515,15 @@ class Settings {
         get() = get("contest_sent_text")
         set(v) = put("contest_sent_text", v)
 
+    /** Contest mode: the QTH locators are exchanged too (VHF contests): two more fields in the card. */
+    var contestGrids: Boolean
+        get() = get("contest_grids", "false") == "true"
+        set(v) = put("contest_grids", v.toString())
+    /** The locator the contest card sends, when it differs from the station's (a portable QTH); empty — the station's. */
+    var contestMyLocator: String
+        get() = get("contest_my_locator")
+        set(v) = put("contest_my_locator", v)
+
     /** Contest card: the RST fields are shown (else folded into one line). */
     var contestRstShown: Boolean
         get() = get("contest_rst_shown", "true") == "true"

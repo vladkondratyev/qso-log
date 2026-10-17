@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.keys.KeyAction
 import ru.r3xed.qsolog.keys.KeyMap
 import androidx.activity.compose.BackHandler
@@ -123,7 +124,7 @@ import ru.r3xed.qsolog.utc
 import kotlin.math.abs
 
 /** The fields of the contest card the app's keypad can type into. */
-private enum class Target { CALL, SENT, RCVD, RST_SENT, RST_RCVD }
+private enum class Target { CALL, SENT, RCVD, RST_SENT, RST_RCVD, MY_LOC, LOC }
 
 /**
  * The contest-mode card: callsign, the two numbers and the reports, nothing else. A swipe from right to left saves
@@ -142,6 +143,9 @@ fun ContestScreen(vm: AppViewModel) {
     var confirmDelete by remember { mutableStateOf(false) }
     val callFocus = remember { FocusRequester() }
     val rcvdFocus = remember { FocusRequester() }
+    val locFocus = remember { FocusRequester() }
+    // VHF contests: the QTH locators are exchanged too.
+    val grids = ContestMode.hasGrids(f.adif)
     val rcvd = f.adif[ContestMode.RCVD].orEmpty()
     val sent = f.adif[ContestMode.SENT].orEmpty()
 
@@ -156,6 +160,8 @@ fun ContestScreen(vm: AppViewModel) {
         Target.RCVD -> vm.form.adif[ContestMode.RCVD].orEmpty()
         Target.RST_SENT -> vm.form.rstSent
         Target.RST_RCVD -> vm.form.rstRcvd
+        Target.MY_LOC -> vm.form.myLocator
+        Target.LOC -> vm.form.locator
     }
     fun setValue(t: Target, v: String) {
         error = null
@@ -165,6 +171,8 @@ fun ContestScreen(vm: AppViewModel) {
             Target.RCVD -> vm.setContestField(ContestMode.RCVD, v)
             Target.RST_SENT -> vm.update(vm.form.copy(rstSent = v))
             Target.RST_RCVD -> vm.update(vm.form.copy(rstRcvd = v))
+            Target.MY_LOC -> vm.setContestMyLocator(v)
+            Target.LOC -> vm.setContestLocator(v)
         }
     }
     // A second tap on the active field selects its value (then ⌫ clears it, a key replaces it), a third deselects.
@@ -247,6 +255,8 @@ fun ContestScreen(vm: AppViewModel) {
                 true
             }
             hit(KeyAction.SPACE_NEXT) && callFocused -> { if (!vm.runCallCommand()) rcvdFocus.requestFocus(); true }
+            // VHF: the callsign → the number → the locator → the callsign.
+            hit(KeyAction.SPACE_NEXT) && rcvdFocused && grids -> { locFocus.requestFocus(); true }
             hit(KeyAction.SPACE_NEXT) && (rcvdFocused || otherFocused != null) -> { callFocus.requestFocus(); true }
             e.key == Key.DirectionUp && callFocused && form.isNew && form.call.isEmpty() -> { prev(); true }
             hit(KeyAction.CONTEST_PREV) -> { prev(); true }
@@ -373,6 +383,30 @@ fun ContestScreen(vm: AppViewModel) {
                     )
                 }
             }
+            if (grids) {
+                // The locators: mine (the station's, or the portable one typed here, kept for the next cards) and his,
+                // filled from his earlier contact (the previous tour) when there is one.
+                val myBad = f.myLocator.isNotBlank() && !Geo.isLocator(f.myLocator)
+                val hisBad = f.locator.isNotBlank() && !Geo.isLocator(f.locator)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (keypad) {
+                        KeyField(tr("Мой локатор"), f.myLocator, active == Target.MY_LOC, replace, myBad, Modifier.weight(1f), caret = caret) { activate(Target.MY_LOC) }
+                        KeyField(tr("Локатор корр."), f.locator, active == Target.LOC, replace, hisBad, Modifier.weight(1f), caret = caret) { activate(Target.LOC) }
+                    } else {
+                        BigField(tr("Мой локатор"), f.myLocator, vm::setContestMyLocator, Modifier.weight(1f).other("myloc"), KeyboardType.Ascii, isError = myBad)
+                        BigField(
+                            tr("Локатор корр."), f.locator, vm::setContestLocator,
+                            Modifier.weight(1f).focusRequester(locFocus).other("loc"), KeyboardType.Ascii, onDone = next, isError = hisBad,
+                        )
+                    }
+                }
+                // The distance counts in VHF contests: from my locator to his.
+                val me = Geo.locatorToLatLon(f.myLocator) ?: vm.settings.myPosition
+                val them = f.position
+                if (me != null && them != null && !hisBad) {
+                    Text(tr("%s км до корреспондента", Math.round(Geo.distanceKm(me, them))), style = MaterialTheme.typography.bodyMedium, color = x.muted)
+                }
+            }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium) }
             if (dupeArmed && dupe != null) {
                 Text(
@@ -451,12 +485,14 @@ fun ContestScreen(vm: AppViewModel) {
                     if (!f.isNew) deleteButton(keypadButtonHeight(compact).value.toInt())
                     // From the callsign to the received number and back: the two fields typed in every contact.
                     val toRcvd = active == Target.CALL
+                    // VHF: the received number → the locator before going back to the callsign.
+                    val toLoc = grids && active == Target.RCVD
                     OutlinedButton(
-                        onClick = { activate(if (toRcvd) Target.RCVD else Target.CALL) },
+                        onClick = { activate(if (toRcvd) Target.RCVD else if (toLoc) Target.LOC else Target.CALL) },
                         modifier = Modifier.weight(1f).height(keypadButtonHeight(compact)), shape = RoundedCornerShape(10.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
                     ) {
-                        Text(if (toRcvd) tr("→ Код") else tr("→ Позывной"), fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(if (toRcvd) tr("→ Код") else if (toLoc) tr("→ Локатор") else tr("→ Позывной"), fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                     Button(
                         onClick = next, modifier = Modifier.weight(if (f.isNew) 1.6f else 1.3f).height(keypadButtonHeight(compact)), shape = RoundedCornerShape(10.dp),

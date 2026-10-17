@@ -81,4 +81,30 @@ class CabrilloTest {
         assertEquals(listOf("SSB", "CW"), back.map { it.mode })
         assertEquals(log.sortedBy { it.timeUtc }.map { it.timeUtc }, back.map { it.timeUtc })
     }
+
+    /** VHF contests: the locators go after the numbers; the import reads such lines back. */
+    @Test
+    fun vhfLocatorsAfterTheNumbers() {
+        val q = Qso(
+            call = "RA9DEMO", timeUtc = at("2026-10-17T07:15"), band = "2m", mode = "SSB", freqMhz = "144.300",
+            rstSent = "59", rstRcvd = "59", myCall = "UA9DEMO", myLocator = "LO65fr", locator = "lo56ab",
+            adif = mapOf("STX_STRING" to "005", "SRX_STRING" to "012", ContestMode.GRIDS to "Y"),
+        )
+        val text = Cabrillo.export(listOf(q), Cabrillo.Header(Cabrillo.Format.ERMAK, "vhf-demo", "UA9DEMO"))
+        val line = text.lines().first { it.startsWith("QSO:") }
+        assertEquals("QSO:   144 PH 2026-10-17 0715 UA9DEMO       59  005 LO65FR RA9DEMO       59  012 LO56AB", line)
+        // Without the mark the line stays as it was: HF contests do not get locators.
+        val hf = Cabrillo.export(listOf(q.copy(adif = q.adif - ContestMode.GRIDS)), Cabrillo.Header(Cabrillo.Format.ERMAK, "x", "UA9DEMO"))
+        assertTrue(hf.lines().first { it.startsWith("QSO:") }.endsWith("59  012"))
+    }
+
+    @Test
+    fun previousLocatorPrefersThisContest() {
+        val old = Qso(call = "RA9DEMO", timeUtc = at("2026-10-01T10:00"), band = "2m", mode = "SSB", locator = "LO56aa")
+        val inContest = Qso(call = "RA9DEMO", timeUtc = at("2026-09-01T10:00"), band = "2m", mode = "SSB", locator = "lo56AB",
+            adif = mapOf(Contest.REF to "c1"))
+        assertEquals("LO56ab", ContestMode.previousLocator("ra9demo", listOf(old, inContest), "c1"))
+        assertEquals("LO56aa", ContestMode.previousLocator("RA9DEMO", listOf(old, inContest), null))
+        assertEquals(null, ContestMode.previousLocator("UA1DEMO", listOf(old), null))
+    }
 }

@@ -648,6 +648,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        stopServer()
         catSession?.stop()
         keyer?.close()
         stopDigi()
@@ -1027,9 +1028,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val call = raw.uppercase().filter { it.isLetterOrDigit() || it == '/' }
         val f = form
         if (call != f.call) cardFromLog = false
-        form = if (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank())) {
+        form = if (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && locatorFree(f))) {
             f.copy(call = call, name = "", qth = "", country = "", locator = "", lat = null, lon = null, infoFromQrz = false, adif = f.adif - HamQth.POSITION_FIELD)
         } else f.copy(call = call)
+        // VHF contest: the station's locator from its earlier contact (the previous tour), shown at once.
+        if (screen == Screen.Contest && ContestMode.hasGrids(form.adif) && form.isNew && locatorFree(form)) {
+            val loc = ContestMode.previousLocator(call, allQsos, form.adif[Contest.REF])
+            pinnedLocator = loc?.let { call to it }
+            if (loc != null) form = form.copy(locator = loc, lat = null, lon = null, adif = form.adif - HamQth.POSITION_FIELD)
+        }
         loadHistory(call)
         lookupJob?.cancel()
         // Searching starts from the 4th character: shorter prefixes only waste the QRZ.ru request limit.
@@ -1054,6 +1061,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun runLookup(call: String) {
         lookupOnce(call)
+        keepPinnedLocator(call)
         // Whatever was found goes to the search history: a cache to look at and to fill a card offline, never a contact.
         if (form.call == call) rememberSearch(requireNew = false)
     }
@@ -1078,7 +1086,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         lat = if (pos != null) info.lat else f.lat, lon = if (pos != null) info.lon else f.lon,
                         adif = withQrzExtras(if (pos != null || info.locator.isNotBlank()) f.adif - HamQth.POSITION_FIELD else f.adif, info),
                     )
-                } else if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
+                } else if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && locatorFree(f)))) {
                     form = f.copy(
                         name = info.fullName, qth = info.city, country = info.country,
                         locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
@@ -1110,7 +1118,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return null
         }
         val f = form
-        if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
+        if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && locatorFree(f)))) {
             // Zones and DXCC go to their ADIF fields unless the card already has them.
             val extra = mapOf("CQZ" to d.cqZone, "ITUZ" to d.ituZone, "DXCC" to d.dxcc, "CONT" to d.continent)
                 .filter { (k, v) -> v.isNotBlank() && f.adif[k].isNullOrBlank() }
@@ -1798,6 +1806,50 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.contestRstShown = on
     }
 
+    /** VHF contests: the card has "Мой локатор" and "Локатор корр.", the report puts them after the numbers. */
+    var contestGrids by mutableStateOf(prefs.contestGrids); private set
+
+    fun changeContestGrids(on: Boolean) {
+        contestGrids = on
+        prefs.contestGrids = on
+        // The open new card takes it at once.
+        if (screen == Screen.Contest && form.isNew) form = withGrids(form)
+    }
+
+    private fun withGrids(f: Form): Form = if (!contestGrids) f.copy(adif = f.adif - ContestMode.GRIDS) else f.copy(
+        myLocator = prefs.contestMyLocator.ifBlank { settings.myLocator.trim() },
+        adif = f.adif + (ContestMode.GRIDS to "Y"),
+    )
+
+    /** The locator the contest card sends; kept for the next cards (a portable QTH stays for the whole contest). */
+    fun setContestMyLocator(v: String) {
+        val loc = v.trim().uppercase().filter { it.isLetterOrDigit() }.take(8)
+        form = form.copy(myLocator = loc)
+        prefs.contestMyLocator = if (loc == settings.myLocator.trim().uppercase()) "" else loc
+    }
+
+    /**
+     * The locator the other station gave (or the one from its earlier contact): QRZ.ru and HamQTH do not replace it —
+     * in a VHF contest the station may be far from its home QTH.
+     */
+    fun setContestLocator(v: String) {
+        val loc = v.trim().uppercase().filter { it.isLetterOrDigit() }.take(8)
+        setLocator(loc)
+        pinnedLocator = if (loc.isEmpty()) null else form.call to loc
+    }
+
+    /** The other station's locator in a VHF contest card, typed or from its earlier contact: (callsign, locator). */
+    private var pinnedLocator: Pair<String, String>? = null
+
+    /** The card's locator is the pinned one: lookups may fill the name and QTH but leave the locator alone. */
+    private fun locatorFree(f: Form): Boolean = f.locator.isBlank() || pinnedLocator == (f.call to f.locator)
+
+    private fun keepPinnedLocator(call: String) {
+        val p = pinnedLocator ?: return
+        val f = form
+        if (f.call == call && p.first == call && f.locator != p.second) form = f.copy(locator = p.second, lat = null, lon = null, adif = f.adif - HamQth.POSITION_FIELD)
+    }
+
     /**
      * Band, mode and frequency the contest is being worked on: taken from the last new card, so the next one stays
      * there. (The log is saved in the background, so its newest contact may not be the one just saved yet.)
@@ -1891,6 +1943,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             adif = f.adif + (ContestMode.FIELD to "Y") + (ContestMode.SENT to contestSentNext()) +
                 listOfNotNull(activeContest?.let { Contest.REF to it.id }),
         )
+        form = withGrids(form)
         formOriginal = form
         screen = Screen.Contest
         catFollowNewCard()
@@ -2093,7 +2146,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         catConfig = c
         prefs.cat = c
         // Only what the card takes changed: the link stays.
-        val relink = c.copy(followFreq = old.followFreq, followMode = old.followMode, sMeterToRst = old.sMeterToRst) != old
+        val relink = c.copy(
+            followFreq = old.followFreq, followMode = old.followMode, sMeterToRst = old.sMeterToRst, control = old.control,
+            serve = old.serve, servePort = old.servePort, serveLan = old.serveLan,
+        ) != old
+        if (c.serve != old.serve || c.servePort != old.servePort || c.serveLan != old.serveLan) restartServer()
         // Typing an address or a port: reconnect once the typing pauses, not on every character.
         if (relink) {
             mainHandler.removeCallbacks(catRestart)
@@ -2109,11 +2166,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         catSession = null
         catStatus = CatStatus.Off
         val c = catConfig
+        // The server goes with CAT: on when both are, off when CAT is switched off.
+        if ((rigServer != null) != (c.enabled && c.serve)) restartServer()
         if (!c.enabled) return
         lateinit var session: CatSession
         session = CatSession(c, { catAndroid.open(c) }, { st -> mainHandler.post { if (catSession === session) onCat(st) } })
         catSession = session
         session.start()
+    }
+
+    // ---------- the radio shared with JTDX, WSJT-X… (a Hamlib rigctld server) ----------
+
+    var rigServerStatus by mutableStateOf<ru.r3xed.qsolog.cat.RigServerStatus>(ru.r3xed.qsolog.cat.RigServerStatus.Off); private set
+    private var rigServer: ru.r3xed.qsolog.cat.RigServer? = null
+
+    fun restartServer() {
+        rigServer?.stop()
+        rigServer = null
+        rigServerStatus = ru.r3xed.qsolog.cat.RigServerStatus.Off
+        val c = catConfig
+        if (!c.enabled || !c.serve) return
+        lateinit var srv: ru.r3xed.qsolog.cat.RigServer
+        srv = ru.r3xed.qsolog.cat.RigServer(
+            c.servePort, c.serveLan,
+            state = { catRig },
+            send = { cmd -> catSession?.send(cmd) },
+            onStatus = { st -> mainHandler.post { if (rigServer === srv) rigServerStatus = st } },
+        )
+        rigServer = srv
+        srv.start()
+    }
+
+    fun stopServer() {
+        rigServer?.stop()
+        rigServer = null
     }
 
     fun catUsbDevices(): List<CatDevice> = runCatching { catAndroid.usbDevices() }.getOrDefault(emptyList())

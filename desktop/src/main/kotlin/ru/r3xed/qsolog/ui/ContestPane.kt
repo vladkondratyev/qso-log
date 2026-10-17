@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.data.Geo
 import ru.r3xed.qsolog.keys.KeyAction
 import ru.r3xed.qsolog.keys.KeyMap
 import androidx.compose.foundation.BorderStroke
@@ -93,7 +94,7 @@ import ru.r3xed.qsolog.tr
 import ru.r3xed.qsolog.utc
 
 /** The fields of the contest card; Enter moves between them. */
-private enum class Target { CALL, SENT, RCVD, RST }
+private enum class Target { CALL, SENT, RCVD, RST, LOC }
 
 /**
  * The contest-mode card: callsign, the two numbers and the reports, nothing else. Keyboard first: Enter goes from the
@@ -108,6 +109,9 @@ fun ContestPane(vm: AppState) {
     var confirmDelete by remember { mutableStateOf(false) }
     val callFocus = remember { FocusRequester() }
     val rcvdFocus = remember { FocusRequester() }
+    val locFocus = remember { FocusRequester() }
+    // VHF contests: the QTH locators are exchanged too.
+    val grids = ContestMode.hasGrids(f.adif)
     var focused by remember { mutableStateOf(Target.CALL) }
     val rcvd = f.adif[ContestMode.RCVD].orEmpty()
     val sent = f.adif[ContestMode.SENT].orEmpty()
@@ -156,6 +160,8 @@ fun ContestPane(vm: AppState) {
                     if (!vm.runCallCommand()) rcvdFocus.requestFocus()
                     true
                 }
+                // VHF: the callsign → the number → the locator → the callsign.
+                hit(KeyAction.SPACE_NEXT) && focused == Target.RCVD && grids -> { locFocus.requestFocus(); true }
                 hit(KeyAction.SPACE_NEXT) -> { callFocus.requestFocus(); true }
                 hit(KeyAction.DELETE_SAVED) && !vm.form.isNew -> { confirmDelete = true; true }
                 e.key == Key.DirectionUp && focused == Target.CALL && f.isNew && f.call.isEmpty() -> {
@@ -270,6 +276,24 @@ fun ContestPane(vm: AppState) {
                     Modifier.weight(1f).focusRequester(rcvdFocus).onFocusChanged { if (it.isFocused) focused = Target.RCVD },
                     isError = error == CONTEST_RCVD_ERROR,
                 )
+            }
+            if (grids) {
+                // The locators: mine (the station's, or the portable one typed here, kept for the next cards) and his,
+                // filled from his earlier contact (the previous tour) when there is one.
+                val myBad = f.myLocator.isNotBlank() && !Geo.isLocator(f.myLocator)
+                val hisBad = f.locator.isNotBlank() && !Geo.isLocator(f.locator)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BigField(tr("Мой локатор"), f.myLocator, vm::setContestMyLocator, Modifier.weight(1f).onFocusChanged { if (it.isFocused) focused = Target.LOC }, isError = myBad)
+                    BigField(
+                        tr("Локатор корр."), f.locator, vm::setContestLocator,
+                        Modifier.weight(1f).focusRequester(locFocus).onFocusChanged { if (it.isFocused) focused = Target.LOC }, isError = hisBad,
+                    )
+                }
+                val me = Geo.locatorToLatLon(f.myLocator) ?: vm.settings.myPosition
+                val them = f.position
+                if (me != null && them != null && !hisBad) {
+                    Text(tr("%s км до корреспондента", Math.round(Geo.distanceKm(me, them))), style = MaterialTheme.typography.bodyMedium, color = x.muted)
+                }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium) }
             if (dupeArmed && dupe != null) {

@@ -124,9 +124,13 @@ object Cabrillo {
 
     /** Sent and received exchange of a record: the contest number fields if the log has them. */
     private fun sentExch(q: Qso, serial: Int): String =
-        q.adif["STX_STRING"]?.ifBlank { null } ?: q.adif["STX"]?.ifBlank { null } ?: "%03d".format(serial)
+        (q.adif["STX_STRING"]?.ifBlank { null } ?: q.adif["STX"]?.ifBlank { null } ?: "%03d".format(serial)) + grid(q, q.myLocator)
 
-    private fun rcvdExch(q: Qso): String = q.adif["SRX_STRING"]?.ifBlank { null } ?: q.adif["SRX"]?.ifBlank { null } ?: ""
+    private fun rcvdExch(q: Qso): String = (q.adif["SRX_STRING"]?.ifBlank { null } ?: q.adif["SRX"]?.ifBlank { null } ?: "") + grid(q, q.locator)
+
+    /** VHF contests: " LO65FR" after the number when the locators were exchanged (see [ContestMode.GRIDS]). */
+    private fun grid(q: Qso, loc: String): String =
+        if (ContestMode.hasGrids(q.adif) && loc.isNotBlank()) " " + loc.trim().uppercase() else ""
 
     private fun col(s: String, width: Int) = s.padEnd(width)
 

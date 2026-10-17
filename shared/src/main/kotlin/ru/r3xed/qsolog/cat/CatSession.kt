@@ -27,6 +27,7 @@ class CatSession(
     private var thread: Thread? = null
     private val freq = AtomicReference<CatCommand.Freq?>(null)
     private val mode = AtomicReference<CatCommand.Mode?>(null)
+    private val ptt = AtomicReference<CatCommand.Ptt?>(null)
     private val wake = Semaphore(0)
 
     /**
@@ -37,6 +38,7 @@ class CatSession(
         when (c) {
             is CatCommand.Freq -> freq.set(c)
             is CatCommand.Mode -> mode.set(c)
+            is CatCommand.Ptt -> ptt.set(c)
         }
         wake.release()
     }
@@ -71,7 +73,10 @@ class CatSession(
                 // Asked while there was no link: the user has moved on.
                 freq.set(null)
                 mode.set(null)
+                ptt.set(null)
                 while (running) {
+                    // Transmit on or off first: a program waits for it to start or stop its audio.
+                    ptt.getAndSet(null)?.let { io.clear(); driver.setPtt(io, it.on) }
                     freq.getAndSet(null)?.let { io.clear(); driver.setFreq(io, it.hz) }
                     mode.getAndSet(null)?.let { io.clear(); driver.setMode(io, it.mode) }
                     state = driver.poll(io, state)

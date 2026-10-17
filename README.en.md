@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.3.0 | [QSO-LOG-2.3.0.apk](../../releases/tag/v2.3.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.3.0 | [QSO-LOG-2.3.0-macos-arm64.dmg](../../releases/tag/desktop-v2.3.0) |
-| macOS 11 or newer, Intel | 2.3.0 | [QSO-LOG-2.3.0-macos-x64.dmg](../../releases/tag/desktop-v2.3.0) |
-| Windows 10 and 11, 64-bit | 2.3.0 | [QSO-LOG-2.3.0-windows-x64.zip](../../releases/tag/desktop-v2.3.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.3.0 | [QSO-LOG-2.3.0-linux-amd64.deb](../../releases/tag/desktop-v2.3.0) |
+| Android 8.0 or newer | 2.4.0 | [QSO-LOG-2.4.0.apk](../../releases/tag/v2.4.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.4.0 | [QSO-LOG-2.4.0-macos-arm64.dmg](../../releases/tag/desktop-v2.4.0) |
+| macOS 11 or newer, Intel | 2.4.0 | [QSO-LOG-2.4.0-macos-x64.dmg](../../releases/tag/desktop-v2.4.0) |
+| Windows 10 and 11, 64-bit | 2.4.0 | [QSO-LOG-2.4.0-windows-x64.zip](../../releases/tag/desktop-v2.4.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.4.0 | [QSO-LOG-2.4.0-linux-amd64.deb](../../releases/tag/desktop-v2.4.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -174,10 +174,17 @@ Connection:
   adapter paired in the Android settings, SPP profile — an IC-705, for one) or the **network** (rigctld, a network CAT
   adapter, ser2net).
 - **Computer** — a **COM port** (the transceiver's USB cable or a CAT/CI-V interface; some need a CP210x, FTDI or CH340
-  driver) or the **network**. Only one program can open a COM port: if WSJT-X or JTDX already controls the
-  transceiver, run Hamlib rigctld and connect both programs to it. On the computer rigctld can be started with
-  QSO-LOG: Settings → "Additional settings" → "Add Hamlib rigctld" — QSO-LOG starts it and connects its CAT to it.
-  In JTDX then: Settings → Radio → Rig "Hamlib NET rigctl", Network Server `127.0.0.1:4532`.
+  driver) or the **network**.
+
+**JTDX, WSJT-X and QSO-LOG with one transceiver** (since 2.4.0). Only one program can open a COM port, so CAT used to
+be switched off in the log. Now QSO-LOG shares the transceiver: switch on "Share the transceiver: a Hamlib rigctld
+server" in the CAT settings. QSO-LOG keeps the port, and JTDX, WSJT-X, MSHV, GridTracker connect to it as to rigctld:
+in JTDX — Settings → Radio → Rig "Hamlib NET rigctl", Network Server `127.0.0.1:4532`, PTT Method "CAT", Split
+Operation "None" or "Fake It". The program sets the frequency and mode and keys the radio, while QSO-LOG still shows
+the frequency, the panel and the meters. If the program closes while transmitting, QSO-LOG puts the radio back to
+receive. With "Let in programs from other computers of the network", JTDX on a computer can use a transceiver
+connected to the phone. A separate Hamlib rigctld (Settings → "Additional settings" → "Add Hamlib rigctld") is only
+needed when JTDX must work without QSO-LOG.
 
 <p>
 <img src="docs/screenshots/73-rig-panel.png" width="200" alt="The transceiver panel on the phone: S-meter and band scale">
@@ -251,6 +258,17 @@ Under the switch you choose what to send:
 
 - **Serial number**: sent as 001, 002… and incremented after every logged QSO.
 - **Fixed code**: the same every time: district, region, zone (MO69, EU, 16).
+
+- **Exchange QTH locators** (VHF contests, since 2.4.0): the card gets "My locator" and "Their locator". Yours
+  comes from "My station"; working portable, type it in the card and it stays for the next QSOs. The other station's
+  locator is filled in when you have worked it before (in an earlier tour or anywhere in the log), and QRZ.ru does not
+  overwrite it. The distance to the station shows under the fields. The ЕРМАК / Cabrillo report puts the locators
+  after the serial numbers: `… 59 005 LO65FR RA9DEMO 59 017 MO06HU`.
+
+<p>
+<img src="docs/screenshots/80-contest-grids.png" width="200" alt="Contest card with locators">
+<img src="docs/screenshots/desktop-30-contest-grids.png" width="440" alt="Contest card with locators on the computer">
+</p>
 
 In this mode "Add QSO" opens a simplified card: callsign, exchange sent and received, RST. The received exchange can
 be anything: 015, MO69, EU, ABCD, 20. RST is filled in (59 or 599) and can be folded into one line. Band and mode are
@@ -648,21 +666,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.3.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.3.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.4.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.4.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.3.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.3.0), unpack the
+Download `QSO-LOG-2.4.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.4.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.3.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.3.0) and install it:
+Download `QSO-LOG-2.4.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.4.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.3.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.4.0-linux-amd64.deb
 ```
 
 ## Where the data is kept

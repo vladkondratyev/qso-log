@@ -191,7 +191,7 @@ fun AdvancedSettings(vm: AppState) {
     ActionButton(tr("Добавить Hamlib rigctld (для JTDX и QSO-LOG вместе)"), Icons.Filled.Add) { rigctld = true }
     if (vm.startApps.any { it.enabled }) ActionButton(tr("Запустить сейчас"), Icons.Filled.PlayArrow) { vm.launchStartApps() }
     Note(tr("При запуске QSO-LOG откроет отмеченные программы с их параметрами — например, JTDX, WSJT-X или Hamlib rigctld. Уже запущенная программа второй раз не открывается. «Закрывать вместе с QSO-LOG» — программа закроется при выходе из QSO-LOG."))
-    Note(tr("JTDX и QSO-LOG с одним трансивером: COM-порт может открыть только одна программа. Его держит rigctld, а обе программы подключаются к нему: в JTDX — Settings → Radio → Rig «Hamlib NET rigctl», Network Server 127.0.0.1:4532; в QSO-LOG — CAT → «Hamlib rigctld», 127.0.0.1, порт 4532. Без rigctld частоту и вид QSO-LOG берёт из JTDX по UDP (Settings → Reporting → UDP Server 127.0.0.1:2237 и блок «Цифровые виды» здесь), но управлять трансивером тогда может только JTDX."))
+    Note(tr("JTDX и QSO-LOG с одним трансивером: проще всего включить в настройках CAT «Делиться трансивером: сервер Hamlib rigctld» — тогда в JTDX выберите Rig «Hamlib NET rigctl», 127.0.0.1:4532, и ничего не переключайте. Отдельный Hamlib rigctld нужен, только если QSO-LOG запускается не всегда, а JTDX должен работать и без него."))
     if (rigctld) RigctldDialog(vm, onDone = { a ->
         rigctld = false
         if (a != null) {

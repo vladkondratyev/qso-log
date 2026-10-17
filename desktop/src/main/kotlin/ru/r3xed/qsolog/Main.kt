@@ -139,7 +139,7 @@ fun main() {
         val state = remember { AppState() }
         val windowState = rememberWindowState(width = 1024.dp, height = 700.dp, position = WindowPosition(Alignment.Center))
         Window(
-            onCloseRequest = { state.flushSettings(); state.stopCat(); state.stopDigi(); state.closeCw(); state.stopStartApps(); exitApplication() },
+            onCloseRequest = { state.flushSettings(); state.stopServer(); state.stopCat(); state.stopDigi(); state.closeCw(); state.stopStartApps(); exitApplication() },
             title = "QSO-LOG",
             icon = painterResource("icon.png"),
             state = windowState,
@@ -263,7 +263,7 @@ fun main() {
                     }
                     if (!IS_MAC) {
                         Separator()
-                        Item(tr("Выход"), onClick = { state.flushSettings(); state.closeCw(); state.stopStartApps(); exitApplication() })
+                        Item(tr("Выход"), onClick = { state.flushSettings(); state.stopServer(); state.closeCw(); state.stopStartApps(); exitApplication() })
                     }
                 }
             } }

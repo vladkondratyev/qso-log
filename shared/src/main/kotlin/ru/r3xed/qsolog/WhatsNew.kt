@@ -9,12 +9,11 @@ import java.net.URLEncoder
 object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
-    /** Points of this release (2.3.0 on the phone and the computer). */
+    /** Points of this release (2.4.0 on the phone and the computer). */
     fun items(desktop: Boolean): List<String> = listOf(
-        tr("Шкалы на пульте трансивера: S-метр на приёме, мощность, КСВ и ALC на передаче (ICOM, Hamlib rigctld), и шкала диапазона с участками CW, цифры и SSB — нажмите на неё, чтобы перестроиться."),
-        if (desktop) tr("Выгрузка в LoTW, Club Log и QRZ.com Logbook: ⋮ → «Экспорт и импорт» → «Онлайн-журналы». LoTW — через TQSL, QSO-LOG запускает его сам. Учётные записи — в Настройки → «Онлайн-журналы».")
-        else tr("Выгрузка в Club Log и QRZ.com Logbook прямо с телефона, для LoTW — файл, который подписывает TQSL: ⋮ → «Экспорт и импорт» → «Онлайн-журналы». Учётные записи — в Настройки → «Онлайн-журналы»."),
-        tr("В карточке связи видно, когда она ушла в каждый онлайн-журнал; в следующий раз уходят только новые связи."),
+        tr("Обмен QTH-локаторами в соревнованиях на УКВ: в контест-карточке «Мой локатор» и «Локатор корр.», локатор знакомой станции подставляется из прошлого тура, в отчёте ЕРМАК / Cabrillo локаторы идут после номеров. Настройки → CONTEST MODE."),
+        if (desktop) tr("QSO-LOG делится трансивером с JTDX и WSJT-X: включите в настройках CAT «Делиться трансивером», а в JTDX выберите Rig «Hamlib NET rigctl», 127.0.0.1:4532. Выключать CAT в журнале больше не нужно — программа ставит частоту, вид и включает передачу через QSO-LOG.")
+        else tr("QSO-LOG делится трансивером с другими программами (сервер Hamlib rigctld): включите в настройках CAT «Делиться трансивером» — JTDX или WSJT-X на компьютере подключаются к телефону по Wi-Fi."),
     )
 }
 

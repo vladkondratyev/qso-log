@@ -130,6 +130,11 @@ data class CatConfig(
     val sMeterToRst: Boolean = false,
     /** Band, mode and frequency changed in the new QSO card are sent to the radio too. */
     val control: Boolean = true,
+    /** QSO-LOG shares the radio with JTDX, WSJT-X and others as a Hamlib rigctld server (see [RigServer]). */
+    val serve: Boolean = false,
+    val servePort: Int = RigServer.DEFAULT_PORT,
+    /** The server takes programs on other computers of the network too, not only on this one. */
+    val serveLan: Boolean = false,
 ) {
     val model get() = Rigs.byName(rig)
     val protocol get() = model.protocol
@@ -139,6 +144,7 @@ data class CatConfig(
         "cat_baud" to baud.toString(), "cat_link" to link.name, "cat_device" to device, "cat_host" to host,
         "cat_port" to port.toString(), "cat_follow_freq" to followFreq.toString(), "cat_follow_mode" to followMode.toString(),
         "cat_smeter_rst" to sMeterToRst.toString(), "cat_control" to control.toString(),
+        "cat_serve" to serve.toString(), "cat_serve_port" to servePort.toString(), "cat_serve_lan" to serveLan.toString(),
     )
 
     companion object {
@@ -157,6 +163,9 @@ data class CatConfig(
                 followMode = m["cat_follow_mode"]?.toBooleanStrictOrNull() ?: d.followMode,
                 sMeterToRst = m["cat_smeter_rst"]?.toBooleanStrictOrNull() ?: d.sMeterToRst,
                 control = m["cat_control"]?.toBooleanStrictOrNull() ?: d.control,
+                serve = m["cat_serve"]?.toBooleanStrictOrNull() ?: d.serve,
+                servePort = m["cat_serve_port"]?.toIntOrNull()?.takeIf { it in 1..65535 } ?: d.servePort,
+                serveLan = m["cat_serve_lan"]?.toBooleanStrictOrNull() ?: d.serveLan,
             )
         }
 
@@ -286,6 +295,13 @@ fun CatStatus.describe(): String = when (this) {
     is CatStatus.Failed -> message
 }
 
+/** The server's line in the CAT settings. */
+fun RigServerStatus.describe(): String = when (this) {
+    RigServerStatus.Off -> tr("выключено")
+    is RigServerStatus.Listening -> if (clients == 0) tr("порт %s · жду программ", port) else tr("порт %s · подключено программ: %s", port, clients)
+    is RigServerStatus.Failed -> message
+}
+
 /** The radio's line in the QSO card: "14 074.000 · USB-D · S7", on transmit "14 074.000 · CW · TX 80% · SWR 1.3". */
 fun RigState.short(): String = listOfNotNull(
     freqHz?.let { CatFormat.khz(it) }, radioMode,
@@ -340,4 +356,6 @@ object BandPlan {
 sealed interface CatCommand {
     data class Freq(val hz: Long) : CatCommand
     data class Mode(val mode: RadioMode) : CatCommand
+    /** Transmit on or off: for programs that key the radio through QSO-LOG (JTDX, WSJT-X via the rigctld server). */
+    data class Ptt(val on: Boolean) : CatCommand
 }

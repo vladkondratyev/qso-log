@@ -15,13 +15,13 @@ class WhatsNewTest {
     }
 
     @Test
-    fun scalesAndOnlineLogsOnBoth() {
-        // 2.3.0: the meters on both; LoTW through TQSL on the computer, a file for TQSL on the phone.
+    fun locatorsAndServerOnBoth() {
+        // 2.4.0: VHF locators on both; the rigctld server — JTDX on this computer, or on another one for the phone.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Шкалы"))
-            assertTrue(WhatsNew.items(desktop = true).any { "QSO-LOG запускает его сам" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "файл, который подписывает TQSL" in it })
+            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Обмен QTH-локаторами"))
+            assertTrue(WhatsNew.items(desktop = true).any { "127.0.0.1:4532" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "Wi-Fi" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }
