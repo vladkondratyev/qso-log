@@ -24,6 +24,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.r3xed.qsolog.data.Adif
+import ru.r3xed.qsolog.data.Callsign
 import ru.r3xed.qsolog.digi.DigiConfig
 import ru.r3xed.qsolog.digi.DigiListener
 import ru.r3xed.qsolog.digi.DigiStatus
@@ -222,6 +223,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * the QRZ.com page (also when QRZ.ru does not know the callsign: foreign stations). Null: known to none of them.
      */
     private suspend fun qrzLookup(call: String, stillWanted: () -> Boolean = { true }): QrzInfo? {
+        // Callbooks know R0DEMO, not R0DEMO/P or DL/R0DEMO; the card keeps the callsign as typed.
+        val home = Callsign.home(call)
         if (!secretsReady) { secrets.await(); applySecrets() }
         var problem: Exception? = null
         // Some source answered that it does not know the callsign.
@@ -235,10 +238,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             null
         }
         // The XML API gives no RDA district: for a Russian station it is read from the callsign page of the site.
-        if (settings.qrzLogin.isNotBlank()) ask { qrz.lookup(call, stillWanted) }?.let { return qrzSite.withRda(it).copy(source = SearchSource.QRZ_RU.key) }
+        if (settings.qrzLogin.isNotBlank()) ask { qrz.lookup(home, stillWanted) }?.let { return qrzSite.withRda(it).copy(source = SearchSource.QRZ_RU.key) }
         // The QRZ.ru site is the same database as its XML API: asked only when the API is not set or failed.
-        if (settings.qrzSiteEmail.isNotBlank() && !notFound) ask { qrzSite.lookup(call) }?.let { return it.copy(source = SearchSource.QRZ_RU_SITE.key) }
-        if (settings.qrzComLogin.isNotBlank()) ask { qrzCom.lookup(call) }?.let { return it.copy(source = SearchSource.QRZ_COM.key) }
+        if (settings.qrzSiteEmail.isNotBlank() && !notFound) ask { qrzSite.lookup(home) }?.let { return it.copy(source = SearchSource.QRZ_RU_SITE.key) }
+        if (settings.qrzComLogin.isNotBlank()) ask { qrzCom.lookup(home) }?.let { return it.copy(source = SearchSource.QRZ_COM.key) }
         if (notFound) return null
         throw problem ?: QrzException(403, tr("Укажите учётную запись QRZ.ru в настройках"))
     }
@@ -1536,7 +1539,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The card was filled from the history: the station's data as it was found earlier. */
     private fun historyFallback(call: String, problem: String?): Lookup? {
         if (!historyOn) return null
-        val e = searchHistory.get(call) ?: return null
+        val e = searchHistory.get(call) ?: searchHistory.get(Callsign.home(call)) ?: return null
         val f = form
         if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && f.locator.isBlank()))) {
             form = f.copy(

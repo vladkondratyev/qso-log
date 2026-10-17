@@ -80,8 +80,9 @@ class QsoDb(context: Context) : SQLiteOpenHelper(context, "qsolog.db", null, 5),
 
     fun history(call: String, excludeId: Long = 0): CallHistory {
         val c = readableDatabase.rawQuery(
-            "SELECT * FROM qso WHERE call = ? AND id != ? ORDER BY time_utc DESC",
-            arrayOf(call.uppercase(), excludeId.toString())
+            // R0DEMO/P and DL/R0DEMO are the same station as R0DEMO.
+            "SELECT * FROM qso WHERE ${Callsign.sqlMatch("call")} AND id != ? ORDER BY time_utc DESC",
+            (Callsign.likeArgs(call) + excludeId.toString()).toTypedArray()
         )
         return c.use { CallHistory.of(buildList { while (it.moveToNext()) add(it.toQso()) }) }
     }

@@ -37,6 +37,14 @@ class QsoDbTest {
     }
 
     @Test
+    fun historyFindsPortableFormsOfTheStation() {
+        val db = QsoDb(tempDb())
+        for (c in listOf("R0DEMO", "R0DEMO/P", "DL/R0DEMO", "R0DEMO/9A", "R0DEMOX", "UR0DEMO")) db.save(Qso(call = c, timeUtc = 1_790_341_860_000))
+        assertEquals(4, db.history("R0DEMO/M").count)
+        assertEquals(4, db.history("R0DEMO").count)
+    }
+
+    @Test
     fun voiceNoteAndPendingMarkAreStored() {
         val db = QsoDb(tempDb())
         val id = db.save(Qso(call = "R5DEMO", timeUtc = 1_790_372_580_000, audio = "qso_20260925_214300.wav", pendingLookup = true))

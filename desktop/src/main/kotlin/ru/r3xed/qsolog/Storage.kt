@@ -4,6 +4,7 @@ import com.github.javakeyring.Keyring
 import ru.r3xed.qsolog.data.Adif
 import ru.r3xed.qsolog.data.AdifLabels
 import ru.r3xed.qsolog.data.CallHistory
+import ru.r3xed.qsolog.data.Callsign
 import ru.r3xed.qsolog.data.BANDS
 import ru.r3xed.qsolog.data.DEFAULT_BANDS
 import ru.r3xed.qsolog.data.MODES
@@ -111,9 +112,10 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) : SyncStore {
 
     @Synchronized
     fun history(call: String, excludeId: Long = 0): CallHistory =
-        conn.prepareStatement("SELECT * FROM qso WHERE call = ? AND id != ? ORDER BY time_utc DESC").use { st ->
-            st.setString(1, call.uppercase())
-            st.setLong(2, excludeId)
+        // R0DEMO/P and DL/R0DEMO are the same station as R0DEMO.
+        conn.prepareStatement("SELECT * FROM qso WHERE ${Callsign.sqlMatch("call")} AND id != ? ORDER BY time_utc DESC").use { st ->
+            Callsign.likeArgs(call).forEachIndexed { i, v -> st.setString(i + 1, v) }
+            st.setLong(5, excludeId)
             st.executeQuery().use { rs -> CallHistory.of(buildList { while (rs.next()) add(rs.toQso()) }) }
         }
 
