@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material3.AlertDialog
@@ -39,6 +40,7 @@ fun TransferDialog(
     total: Int,
     onExport: (ExportFormat) -> Unit,
     onUpload: () -> Unit,
+    onSelect: () -> Unit,
     onImportAdif: () -> Unit,
     onImportCsv: () -> Unit,
     onImportContest: () -> Unit,
@@ -55,6 +57,7 @@ fun TransferDialog(
                 Choice("ADIF", tr("для LogHX, UR5EQF, QRZ.com, LoTW"), Icons.Filled.FileUpload) { onExport(ExportFormat.ADIF) }
                 Choice("CSV", tr("таблица для Excel и Google Таблиц"), Icons.Filled.FileUpload) { onExport(ExportFormat.CSV) }
                 Choice(tr("ЕРМАК / Cabrillo"), tr("отчёт для соревнований"), Icons.Filled.FileUpload) { onExport(ExportFormat.CONTEST) }
+                Choice(tr("Часть журнала…"), tr("выбрать по датам, диапазонам и видам, потом «Экспорт»"), Icons.Filled.FilterList, onSelect)
                 Text(tr("Онлайн-журналы"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
                 Choice("LoTW · Club Log · QRZ.com", tr("выгрузить новые связи"), Icons.Filled.CloudUpload, onUpload)
                 Text(tr("Импорт в журнал"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
@@ -62,7 +65,7 @@ fun TransferDialog(
                 Choice("CSV", tr("таблица с разделителем «;»"), Icons.Filled.FileDownload, onImportCsv)
                 Choice(tr("ЕРМАК / Cabrillo"), tr("отчёт .txt или .cbr"), Icons.Filled.FileDownload, onImportContest)
                 Text(
-                    tr("Чтобы выгрузить только часть журнала, выберите записи долгим нажатием и нажмите «Экспорт». Повторы при импорте пропускаются."),
+                    tr("Часть журнала можно выбрать и вручную: долгим нажатием на запись (на компьютере — щелчком с ⌘/Ctrl), затем «Экспорт». Повторы при импорте пропускаются."),
                     style = MaterialTheme.typography.bodyMedium, color = x.muted,
                 )
             }

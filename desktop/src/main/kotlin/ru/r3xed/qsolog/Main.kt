@@ -249,6 +249,7 @@ fun main() {
                     Separator()
                     Item(tr("Экспорт в ЕРМАК / Cabrillo…"), onClick = { state.openContestExport(selectedOnly = false) })
                     Item(tr("Импорт из ЕРМАК / Cabrillo…"), onClick = importContest)
+                    Item(tr("Выбрать часть журнала…"), onClick = { state.showSelect = true })
                     Separator()
                     Item(tr("Дашборд"), shortcut = menuShortcut(KeyAction.DASHBOARD), onClick = state::dashboardOrDelete)
                     Item(tr("Карта QSO"), shortcut = menuShortcut(KeyAction.MAP), onClick = state::openMap)
@@ -257,6 +258,7 @@ fun main() {
                     Item(tr("Горячие клавиши") + KeyMap.label(KeyAction.KEYS_HELP, IS_MAC).ifEmpty { null }?.let { " ($it)" }.orEmpty(), onClick = { state.showKeys = true })
                     if (state.catConfig.enabled || state.rig != null) Item(tr("Пульт трансивера"), onClick = { state.showRigPanel = true })
                     Item(tr("Настройки"), shortcut = menuShortcut(KeyAction.SETTINGS), onClick = { state.openSettings() })
+                    Item(tr("Оборудование и программы…"), onClick = { state.openSettings(page = ru.r3xed.qsolog.SettingsPage.HARDWARE) })
                     // Shown once the table is set up in the settings; the sync runs only when asked.
                     if (ru.r3xed.qsolog.data.SheetSync.isScriptUrl(state.sheetUrl)) {
                         Item(tr("Синхронизировать"), enabled = !state.sheetSyncing, onClick = state::syncSheet)
@@ -369,11 +371,13 @@ fun App(state: AppState, files: Exports) {
                 total = state.total,
                 onExport = { format -> state.showTransfer = false; state.openExport(format, selectedOnly = false) },
                 onUpload = { state.showTransfer = false; state.openUpload(selectedOnly = false) },
+                onSelect = { state.showTransfer = false; state.showSelect = true },
                 onImportAdif = { state.showTransfer = false; files.importAdif() },
                 onImportCsv = { state.showTransfer = false; files.importCsv() },
                 onImportContest = { state.showTransfer = false; files.importContest() },
                 onDismiss = { state.showTransfer = false },
             )
+            if (state.showSelect) ru.r3xed.qsolog.ui.SelectDialog(state.allQsos, onPick = state::selectIds, onDismiss = { state.showSelect = false })
             // Not over the first-start setup: it waits until the log.
             if (state.showWhatsNew && state.pane != Pane.Welcome) ru.r3xed.qsolog.ui.WhatsNewDialog(APP_VERSION, desktop = true, onClose = state::closeWhatsNew)
             if (state.historyAsk) HistoryOnDialog(onConfirm = { state.changeHistoryOn(true) }, onDismiss = { state.historyAsk = false })

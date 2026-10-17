@@ -65,9 +65,10 @@ fun ContestExportDialog(
     var contest by remember { mutableStateOf(defaults.contest) }
     var operator by remember { mutableStateOf(defaults.categoryOperator) }
     var location by remember { mutableStateOf(defaults.location) }
-    var onlyNew by remember { mutableStateOf(true) }
+    // Picked records go out as picked: none dropped as already exported or as not entered in contest mode.
+    var onlyNew by remember { mutableStateOf(selected == null) }
     var mark by remember { mutableStateOf(true) }
-    var contestOnly by remember { mutableStateOf(hasContest) }
+    var contestOnly by remember { mutableStateOf(hasContest && selected == null) }
     var ref by remember { mutableStateOf(initialContest) }
     val n = { onlyNew: Boolean -> count(onlyNew, contestOnly, ref.takeIf { contestOnly }) }
     AlertDialog(

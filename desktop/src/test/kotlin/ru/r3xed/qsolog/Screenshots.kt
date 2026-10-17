@@ -119,6 +119,9 @@ fun main(args: Array<String>) {
             state.sort(SortBy.CALL)
             log().filter { it.call == "4K4DEMO" || it.call == "DL1DEMO" }.forEach { state.toggleSelected(it.id) }
             shot("07-select")
+            state.showSelect = true
+            shot("31-select-dialog", 1000)
+            state.showSelect = false
             state.clearSelection()
             state.sort(SortBy.DATE)
 
@@ -175,21 +178,23 @@ fun main(args: Array<String>) {
 
             state.pane = Pane.Settings
             shot("08-settings")
-            // The CAT block: fold the sources open by default, unfold CAT.
-            click(1150f, 286f)
-            click(1150f, 418f)
+            // The equipment page; then its first block, CAT, unfolded.
+            state.settingsPage = SettingsPage.HARDWARE
+            shot("32-settings-hardware", 1000)
+            click(1150f, 154f)
             big.sendPointerEvent(PointerEventType.Move, Offset(1900f, 1300f))
             shot("24-cat", 1000)
             // The WSJT-X block: fold CAT, unfold the next one; a heartbeat from a made-up WSJT-X fills the status line.
             state.changeDigi(state.digiConfig.copy(enabled = true))
             repeat(6) { frame(); delay(250) }
             fakeWsjtxHeartbeat(state.digiConfig.port)
-            click(1150f, 418f)
-            click(1150f, 550f)
+            click(1150f, 154f)
+            click(1150f, 286f)
             big.sendPointerEvent(PointerEventType.Move, Offset(1900f, 1300f))
             shot("25-wsjtx", 1500)
-            click(1150f, 550f)
+            click(1150f, 286f)
             state.changeDigi(state.digiConfig.copy(enabled = false))
+            state.settingsPage = SettingsPage.MAIN
             // Scroll the settings column to the bottom: version and project link.
             scrollRight(700)
             shot("09-about")

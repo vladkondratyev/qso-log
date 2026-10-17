@@ -154,18 +154,20 @@ fun CwSettings(vm: AppState) {
     Note(tr("Если CAT идёт через тот же COM-порт (один кабель CP2102 для CI-V и ключа), выберите его и здесь: порт будет общим."))
 }
 
-/**
- * Дополнительные настройки: the keys, and the programs started together with QSO-LOG.
- */
+/** The keys: any shortcut can be reassigned. */
 @Composable
-fun AdvancedSettings(vm: AppState) {
+fun KeysSettings(vm: AppState) {
     var keys by remember { mutableStateOf(false) }
     Section(tr("Клавиши"))
     Note(tr("Любое сочетание можно заменить своим: например, F9 вместо Ctrl+N, или клавиши, к которым вы привыкли в другом логгере. Список клавиш (F1) показывает уже ваши."))
     ActionButton(tr("Назначить клавиши"), Icons.Filled.Keyboard) { keys = true }
     if (vm.keymap.isNotEmpty()) Note(tr("Изменено действий: %s", vm.keymap.size))
+    if (keys) KeysEditor(vm) { keys = false }
+}
 
-    Section(tr("Запускать вместе с QSO-LOG"))
+/** The programs started together with QSO-LOG. */
+@Composable
+fun StartAppsSettings(vm: AppState) {
     vm.startApps.forEachIndexed { i, a ->
         fun upd(n: StartApp) = vm.changeStartApps(vm.startApps.toMutableList().also { it[i] = n })
         Column(
@@ -200,8 +202,6 @@ fun AdvancedSettings(vm: AppState) {
             vm.changeCat(vm.catConfig.copy(rig = ru.r3xed.qsolog.cat.Rigs.RIGCTLD, host = "127.0.0.1", port = 4532, link = ru.r3xed.qsolog.cat.CatLinkType.NETWORK))
         }
     })
-
-    if (keys) KeysEditor(vm) { keys = false }
 }
 
 /** A file dialog for a program: an .exe, a Mac .app, a script or a binary. */

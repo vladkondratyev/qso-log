@@ -85,3 +85,9 @@ val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 fun utc(ms: Long): LocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneOffset.UTC)
 
+
+/**
+ * The settings are two levels deep: the main page with what is changed often, and pages for the equipment and for the
+ * callbooks and online logs, opened from it.
+ */
+enum class SettingsPage { MAIN, HARDWARE, SOURCES }

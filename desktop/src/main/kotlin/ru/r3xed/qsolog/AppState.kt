@@ -230,6 +230,16 @@ class AppState {
         selected = qsos.map { it.id }.toSet()
     }
 
+    /** "Выбрать записи…" (by dates, bands, modes) is open. */
+    var showSelect by mutableStateOf(false)
+
+    /** The contacts found by "Выбрать записи…" become the selection, whatever the search shows. */
+    fun selectIds(ids: Set<Long>) {
+        showSelect = false
+        showTransfer = false
+        selected = ids
+    }
+
     fun clearSelection() {
         selected = emptySet()
     }
@@ -334,12 +344,20 @@ class AppState {
         pane = Pane.Empty
     }
 
-    fun openSettings(from: Pane = Pane.Empty) {
+    fun openSettings(from: Pane = Pane.Empty, page: SettingsPage = SettingsPage.MAIN) {
         // A fresh visit starts at the top.
         scope.launch { settingsScroll.scrollTo(0) }
+        settingsPage = page
+        settingsPageDirect = page != SettingsPage.MAIN
         settingsReturn = from
         pane = Pane.Settings
     }
+
+    /** Which settings page is open; Back (Esc) from the equipment or the callbooks returns to the main one. */
+    var settingsPage by mutableStateOf(SettingsPage.MAIN)
+
+    /** The page was opened straight away (a long press on TRX, the menu): Back returns to where that was. */
+    private var settingsPageDirect = false
 
     val settingsScroll = ScrollState(0)
 
@@ -353,6 +371,10 @@ class AppState {
     }
 
     fun closeSettings() {
+        if (settingsPage != SettingsPage.MAIN && !settingsPageDirect && pane == Pane.Settings) {
+            settingsPage = SettingsPage.MAIN
+            return
+        }
         pane = settingsReturn
         settingsReturn = Pane.Empty
         // Coming back to a card after entering the QRZ.ru account: look the callsign up now.

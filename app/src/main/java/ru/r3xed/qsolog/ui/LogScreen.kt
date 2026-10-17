@@ -66,6 +66,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.BarChart
@@ -512,11 +513,15 @@ private fun SelectionBar(vm: AppViewModel) {
         IconButton(onClick = vm::clearSelection, modifier = Modifier.size(56.dp)) {
             Icon(Icons.Filled.Close, tr("Отменить выбор"), Modifier.size(30.dp))
         }
+        // Three buttons share the row with it: a small label and the count, which always fits.
         Column(Modifier.weight(1f)) {
-            Text(tr("Выбрано: %s", vm.selected.size), style = MaterialTheme.typography.headlineSmall)
-            Text(tr("Нажимайте записи, чтобы добавить"), style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
+            Text(tr("выбрано"), style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted, maxLines = 1)
+            Text("${vm.selected.size}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1)
         }
-        IconButton(onClick = vm::selectAllShown, modifier = Modifier.size(52.dp)) {
+        IconButton(onClick = { vm.showSelect = true }, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Filled.FilterList, tr("Выбрать по датам, диапазонам, видам"), Modifier.size(28.dp))
+        }
+        IconButton(onClick = vm::selectAllShown, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.SelectAll, tr("Выбрать все"), Modifier.size(28.dp))
         }
         // Export of the picked records: ADIF, CSV or a contest report (ЕРМАК / Cabrillo), each via its dialog.

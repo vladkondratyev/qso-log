@@ -39,7 +39,8 @@ import ru.r3xed.qsolog.data.ExportFormat
 import ru.r3xed.qsolog.tr
 
 /**
- * Before an ADIF or CSV file is saved: only the contacts not exported to this format yet (the default) or all of them,
+ * Before an ADIF or CSV file is saved: only the contacts not exported to this format yet (the default for the whole log)
+ * or all of them (the default for picked records),
  * and whether to mark the exported cards. [selected] is the number of records picked in the log, null for the whole log.
  * For ADIF also the encoding: [utf8] true — UTF-8, false — Windows-1251 (LogHX, UR5EQF).
  * The same file is used by the phone and the desktop.
@@ -54,7 +55,8 @@ fun ExportDialog(
     utf8: Boolean = true,
     onUtf8: (Boolean) -> Unit = {},
 ) {
-    var onlyNew by remember { mutableStateOf(true) }
+    // Picked records go out as picked; "only new" is for exporting the whole log again and again.
+    var onlyNew by remember { mutableStateOf(selected == null) }
     var mark by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onDismiss,

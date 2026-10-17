@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.4.0 | [QSO-LOG-2.4.0.apk](../../releases/tag/v2.4.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.4.0 | [QSO-LOG-2.4.0-macos-arm64.dmg](../../releases/tag/desktop-v2.4.0) |
-| macOS 11 or newer, Intel | 2.4.0 | [QSO-LOG-2.4.0-macos-x64.dmg](../../releases/tag/desktop-v2.4.0) |
-| Windows 10 and 11, 64-bit | 2.4.0 | [QSO-LOG-2.4.0-windows-x64.zip](../../releases/tag/desktop-v2.4.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.4.0 | [QSO-LOG-2.4.0-linux-amd64.deb](../../releases/tag/desktop-v2.4.0) |
+| Android 8.0 or newer | 2.5.0 | [QSO-LOG-2.5.0.apk](../../releases/tag/v2.5.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.5.0 | [QSO-LOG-2.5.0-macos-arm64.dmg](../../releases/tag/desktop-v2.5.0) |
+| macOS 11 or newer, Intel | 2.5.0 | [QSO-LOG-2.5.0-macos-x64.dmg](../../releases/tag/desktop-v2.5.0) |
+| Windows 10 and 11, 64-bit | 2.5.0 | [QSO-LOG-2.5.0-windows-x64.zip](../../releases/tag/desktop-v2.5.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.5.0 | [QSO-LOG-2.5.0-linux-amd64.deb](../../releases/tag/desktop-v2.5.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -154,7 +154,7 @@ where the transceiver is. Tap the scale or drag along it, and the transceiver go
 The app never transmits by itself and keeps the CAT port's DTR and RTS lines low. A transceiver cannot tell digital
 modes apart, so in DATA (USB-D) the card keeps FT8, FT4 or whatever digital mode it has.
 
-Settings → **"CAT — transceiver"**: the model, the connection, the port speed and the CI-V address (if the radio does
+Settings → "Equipment and programs" → **"CAT — transceiver"** (or a long press on the TRX badge): the model, the connection, the port speed and the CI-V address (if the radio does
 not answer at the set address, the app tries the factory ones), and what the card takes. The status line shows what
 the transceiver answers right now.
 
@@ -183,7 +183,7 @@ in JTDX — Settings → Radio → Rig "Hamlib NET rigctl", Network Server `127.
 Operation "None" or "Fake It". The program sets the frequency and mode and keys the radio, while QSO-LOG still shows
 the frequency, the panel and the meters. If the program closes while transmitting, QSO-LOG puts the radio back to
 receive. With "Let in programs from other computers of the network", JTDX on a computer can use a transceiver
-connected to the phone. A separate Hamlib rigctld (Settings → "Additional settings" → "Add Hamlib rigctld") is only
+connected to the phone. A separate Hamlib rigctld (Settings → "Equipment and programs" → "Start together with QSO-LOG" → "Add Hamlib rigctld") is only
 needed when JTDX must work without QSO-LOG.
 
 <p>
@@ -206,7 +206,7 @@ while the QSO card (the usual or the contest one) is in CW; on a phone without a
 buttons under the frequency. **Esc** stops sending, **Alt+↑ / Alt+↓** change the speed (10–50 WPM). The keys can be
 reassigned.
 
-Settings → **"Telegraph (CW) — key on DTR/RTS"**: the adapter (through OTG on the phone), the key line, the speed, the
+Settings → "Equipment and programs" → **"Telegraph (CW) — key on DTR/RTS"**: the adapter (through OTG on the phone), the key line, the speed, the
 message texts, "The other line is PTT" for radios without break-in, and "Test: send VVV". If CAT uses the same
 adapter (one CP2102 cable for both CI-V and the key), choose it here too — the port is shared.
 
@@ -229,7 +229,7 @@ the network (UDP, port 2237), and QSO-LOG puts it into the log by itself: callsi
 Duplicates are not saved: WSJT-X reports a QSO twice (as fields and as an ADIF line), and it goes into the log once.
 Plain ADIF over UDP is taken as well.
 
-Settings → **“Digital modes — WSJT-X, JTDX, MSHV”** → “Take QSOs”. The status line shows whether the program is heard
+Settings → "Equipment and programs" → **“Digital modes — WSJT-X, JTDX, MSHV”** → “Take QSOs”. The status line shows whether the program is heard
 (“port 2237 · hearing WSJT-X v2.7.0”).
 
 - **Computer.** In WSJT-X: Settings → Reporting → UDP Server — `127.0.0.1`, port `2237`. A QSO is saved when you
@@ -251,7 +251,7 @@ Settings → **“Digital modes — WSJT-X, JTDX, MSHV”** → “Take QSOs”.
 ## Contest mode
 
 Contests need speed, so there is a separate mode. Switch it on in the ⋮ menu (below "Reference and calculators") — **CONTEST MODE**
-(also in Settings → "QSO entry", or Ctrl+K on a keyboard).
+(also in Settings → "Contests", or Ctrl+K on a keyboard).
 It turns off every time the app starts, so you don't keep your everyday log in it by accident.
 
 Under the switch you choose what to send:
@@ -319,7 +319,7 @@ A whole outing or contest can be done without touching the screen: on the comput
 tablet with an external one (Bluetooth or USB OTG). Handy in the field: phone on a stand, small keyboard on your lap.
 With an external keyboard attached, the built-in on-screen keyboard hides and the cursor is in the callsign.
 
-All the keys below are the defaults: any of them can be replaced in Settings → "Additional settings" → "Assign keys"
+All the keys below are the defaults: any of them can be replaced in Settings → "Interface" → "Assign keys"
 (since 2.2.0), and the key list (F1) then shows yours.
 
 It works as in classic loggers (on the phone since 0.40.0, on the computer since 2.0.0): **Space** goes round the fields: callsign → RST sent →
@@ -435,6 +435,7 @@ A microphone icon means the QSO has a voice note.
 - **Sorting**: by date, distance, callsign or band. A second tap on the same button reverses the order.
 - A QSO saved without internet has a ⟳ button. Tap it when you are online and the QRZ.ru data is filled in.
 - Select several QSOs with a long press (on the computer also Ctrl-click or ⌘-click) and export them with "Export".
+  The filter button next to it selects the QSOs of a period, bands and modes (since 2.5.0).
 - A QSO is deleted only from its card. The app asks first, and after deleting you can still tap "Undo".
 - The ⋮ button in the top right opens the menu: settings, dashboard, QSO map, search history, reference.
 
@@ -497,7 +498,7 @@ What you can do:
 ## Station data
 
 The app looks for the other station's name, city and position in four places, in this order. All of them are set up
-in Settings → "Station data sources".
+in Settings → "Callbooks and online logs" → "Station data sources".
 
 1. **QRZ.ru XML API.** The main way, meant by QRZ.ru for logging programs. QRZ.ru issues a separate API login:
    on qrz.ru open your personal data, section "XML API", "Create account"
@@ -531,7 +532,7 @@ worked on OpenStreetMap; a tap on a point opens the last QSO with that station.
 
 ## Export and import
 
-All formats are in one window: ⋮ menu → **"Export and import…"** (the same buttons are in Settings → "Logbook").
+All formats are in one window: ⋮ menu → **"Export and import…"** (on the computer, the "File" menu; Settings → "Logbook" has a button for the same window).
 
 - **ADIF** (.adi) for LogHX, UR5EQF, HamLog, N1MM, QRZ.com and others, and for moving the log between phone and
   computer. Choose UTF-8 or Windows-1251 when exporting; on import the encoding is detected and all fields are kept.
@@ -539,8 +540,18 @@ All formats are in one window: ⋮ menu → **"Export and import…"** (the same
 - **Cabrillo 3.0** for international contests and **ЕРМАК** ([ermak.srr.ru](https://ermak.srr.ru/)) for Russian
   ones. The app asks for the contest code and category first.
 
-The whole log is exported from Settings → "Logbook"; selected QSOs with "Export" in the log. Before saving you choose
-whether to take only QSOs not yet exported in this format, and whether to mark them as exported. The marks are shown
+To export part of the log (since 2.5.0), press **"Part of the log…"** in the "Export and import" window (on the computer,
+"File" → "Select part of the log…"): a period (today, 7 days, 30 days, this year or your own UTC dates), bands and
+modes. The matching QSOs become selected in the log — tap to add or remove — and "Export" saves just them. QSOs can
+also be picked by hand with a long press. Selected QSOs are all exported: "All selected" is the default, and the
+ЕРМАК / Cabrillo dialog does not switch on "Only contest-mode QSOs" for them.
+
+<p>
+<img src="docs/screenshots/82-select-dialog.png" width="200" alt="Selecting part of the log: period, bands, modes">
+</p>
+
+Before saving you choose whether to take only QSOs not yet exported in this format (the default for the whole log),
+and whether to mark them as exported. The marks are shown
 at the bottom of the card, and coloured dots next to the time in the log: blue ADIF, green CSV, orange contest report.
 Every QSO has a permanent GUID (ADIF `APP_QSOLOG_UID`), so duplicates are skipped on import.
 
@@ -559,7 +570,7 @@ them. The mark with date and time shows in the QSO card; take it off and the QSO
   the phone: QSO-LOG saves an ADIF file you sign in TQSL on a computer ("Sign a log and upload it"), and the QSOs
   are marked "saved for TQSL".
 
-The accounts are in Settings → **"Online logbooks: LoTW, Club Log, QRZ.com"**. The password and keys are stored
+The accounts are in Settings → "Callbooks and online logs" → **"Online logbooks: LoTW, Club Log, QRZ.com"**. The password and keys are stored
 encrypted (Android's keystore on the phone, the system keychain on the computer).
 
 <p>
@@ -622,20 +633,24 @@ understood), and assignment: press "Assign" and then the key, so an adapter send
 
 ## Settings
 
-Settings are grouped in blocks; each header says briefly what is chosen. My station; station data sources; QSO entry
-(time, keyboard and its hold time, keep the screen on, CONTEST MODE); bands and modes shown in the card; language (system, Russian, English — changes at once);
-theme; online logbooks (LoTW, Club Log, QRZ.com accounts); additional settings (since 2.2.0: "Assign keys" — any key of an external keyboard can be replaced, added or
-taken off; "Start together with QSO-LOG" — on the phone, apps such as FT8CN or an SDR app that open with QSO-LOG and
-keep running in the background while QSO-LOG comes back in front; on the computer, any programs with their arguments,
-such as JTDX, WSJT-X or Hamlib rigctld, not opened twice and optionally closed with QSO-LOG); logbook (export, import,
-sync — its header says whether Google sync is on, delete all). At the bottom: version, "What's new", "Report a problem" and
+Since 2.5.0 the settings are two levels deep; each block header says briefly what is chosen. The main page: My station;
+QSO entry (time, keyboard and its hold time); Contests (CONTEST MODE, what is sent, locator exchange); bands and modes
+shown in the card; **Equipment and programs ›** — a page with CAT, digital modes, CW and "Start together with QSO-LOG"
+(on the phone, apps such as FT8CN or an SDR app that open with QSO-LOG and keep running in the background while QSO-LOG
+comes back in front; on the computer, any programs with their arguments, such as JTDX, WSJT-X or Hamlib rigctld, not
+opened twice and optionally closed with QSO-LOG; the page also opens with a long press on the TRX badge on the phone,
+and from "File" → "Equipment and programs…" on the computer); **Callbooks and online logs ›** — a page with the station
+data sources and the LoTW, Club Log and QRZ.com accounts; logbook ("Export and import…", "Select part of the log…",
+sync — its header says whether Google sync is on, delete all); interface (language: system, Russian, English — changes
+at once; theme; keep the screen on (phone); "Assign keys" — any key of an external keyboard can be replaced, added or
+taken off). At the bottom: version, "What's new", "Report a problem" and
 "Check for updates". "Report a problem" opens a new GitHub issue in the browser with a template, the app version and
 the device model — no log, callsign or passwords; you send it yourself (a GitHub account is needed).
 
 <p>
 <img src="docs/screenshots/en-03-language.png" width="200" alt="Language">
 <img src="docs/screenshots/11-dark.png" width="200" alt="Dark theme">
-<img src="docs/screenshots/76-advanced.png" width="200" alt="Additional settings: keys and auto-start">
+<img src="docs/screenshots/81-settings-hardware.png" width="200" alt="Equipment and programs">
 <img src="docs/screenshots/77-keys-editor.png" width="200" alt="Assigning keys">
 </p>
 
@@ -666,21 +681,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.4.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.4.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.5.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.5.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.4.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.4.0), unpack the
+Download `QSO-LOG-2.5.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.5.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.4.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.4.0) and install it:
+Download `QSO-LOG-2.5.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.5.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.4.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.5.0-linux-amd64.deb
 ```
 
 ## Where the data is kept

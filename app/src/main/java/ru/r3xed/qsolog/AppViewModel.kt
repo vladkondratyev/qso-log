@@ -271,6 +271,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         selected = qsos.map { it.id }.toSet()
     }
 
+    /** "Выбрать записи…" (by dates, bands, modes) is open. */
+    var showSelect by mutableStateOf(false)
+
+    /** The contacts found by "Выбрать записи…" become the selection, whatever the search shows. */
+    fun selectIds(ids: Set<Long>) {
+        showSelect = false
+        showTransfer = false
+        selected = ids
+        // The picked records are seen, and exported, from the log.
+        if (screen == Screen.Settings) {
+            settingsPage = SettingsPage.MAIN
+            closeSettings()
+        }
+    }
+
     fun clearSelection() {
         selected = emptySet()
     }
@@ -596,14 +611,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         screen = Screen.Log
     }
 
-    fun openSettings(from: Screen = Screen.Log) {
+    fun openSettings(from: Screen = Screen.Log, page: SettingsPage = SettingsPage.MAIN) {
         // A fresh visit starts at the top.
         viewModelScope.launch { settingsScroll.scrollTo(0) }
+        settingsPage = page
+        settingsPageDirect = page != SettingsPage.MAIN
         settingsReturn = from
         screen = Screen.Settings
     }
 
+    /** Which settings page is open; Back from the equipment or the callbooks returns to the main one. */
+    var settingsPage by mutableStateOf(SettingsPage.MAIN)
+
+    /** The page was opened straight away (a long press on TRX, the menu): Back returns to where that was. */
+    private var settingsPageDirect = false
+
     fun closeSettings() {
+        if (settingsPage != SettingsPage.MAIN && !settingsPageDirect && screen == Screen.Settings) {
+            settingsPage = SettingsPage.MAIN
+            return
+        }
         screen = settingsReturn
         settingsReturn = Screen.Log
         // Coming back to a card after entering the QRZ.ru account: look the callsign up now.

@@ -15,13 +15,14 @@ class WhatsNewTest {
     }
 
     @Test
-    fun locatorsAndServerOnBoth() {
-        // 2.4.0: VHF locators on both; the rigctld server — JTDX on this computer, or on another one for the phone.
+    fun settingsAndPartOfTheLogOnBoth() {
+        // 2.5.0: the settings pages on both; picking part of the log — from "Файл" on the computer, from the export window on the phone.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Обмен QTH-локаторами"))
-            assertTrue(WhatsNew.items(desktop = true).any { "127.0.0.1:4532" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "Wi-Fi" in it })
+            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Настройки стали короче"))
+            assertTrue(WhatsNew.items(desktop = true).any { "«Файл»" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "TRX" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "/P" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

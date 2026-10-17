@@ -1,5 +1,8 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import ru.r3xed.qsolog.SettingsPage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
@@ -29,6 +32,7 @@ import ru.r3xed.qsolog.tr
  * a grey or red one with the reason when it does not. Without CAT, the dial WSJT-X or JTDX reports ("JTDX 14 074.000 ·
  * FT8"). A tap opens the transceiver panel.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RigBadge(vm: AppViewModel, modifier: Modifier = Modifier) {
     val rig = vm.rig
@@ -38,7 +42,12 @@ fun RigBadge(vm: AppViewModel, modifier: Modifier = Modifier) {
     val bad = vm.catConfig.enabled && rig == null && (st is CatStatus.Failed || (st is CatStatus.Connected && st.silent))
     Row(
         modifier.clip(RoundedCornerShape(10.dp)).background(x.field)
-            .clickable(onClickLabel = tr("Пульт трансивера")) { vm.showRigPanel = true }
+            // A long press goes straight to the CAT settings (the equipment page), back to here after.
+            .combinedClickable(
+                onClickLabel = tr("Пульт трансивера"),
+                onLongClickLabel = tr("Настройки CAT"),
+                onLongClick = { vm.openSettings(from = vm.screen, page = SettingsPage.HARDWARE) },
+            ) { vm.showRigPanel = true }
             .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

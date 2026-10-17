@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.BarChart
@@ -468,9 +469,15 @@ private fun SelectionBar(state: AppState, onExport: () -> Unit) {
         IconButton(onClick = state::clearSelection, modifier = Modifier.size(56.dp)) {
             Icon(Icons.Filled.Close, tr("Отменить выбор (Esc)"), Modifier.size(30.dp))
         }
+        // Three buttons share the row with it: a small label and the count, which always fits.
         Column(Modifier.weight(1f)) {
-            Text(tr("Выбрано: %s", state.selected.size), style = MaterialTheme.typography.headlineSmall)
-            Text(tr("Щёлкайте записи, чтобы добавить"), style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted)
+            Text(tr("выбрано"), style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted, maxLines = 1)
+            Text("${state.selected.size}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+        Tip(tr("Выбрать по датам, диапазонам, видам")) {
+            IconButton(onClick = { state.showSelect = true }, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Filled.FilterList, tr("Выбрать по датам, диапазонам, видам"), Modifier.size(28.dp))
+            }
         }
         Tip(tr("Выбрать все")) {
             IconButton(onClick = state::selectAllShown, modifier = Modifier.size(52.dp)) {

@@ -150,18 +150,19 @@ fun CwSettings(vm: AppViewModel) {
     Note(tr("Если CAT идёт через тот же адаптер (один кабель CP2102 для CI-V и ключа), выберите его и здесь: порт будет общим."))
 }
 
-/**
- * Дополнительные настройки: the keys of an external keyboard, and the apps started together with QSO-LOG.
- */
+/** The keys of an external keyboard: any shortcut can be reassigned. */
 @Composable
-fun AdvancedSettings(vm: AppViewModel, onLaunchApps: () -> Unit) {
-    var pick by remember { mutableStateOf(false) }
+fun KeysSettings(vm: AppViewModel) {
     Section(tr("Клавиши внешней клавиатуры"))
     Note(tr("Любое сочетание можно заменить своим: например, F9 вместо Ctrl+N, или клавиши, к которым вы привыкли в другом логгере. Список клавиш (F1) показывает уже ваши."))
     ActionButton(tr("Назначить клавиши"), Icons.Filled.Keyboard) { vm.showKeysEditor = true }
     if (vm.keymap.isNotEmpty()) Note(tr("Изменено действий: %s", vm.keymap.size))
+}
 
-    Section(tr("Запускать вместе с QSO-LOG"))
+/** The apps started together with QSO-LOG. */
+@Composable
+fun StartAppsSettings(vm: AppViewModel, onLaunchApps: () -> Unit) {
+    var pick by remember { mutableStateOf(false) }
     vm.startApps.forEach { a ->
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
