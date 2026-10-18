@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,6 +69,7 @@ import androidx.compose.ui.window.DialogProperties
 import ru.r3xed.qsolog.AppViewModel
 import ru.r3xed.qsolog.cw.CwConfig
 import ru.r3xed.qsolog.cw.CwLine
+import ru.r3xed.qsolog.cw.CwVia
 import ru.r3xed.qsolog.cw.CwMacros
 import ru.r3xed.qsolog.cw.CwState
 import ru.r3xed.qsolog.data.StartApp
@@ -94,7 +96,9 @@ private fun SwitchLine(text: String, on: Boolean, strong: Boolean = false, onCha
 
 /** The summary line of the telegraph block. */
 fun cwSummary(vm: AppViewModel): String =
-    if (!vm.cwConfig.enabled) tr("выключено") else tr("ключ на %s · %s WPM", vm.cwConfig.line.name, vm.cwConfig.wpm) +
+    if (!vm.cwConfig.enabled) tr("выключено")
+    else (if (vm.cwConfig.via == CwVia.CWDAEMON) tr("cwdaemon %s · %s WPM", vm.cwConfig.daemon.ifBlank { "?" }, vm.cwConfig.wpm)
+    else tr("ключ на %s · %s WPM", vm.cwConfig.line.name, vm.cwConfig.wpm)) +
         ((vm.cwState as? CwState.Failed)?.let { " · " + it.message } ?: "")
 
 /**
@@ -106,27 +110,46 @@ fun CwSettings(vm: AppViewModel) {
     val c = vm.cwConfig
     SwitchLine(tr("Передавать телеграфом с клавиш F1–F8"), c.enabled, strong = true) { vm.changeCw(c.copy(enabled = it)) }
     (vm.cwState as? CwState.Failed)?.let { Text(it.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
-    Section(tr("USB-адаптер ключа"))
-    var tick by remember { mutableStateOf(0) }
-    val devices = remember(tick) { vm.catUsbDevices() }
-    DeviceList(devices, c.device, tr("USB-адаптеров не видно. Подключите адаптер (CP2102, CH340, FTDI) через OTG и нажмите «Обновить список».")) { vm.changeCw(c.copy(device = it)) }
-    ActionButton(tr("Обновить список"), Icons.Filled.Refresh) { tick++ }
-    Section(tr("Линия ключа"))
+    Section(tr("Чем замыкать ключ"))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        CwLine.entries.forEach { l ->
-            val on = c.line == l
+        listOf(CwVia.SERIAL to tr("Линия адаптера"), CwVia.CWDAEMON to tr("cwdaemon по сети")).forEach { (v, title) ->
+            val on = c.via == v
             Box(
                 Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp))
                     .background(if (on) MaterialTheme.colorScheme.primary else LocalExtra.current.field)
-                    .selectable(selected = on, role = Role.RadioButton) { vm.changeCw(c.copy(line = l)) },
+                    .selectable(selected = on, role = Role.RadioButton) { vm.changeCw(c.copy(via = v)) },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(l.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
             }
         }
     }
-    SwitchLine(tr("Вторая линия — PTT на время передачи"), c.ptt) { vm.changeCw(c.copy(ptt = it)) }
-    SwitchLine(tr("Инвертировать линию ключа"), c.invert) { vm.changeCw(c.copy(invert = it)) }
+    if (c.via == CwVia.CWDAEMON) {
+        SettingField(tr("Адрес cwdaemon: IP или имя, порт через «:» (по умолчанию 6789)"), c.daemon, { vm.changeCw(c.copy(daemon = it.trim())) }, mono = true)
+        Note(tr("cwdaemon работает на компьютере, к которому подключён трансивер (Linux, Raspberry Pi: sudo apt install cwdaemon), и манипулирует ключом через свой COM- или LPT-порт. QSO-LOG передаёт ему текст сообщений и скорость по UDP, Esc останавливает передачу. Пример запуска: cwdaemon -d ttyUSB0 -p 6789. Если ключ не работает, проверьте, что порт 6789/UDP открыт в брандмауэре."))
+    } else {
+        Section(tr("USB-адаптер ключа"))
+        var tick by remember { mutableStateOf(0) }
+        val devices = remember(tick) { vm.catUsbDevices() }
+        DeviceList(devices, c.device, tr("USB-адаптеров не видно. Подключите адаптер (CP2102, CH340, FTDI) через OTG и нажмите «Обновить список».")) { vm.changeCw(c.copy(device = it)) }
+        ActionButton(tr("Обновить список"), Icons.Filled.Refresh) { tick++ }
+        Section(tr("Линия ключа"))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CwLine.entries.forEach { l ->
+                val on = c.line == l
+                Box(
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp))
+                        .background(if (on) MaterialTheme.colorScheme.primary else LocalExtra.current.field)
+                        .selectable(selected = on, role = Role.RadioButton) { vm.changeCw(c.copy(line = l)) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(l.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+        SwitchLine(tr("Вторая линия — PTT на время передачи"), c.ptt) { vm.changeCw(c.copy(ptt = it)) }
+        SwitchLine(tr("Инвертировать линию ключа"), c.invert) { vm.changeCw(c.copy(invert = it)) }
+    }
     Section(tr("Скорость: %s WPM", c.wpm))
     Slider(
         value = c.wpm.toFloat(), onValueChange = { vm.changeCw(c.copy(wpm = it.toInt())) },
@@ -146,8 +169,10 @@ fun CwSettings(vm: AppViewModel) {
     Note(CwMacros.HELP)
     ActionButton(tr("Проверить: передать «VVV»"), Icons.Filled.PlayArrow) { vm.testCw() }
     Note(tr("Сообщения передаются, когда в карточке QSO выбран вид CW: клавиши F1–F8 (их можно переназначить в «Дополнительных настройках»), кнопки под частотой, Esc — остановить, Alt+↑ и Alt+↓ — скорость. Так работает N1MM: программа замыкает ключ линией DTR или RTS USB-адаптера."))
-    Note(tr("Xiegu G90 и другие трансиверы, у которых ключ замыкается на массу: у адаптера CP2102 выводы DTR и RTS при передаче опускаются в 0 В. Соедините вывод с «точкой» (или прямым ключом) гнезда KEY через транзистор или оптрон (PC817), массу — с массой. В меню трансивера выберите прямой ключ (Straight). Если ключ замкнут без передачи, включите «Инвертировать»."))
-    Note(tr("Если CAT идёт через тот же адаптер (один кабель CP2102 для CI-V и ключа), выберите его и здесь: порт будет общим."))
+    if (c.via == CwVia.SERIAL) {
+        Note(tr("Xiegu G90 и другие трансиверы, у которых ключ замыкается на массу: у адаптера CP2102 выводы DTR и RTS при передаче опускаются в 0 В. Соедините вывод с «точкой» (или прямым ключом) гнезда KEY через транзистор или оптрон (PC817), массу — с массой. В меню трансивера выберите прямой ключ (Straight). Если ключ замкнут без передачи, включите «Инвертировать»."))
+        Note(tr("Если CAT идёт через тот же адаптер (один кабель CP2102 для CI-V и ключа), выберите его и здесь: порт будет общим."))
+    }
 }
 
 /** The keys of an external keyboard: any shortcut can be reassigned. */
@@ -173,7 +198,29 @@ fun StartAppsSettings(vm: AppViewModel, onLaunchApps: () -> Unit) {
     }
     ActionButton(tr("Добавить приложение"), Icons.Filled.Add) { pick = true }
     if (vm.startApps.any { it.enabled }) ActionButton(tr("Запустить сейчас"), Icons.Filled.PlayArrow, onLaunchApps)
-    Note(tr("При запуске QSO-LOG откроет отмеченные приложения (например, FT8CN, программу для SDR или Bluetooth-адаптера) и сразу вернётся на свой экран, а они продолжат работать в фоне — их видно в списке недавних приложений. Приложения запускаются один раз — при открытии QSO-LOG, а не при каждом повороте экрана."))
+    if (vm.startApps.isNotEmpty()) SwitchLine(tr("Сразу возвращаться в QSO-LOG"), vm.startAppsReturn, onChange = vm::changeStartAppsReturn)
+    Note(tr("При запуске QSO-LOG откроет отмеченные приложения (например, FT8CN, программу для SDR или Bluetooth-адаптера) и сразу вернётся на свой экран, а они продолжат работать в фоне — их видно в списке недавних приложений. Приложения запускаются один раз — при открытии QSO-LOG, а не при каждом повороте экрана. Если телефон спрашивает разрешение на запуск или приложение не успевает открыться, выключите «Сразу возвращаться»: тогда последнее приложение останется на экране, а в QSO-LOG вы вернётесь кнопкой «Назад» или из недавних."))
+    // Xiaomi, Redmi, Poco: the start of other apps needs the system's own permission.
+    if (ru.r3xed.qsolog.data.Miui.isMiui) {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        // Checked again when the user comes back from the system's settings.
+        var allowed by remember { mutableStateOf(ru.r3xed.qsolog.data.Miui.backgroundStartAllowed(context)) }
+        val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+        androidx.compose.runtime.DisposableEffect(owner) {
+            val o = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) allowed = ru.r3xed.qsolog.data.Miui.backgroundStartAllowed(context)
+            }
+            owner.lifecycle.addObserver(o)
+            onDispose { owner.lifecycle.removeObserver(o) }
+        }
+        if (allowed != true) {
+            Note(
+                (if (allowed == false) tr("Xiaomi не даёт QSO-LOG открывать другие приложения. ") else tr("На Xiaomi, Redmi и Poco нужно разрешение системы. ")) +
+                    tr("Откройте разрешения QSO-LOG («Другие разрешения») и включите «Отображать всплывающие окна, когда запущено в фоновом режиме» (и «Открывать новые окна в фоновом режиме», если есть). Для запускаемых приложений в их настройках включите «Автозапуск»."),
+            )
+            ActionButton(tr("Открыть разрешения QSO-LOG"), Icons.Filled.Settings) { ru.r3xed.qsolog.data.Miui.openPermissions(context) }
+        }
+    }
 
     if (pick) AppPicker(vm, onPick = { a ->
         pick = false

@@ -20,6 +20,7 @@ import java.time.format.DateTimeFormatter
 enum class OnlineLog(val title: String, val statusField: String, val dateField: String) {
     LOTW("LoTW", "LOTW_QSL_SENT", "LOTW_QSLSDATE"),
     QRZCOM("QRZ.com", "QRZCOM_QSO_UPLOAD_STATUS", "QRZCOM_QSO_UPLOAD_DATE"),
+    EQSL("eQSL", "EQSL_QSL_SENT", "EQSL_QSLSDATE"),
     CLUBLOG("Club Log", "CLUBLOG_QSO_UPLOAD_STATUS", "CLUBLOG_QSO_UPLOAD_DATE"),
     ;
 
@@ -57,13 +58,14 @@ enum class OnlineLog(val title: String, val statusField: String, val dateField: 
         private val SHOW_TIME = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
         private val SHOW_DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
-        /** Every field the upload marks use; the card shows them in their own block. */
-        val FIELDS: Set<String> = entries.flatMap { listOf(it.statusField, it.dateField, it.timeField) }.toSet()
+        /** Every field the upload marks (and the eQSL confirmations) use; the card shows them in their own block. */
+        val FIELDS: Set<String> = entries.flatMap { listOf(it.statusField, it.dateField, it.timeField) }.toSet() + Eqsl.RCVD_FIELDS
     }
 }
 
 /**
  * The accounts of the online logbooks (Настройки → «Онлайн-журналы»). [qrzcomKey] — the API key of the QRZ.com logbook;
+ * eQSL takes its own login (the callsign), password and, for several accounts of one callsign, the QTH Nickname;
  * Club Log wants the account's e-mail and password and an application key it gives on request ([clublogAppKey]);
  * LoTW goes through ARRL's TQSL: on the computer it is run with the Station Location [lotwLocation], on the phone the
  * contacts are saved to a file that TQSL signs.
@@ -75,26 +77,36 @@ data class OnlineConfig(
     val clublogAppKey: String = "",
     val lotwLocation: String = "",
     val tqslPath: String = "",
+    val eqslUser: String = "",
+    val eqslPassword: String = "",
+    val eqslNickname: String = "",
 ) {
     /** What is missing for [log], or null when it can be sent (LoTW: see the platform's own check). */
     fun problem(log: OnlineLog, myCall: String): String? = when (log) {
         OnlineLog.QRZCOM -> if (qrzcomKey.isBlank()) tr("Укажите API-ключ журнала QRZ.com") else null
         OnlineLog.CLUBLOG -> if (clublogEmail.isBlank() || clublogPassword.isBlank() || clublogAppKey.isBlank() || myCall.isBlank())
             tr("Укажите e-mail, пароль и ключ приложения Club Log и свой позывной") else null
+        OnlineLog.EQSL -> if (eqslUser.isBlank() || eqslPassword.isBlank()) tr("Укажите логин и пароль eQSL") else null
         OnlineLog.LOTW -> null
     }
 
-    fun publicMap(): Map<String, String> = mapOf("clublog_email" to clublogEmail, "lotw_location" to lotwLocation, "tqsl_path" to tqslPath)
-    fun secretMap(): Map<String, String> = mapOf("qrzcom_key" to qrzcomKey, "clublog_password" to clublogPassword, "clublog_key" to clublogAppKey)
+    fun publicMap(): Map<String, String> = mapOf(
+        "clublog_email" to clublogEmail, "lotw_location" to lotwLocation, "tqsl_path" to tqslPath,
+        "eqsl_user" to eqslUser, "eqsl_nickname" to eqslNickname,
+    )
+    fun secretMap(): Map<String, String> = mapOf(
+        "qrzcom_key" to qrzcomKey, "clublog_password" to clublogPassword, "clublog_key" to clublogAppKey, "eqsl_password" to eqslPassword,
+    )
 
     companion object {
-        val PUBLIC_KEYS = listOf("clublog_email", "lotw_location", "tqsl_path")
-        val SECRET_KEYS = listOf("qrzcom_key", "clublog_password", "clublog_key")
+        val PUBLIC_KEYS = listOf("clublog_email", "lotw_location", "tqsl_path", "eqsl_user", "eqsl_nickname")
+        val SECRET_KEYS = listOf("qrzcom_key", "clublog_password", "clublog_key", "eqsl_password")
 
         fun from(m: Map<String, String?>) = OnlineConfig(
             qrzcomKey = m["qrzcom_key"].orEmpty(), clublogEmail = m["clublog_email"].orEmpty(),
             clublogPassword = m["clublog_password"].orEmpty(), clublogAppKey = m["clublog_key"].orEmpty(),
             lotwLocation = m["lotw_location"].orEmpty(), tqslPath = m["tqsl_path"].orEmpty(),
+            eqslUser = m["eqsl_user"].orEmpty(), eqslPassword = m["eqsl_password"].orEmpty(), eqslNickname = m["eqsl_nickname"].orEmpty(),
         )
     }
 }
@@ -148,23 +160,49 @@ object OnlineLogs {
         UploadResult(sent, dupes, null)
     }
 
+    // ---------- eQSL: https://www.eqsl.cc/qslcard/ImportADIF.txt ----------
+
+    /** The "Result: 3 out of 4 records added", the duplicates and the first "Error: …" of the ImportADIF answer. */
+    data class EqslAnswer(val added: Int?, val duplicates: Int, val error: String?)
+
+    fun parseEqsl(html: String): EqslAnswer {
+        val text = html.replace(Regex("<[^>]+>"), "\n")
+        val added = Regex("Result:\\s*(\\d+)\\s+out of\\s+(\\d+)", RegexOption.IGNORE_CASE).find(text)?.groupValues?.get(1)?.toIntOrNull()
+        val dupes = Regex("Duplicate", RegexOption.IGNORE_CASE).findAll(text).count()
+        val error = Regex("Error:\\s*([^\\n]+)", RegexOption.IGNORE_CASE).find(text)?.groupValues?.get(1)?.trim()
+        return EqslAnswer(added, dupes, error)
+    }
+
+    /** The file goes as a form upload; a duplicate counts as sent (eQSL already has the contact). */
+    suspend fun uploadEqsl(user: String, password: String, nickname: String, list: List<Qso>, agent: String): UploadResult = withContext(Dispatchers.IO) {
+        val nick = nickname.trim()
+        val adif = file(list) { if (nick.isEmpty()) "" else "<APP_EQSL_QTH_NICKNAME:${nick.toByteArray(Charsets.UTF_8).size}>$nick" }
+        val (body, type) = multipart(listOf("EQSL_USER" to user.trim(), "EQSL_PSWD" to password), "Filename", "qsolog.adi", adif.toByteArray(Charsets.UTF_8))
+        val (code, page) = try {
+            post("https://www.eqsl.cc/qslcard/ImportADIF.cfm", body, agent, type)
+        } catch (e: Exception) {
+            return@withContext UploadResult(emptyList(), 0, netError("eQSL", e))
+        }
+        if (code != 200) return@withContext UploadResult(emptyList(), 0, tr("eQSL ответил %s, попробуйте позже", code))
+        val a = parseEqsl(page)
+        when {
+            // A wrong login is an "Error:" with no "Result:"; per-record warnings (duplicates) come with a result.
+            a.added == null -> UploadResult(emptyList(), 0, tr("eQSL: %s", a.error ?: tr("неожиданный ответ сервера")))
+            // Records after a failing one are not taken: then only the added ones (and the duplicates) count as sent.
+            a.error != null -> UploadResult(list.sortedBy { it.timeUtc }.take(a.added + a.duplicates), a.duplicates, tr("eQSL: %s", a.error))
+            else -> UploadResult(list, a.duplicates, null)
+        }
+    }
+
     // ---------- Club Log: https://clublog.freshdesk.com/support/solutions/articles/3000064883 ----------
 
     /** Club Log wants an application key per program; the user enters one (see the settings). */
     suspend fun uploadClubLog(email: String, password: String, callsign: String, appKey: String, list: List<Qso>, agent: String): UploadResult =
         withContext(Dispatchers.IO) {
-            val boundary = "qsolog" + System.nanoTime()
-            val out = ByteArrayOutputStream()
-            fun part(name: String, value: String) {
-                out.write("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n".toByteArray())
-            }
-            part("email", email.trim()); part("password", password); part("callsign", callsign.trim().uppercase())
-            part("api", appKey.trim()); part("clear", "0")
-            out.write("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"qsolog.adi\"\r\nContent-Type: application/octet-stream\r\n\r\n".toByteArray())
-            out.write(file(list).toByteArray(Charsets.UTF_8))
-            out.write("\r\n--$boundary--\r\n".toByteArray())
+            val fields = listOf("email" to email.trim(), "password" to password, "callsign" to callsign.trim().uppercase(), "api" to appKey.trim(), "clear" to "0")
+            val (form, type) = multipart(fields, "file", "qsolog.adi", file(list).toByteArray(Charsets.UTF_8))
             val (code, body) = try {
-                post("https://clublog.org/putlogs.php", out.toByteArray(), agent, "multipart/form-data; boundary=$boundary")
+                post("https://clublog.org/putlogs.php", form, agent, type)
             } catch (e: Exception) {
                 return@withContext UploadResult(emptyList(), 0, netError("Club Log", e))
             }
@@ -176,6 +214,31 @@ object OnlineLogs {
         }
 
     // ---------- HTTP ----------
+
+    /** A multipart form with [fields] and one file; returns the body and its Content-Type. */
+    private fun multipart(fields: List<Pair<String, String>>, fileField: String, fileName: String, content: ByteArray): Pair<ByteArray, String> {
+        val boundary = "qsolog" + System.nanoTime()
+        val out = ByteArrayOutputStream()
+        for ((name, value) in fields) out.write("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n".toByteArray())
+        out.write("--$boundary\r\nContent-Disposition: form-data; name=\"$fileField\"; filename=\"$fileName\"\r\nContent-Type: application/octet-stream\r\n\r\n".toByteArray())
+        out.write(content)
+        out.write("\r\n--$boundary--\r\n".toByteArray())
+        return out.toByteArray() to "multipart/form-data; boundary=$boundary"
+    }
+
+    internal fun get(url: String, agent: String): Pair<Int, ByteArray> {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        try {
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 120_000
+            conn.setRequestProperty("User-Agent", agent)
+            val code = conn.responseCode
+            val bytes = (if (code < 400) conn.inputStream else conn.errorStream)?.use { it.readBytes() } ?: ByteArray(0)
+            return code to bytes
+        } finally {
+            conn.disconnect()
+        }
+    }
 
     private fun form(vararg p: Pair<String, String>): ByteArray =
         p.joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, "UTF-8") }.toByteArray()
@@ -198,7 +261,7 @@ object OnlineLogs {
         }
     }
 
-    private fun netError(service: String, e: Exception) = when (e) {
+    internal fun netError(service: String, e: Exception) = when (e) {
         is java.net.UnknownHostException -> tr("Нет интернета: не удаётся связаться с %s", service)
         is java.net.SocketTimeoutException -> tr("%s не ответил вовремя", service)
         else -> tr("Нет связи с %s: %s", service, e.message ?: e.javaClass.simpleName)

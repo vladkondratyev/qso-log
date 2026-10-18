@@ -173,18 +173,26 @@ class MainActivity : ComponentActivity() {
      * running behind it and are a swipe away in the recent apps.
      */
     private fun launchStartApps() {
-        var started = 0
+        val started = mutableListOf<String>()
+        val failed = mutableListOf<String>()
         vm.startApps.filter { it.enabled }.forEach { a ->
-            val intent = packageManager.getLaunchIntentForPackage(a.target) ?: return@forEach
-            if (runCatching { startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) started++
+            val intent = packageManager.getLaunchIntentForPackage(a.target)
+            if (intent != null && runCatching { startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) started += a.title
+            else failed += a.title
         }
-        if (started == 0) return
-        runCatching {
+        if (started.isEmpty() && failed.isEmpty()) return
+        if (started.isNotEmpty() && vm.startAppsReturn) runCatching {
             startActivity(
                 android.content.Intent(this, MainActivity::class.java)
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
             )
         }
+        // Xiaomi and Poco block the start without a word: the message says what to allow.
+        vm.say(buildString {
+            if (started.isNotEmpty()) append(tr("Открываю вместе с QSO-LOG: %s", started.joinToString(", ")))
+            if (failed.isNotEmpty()) append(if (isEmpty()) "" else ". ").append(tr("Не удалось открыть: %s — приложение удалено?", failed.joinToString(", ")))
+            if (ru.r3xed.qsolog.data.Miui.backgroundStartAllowed(this@MainActivity) == false) append(". ").append(tr("Xiaomi не даёт QSO-LOG открывать приложения: разрешите это в «Оборудование и программы» → «Запускать вместе»"))
+        })
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -310,6 +318,7 @@ class MainActivity : ComponentActivity() {
                             total = vm.total,
                             onExport = { vm.showTransfer = false; vm.openExport(it, selectedOnly = false) },
                             onUpload = { vm.showTransfer = false; vm.openUpload(selectedOnly = false) },
+                            onEqslInbox = { vm.showTransfer = false; vm.openEqslInbox() },
                             onSelect = { vm.showTransfer = false; vm.showSelect = true },
                             onImportAdif = { vm.showTransfer = false; importAdif.launch(arrayOf("*/*")) },
                             onImportCsv = { vm.showTransfer = false; import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
@@ -330,6 +339,14 @@ class MainActivity : ComponentActivity() {
                                 count = { onlyNew, contestOnly, ref -> vm.exportCandidates(ExportFormat.CONTEST, target.only, onlyNew, contestOnly, ref).size },
                                 onDismiss = vm::closeContestExport,
                                 onConfirm = { h, onlyNew, mark, contestOnly, ref -> exportContest.launch(vm.prepareContest(h, onlyNew, mark, contestOnly, ref)) },
+                            )
+                        }
+                        vm.eqslInbox?.let { inbox ->
+                            ru.r3xed.qsolog.ui.EqslInboxDialog(
+                                inbox,
+                                onOpenSettings = { vm.closeEqslInbox(); vm.openSettings(page = ru.r3xed.qsolog.SettingsPage.SOURCES) },
+                                onAdd = vm::addEqslCards,
+                                onDismiss = vm::closeEqslInbox,
                             )
                         }
                         vm.uploadTarget?.let { target ->

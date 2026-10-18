@@ -72,6 +72,7 @@ import ru.r3xed.qsolog.cat.CatProtocol
 import ru.r3xed.qsolog.data.StartApps
 import ru.r3xed.qsolog.cw.CwConfig
 import ru.r3xed.qsolog.cw.CwLine
+import ru.r3xed.qsolog.cw.CwVia
 import ru.r3xed.qsolog.cw.CwMacros
 import ru.r3xed.qsolog.cw.CwState
 import ru.r3xed.qsolog.data.StartApp
@@ -98,7 +99,9 @@ private fun SwitchLine(text: String, on: Boolean, strong: Boolean = false, onCha
 
 /** The summary line of the telegraph block. */
 fun cwSummary(vm: AppState): String =
-    if (!vm.cwConfig.enabled) tr("выключено") else tr("ключ на %s · %s WPM", vm.cwConfig.line.name, vm.cwConfig.wpm) +
+    if (!vm.cwConfig.enabled) tr("выключено")
+    else (if (vm.cwConfig.via == CwVia.CWDAEMON) tr("cwdaemon %s · %s WPM", vm.cwConfig.daemon.ifBlank { "?" }, vm.cwConfig.wpm)
+    else tr("ключ на %s · %s WPM", vm.cwConfig.line.name, vm.cwConfig.wpm)) +
         ((vm.cwState as? CwState.Failed)?.let { " · " + it.message } ?: "")
 
 /**
@@ -110,27 +113,46 @@ fun CwSettings(vm: AppState) {
     val c = vm.cwConfig
     SwitchLine(tr("Передавать телеграфом с клавиш F1–F8"), c.enabled, strong = true) { vm.changeCw(c.copy(enabled = it)) }
     (vm.cwState as? CwState.Failed)?.let { Text(it.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
-    Section(tr("COM-порт ключа"))
-    var tick by remember { mutableStateOf(0) }
-    val devices = remember(tick) { vm.catPorts() }
-    DeviceList(devices, c.device, tr("COM-портов не видно. Подключите адаптер (CP2102, CH340, FTDI) и нажмите «Обновить список».")) { vm.changeCw(c.copy(device = it)) }
-    ActionButton(tr("Обновить список"), Icons.Filled.Refresh) { tick++ }
-    Section(tr("Линия ключа"))
+    Section(tr("Чем замыкать ключ"))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        CwLine.entries.forEach { l ->
-            val on = c.line == l
+        listOf(CwVia.SERIAL to tr("Линия адаптера"), CwVia.CWDAEMON to tr("cwdaemon по сети")).forEach { (v, title) ->
+            val on = c.via == v
             Box(
                 Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp))
                     .background(if (on) MaterialTheme.colorScheme.primary else LocalExtra.current.field)
-                    .selectable(selected = on, role = Role.RadioButton) { vm.changeCw(c.copy(line = l)) },
+                    .selectable(selected = on, role = Role.RadioButton) { vm.changeCw(c.copy(via = v)) },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(l.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
             }
         }
     }
-    SwitchLine(tr("Вторая линия — PTT на время передачи"), c.ptt) { vm.changeCw(c.copy(ptt = it)) }
-    SwitchLine(tr("Инвертировать линию ключа"), c.invert) { vm.changeCw(c.copy(invert = it)) }
+    if (c.via == CwVia.CWDAEMON) {
+        SettingField(tr("Адрес cwdaemon: IP или имя, порт через «:» (по умолчанию 6789)"), c.daemon, { vm.changeCw(c.copy(daemon = it.trim())) }, mono = true)
+        Note(tr("cwdaemon работает на компьютере, к которому подключён трансивер (Linux, Raspberry Pi: sudo apt install cwdaemon), и манипулирует ключом через свой COM- или LPT-порт. QSO-LOG передаёт ему текст сообщений и скорость по UDP, Esc останавливает передачу. Пример запуска: cwdaemon -d ttyUSB0 -p 6789. Если ключ не работает, проверьте, что порт 6789/UDP открыт в брандмауэре."))
+    } else {
+        Section(tr("COM-порт ключа"))
+        var tick by remember { mutableStateOf(0) }
+        val devices = remember(tick) { vm.catPorts() }
+        DeviceList(devices, c.device, tr("COM-портов не видно. Подключите адаптер (CP2102, CH340, FTDI) и нажмите «Обновить список».")) { vm.changeCw(c.copy(device = it)) }
+        ActionButton(tr("Обновить список"), Icons.Filled.Refresh) { tick++ }
+        Section(tr("Линия ключа"))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CwLine.entries.forEach { l ->
+                val on = c.line == l
+                Box(
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp))
+                        .background(if (on) MaterialTheme.colorScheme.primary else LocalExtra.current.field)
+                        .selectable(selected = on, role = Role.RadioButton) { vm.changeCw(c.copy(line = l)) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(l.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+        SwitchLine(tr("Вторая линия — PTT на время передачи"), c.ptt) { vm.changeCw(c.copy(ptt = it)) }
+        SwitchLine(tr("Инвертировать линию ключа"), c.invert) { vm.changeCw(c.copy(invert = it)) }
+    }
     Section(tr("Скорость: %s WPM", c.wpm))
     Slider(
         value = c.wpm.toFloat(), onValueChange = { vm.changeCw(c.copy(wpm = it.toInt())) },
@@ -150,8 +172,10 @@ fun CwSettings(vm: AppState) {
     Note(CwMacros.HELP)
     ActionButton(tr("Проверить: передать «VVV»"), Icons.Filled.PlayArrow) { vm.testCw() }
     Note(tr("Сообщения передаются, когда в карточке QSO выбран вид CW: клавиши F1–F8 (их можно переназначить в «Дополнительных настройках»), кнопки под частотой, Esc — остановить, Alt+↑ и Alt+↓ — скорость. Так работает N1MM: программа замыкает ключ линией DTR или RTS USB-адаптера."))
-    Note(tr("Xiegu G90 и другие трансиверы, у которых ключ замыкается на массу: у адаптера CP2102 выводы DTR и RTS при передаче опускаются в 0 В. Соедините вывод с «точкой» (или прямым ключом) гнезда KEY через транзистор или оптрон (PC817), массу — с массой. В меню трансивера выберите прямой ключ (Straight). Если ключ замкнут без передачи, включите «Инвертировать»."))
-    Note(tr("Если CAT идёт через тот же COM-порт (один кабель CP2102 для CI-V и ключа), выберите его и здесь: порт будет общим."))
+    if (c.via == CwVia.SERIAL) {
+        Note(tr("Xiegu G90 и другие трансиверы, у которых ключ замыкается на массу: у адаптера CP2102 выводы DTR и RTS при передаче опускаются в 0 В. Соедините вывод с «точкой» (или прямым ключом) гнезда KEY через транзистор или оптрон (PC817), массу — с массой. В меню трансивера выберите прямой ключ (Straight). Если ключ замкнут без передачи, включите «Инвертировать»."))
+        Note(tr("Если CAT идёт через тот же COM-порт (один кабель CP2102 для CI-V и ключа), выберите его и здесь: порт будет общим."))
+    }
 }
 
 /** The keys: any shortcut can be reassigned. */

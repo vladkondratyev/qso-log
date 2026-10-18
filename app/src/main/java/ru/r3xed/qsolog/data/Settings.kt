@@ -215,6 +215,10 @@ class Settings(context: Context) {
     var startApps: String
         get() = prefs.getString("start_apps", "") ?: ""
         set(v) = prefs.edit().putString("start_apps", v).apply()
+    /** After starting them, QSO-LOG comes back to the front at once; off: the last started app stays in front. */
+    var startAppsReturn: Boolean
+        get() = prefs.getBoolean("start_apps_return", true)
+        set(v) = prefs.edit().putBoolean("start_apps_return", v).apply()
     /** The radio's last frequency on each band, "20m=14025000,40m=7074000": a band picked on the panel goes back there. */
     var bandMemory: String
         get() = prefs.getString("cat_band_memory", "") ?: ""

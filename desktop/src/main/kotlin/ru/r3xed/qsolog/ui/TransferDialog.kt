@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material3.AlertDialog
@@ -40,6 +41,7 @@ fun TransferDialog(
     total: Int,
     onExport: (ExportFormat) -> Unit,
     onUpload: () -> Unit,
+    onEqslInbox: () -> Unit,
     onSelect: () -> Unit,
     onImportAdif: () -> Unit,
     onImportCsv: () -> Unit,
@@ -59,7 +61,8 @@ fun TransferDialog(
                 Choice(tr("ЕРМАК / Cabrillo"), tr("отчёт для соревнований"), Icons.Filled.FileUpload) { onExport(ExportFormat.CONTEST) }
                 Choice(tr("Часть журнала…"), tr("выбрать по датам, диапазонам и видам, потом «Экспорт»"), Icons.Filled.FilterList, onSelect)
                 Text(tr("Онлайн-журналы"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
-                Choice("LoTW · Club Log · QRZ.com", tr("выгрузить новые связи"), Icons.Filled.CloudUpload, onUpload)
+                Choice("LoTW · eQSL · Club Log · QRZ.com", tr("выгрузить новые связи"), Icons.Filled.CloudUpload, onUpload)
+                Choice(tr("Карточки eQSL"), tr("загрузить полученные: отметки в журнале и связи, которых в нём нет"), Icons.Filled.CloudDownload, onEqslInbox)
                 Text(tr("Импорт в журнал"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
                 Choice("ADIF", tr("файл .adi или .adif"), Icons.Filled.FileDownload, onImportAdif)
                 Choice("CSV", tr("таблица с разделителем «;»"), Icons.Filled.FileDownload, onImportCsv)

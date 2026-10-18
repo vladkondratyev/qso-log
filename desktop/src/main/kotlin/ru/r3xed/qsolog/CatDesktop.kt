@@ -31,7 +31,7 @@ object CatDesktop {
 
     /** Opens the link of [c]. Throws with a message for the user when it cannot. */
     fun open(c: CatConfig): CatLink =
-        if (c.protocol == CatProtocol.RIGCTLD || c.link == CatLinkType.NETWORK) tcpLink(c.host, c.port) else openSerial(c)
+        if (c.protocol.network || c.link == CatLinkType.NETWORK) tcpLink(c.host, c.port) else openSerial(c)
 
     private fun openSerial(c: CatConfig): CatLink {
         val name = c.device.ifBlank { ports().firstOrNull()?.key }

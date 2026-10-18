@@ -15,14 +15,14 @@ class WhatsNewTest {
     }
 
     @Test
-    fun settingsAndPartOfTheLogOnBoth() {
-        // 2.5.0: the settings pages on both; picking part of the log — from "Файл" on the computer, from the export window on the phone.
+    fun eqslCwdaemonCommanderOnBoth() {
+        // 2.6.0: eQSL, cwdaemon and Commander on both; the Xiaomi note of "Запускать вместе" only on the phone.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Настройки стали короче"))
-            assertTrue(WhatsNew.items(desktop = true).any { "«Файл»" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "TRX" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "/P" in it })
+            assertTrue(WhatsNew.items(desktop = false).first().startsWith("eQSL"))
+            assertTrue(WhatsNew.items(desktop = true).any { "cwdaemon" in it } && WhatsNew.items(desktop = true).any { "Commander" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "Poco" in it })
+            assertTrue(WhatsNew.items(desktop = true).none { "Poco" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

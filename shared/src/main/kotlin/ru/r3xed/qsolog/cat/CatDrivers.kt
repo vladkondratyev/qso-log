@@ -82,6 +82,7 @@ interface RigDriver {
             CatProtocol.YAESU -> YaesuDriver(c.model.name, sMeter)
             CatProtocol.YAESU_OLD -> YaesuOldDriver(c.model.name, sMeter)
             CatProtocol.RIGCTLD -> RigctldDriver(sMeter)
+            CatProtocol.COMMANDER -> CommanderDriver()
         }
     }
 }
@@ -583,6 +584,102 @@ class RigctldDriver(private val sMeter: Boolean = true) : RigDriver {
             out += l
         }
         return out
+    }
+}
+
+/**
+ * DXLab Commander's TCP directives (port 52002): "<command:10>CmdGetFreq<parameters:0>" → "<CmdFreq:10>14,074.000"
+ * (kHz), "CmdSendMode" → "<CmdMode:5>DATA-U", "CmdSendTX" → "<CmdTX:2>ON". The set directives get no answer. Commander
+ * reads the frequency it is given with the decimal separator of its Windows: that is learned from "CmdSendFreq",
+ * which answers in the same local format.
+ */
+class CommanderDriver : RigDriver {
+    override var answered = false; private set
+    override val what get() = "DXLab Commander"
+
+    /** The decimal separator of Commander's computer; null until "CmdSendFreq" has answered. */
+    private var decimal: Char? = null
+    private var txSupported = true
+
+    override fun poll(io: CatIo, last: RigState): RigState {
+        var s = last
+        answered = false
+        io.clear()
+        if (decimal == null) ask(io, "CmdSendFreq", "CmdFreq")?.let { v -> decimal = v.lastOrNull { it == ',' || it == '.' } ?: '.' }
+        ask(io, "CmdGetFreq", "CmdFreq")?.let { khz(it) }?.takeIf { it > 0 }?.let { s = s.copy(freqHz = it, at = System.currentTimeMillis()) }
+        if (!answered) return s
+        ask(io, "CmdSendMode", "CmdMode")?.trim()?.takeIf { it.isNotEmpty() }?.let { s = s.copy(radioMode = it) }
+        if (txSupported) ask(io, "CmdSendTX", "CmdTX")?.trim()?.uppercase().let { v ->
+            when (v) {
+                "ON" -> s = s.copy(tx = true)
+                "OFF" -> s = s.copy(tx = false)
+                // Not all radios tell Commander; it then stays silent and is not asked again.
+                else -> txSupported = false
+            }
+        }
+        return s
+    }
+
+    override fun setFreq(io: CatIo, hz: Long): Boolean {
+        val d = decimal ?: '.'
+        val khz = "%d%c%03d".format(hz / 1000, d, hz % 1000)
+        send(io, "CmdSetFreq", field("xcvrfreq", khz))
+        return true
+    }
+
+    override fun setMode(io: CatIo, mode: RadioMode): Boolean {
+        send(io, "CmdSetMode", field("1", if (mode == RadioMode.DATA) "DATA-U" else mode.name))
+        return true
+    }
+
+    override fun setPtt(io: CatIo, on: Boolean): Boolean {
+        send(io, if (on) "CmdTX" else "CmdRX", "")
+        return true
+    }
+
+    private fun send(io: CatIo, cmd: String, params: String) =
+        io.send((field("command", cmd) + field("parameters", params)).toByteArray(Charsets.UTF_8))
+
+    /** Sends [cmd] and waits for the field [answer]; its value, or null when none came. */
+    private fun ask(io: CatIo, cmd: String, answer: String): String? {
+        send(io, cmd, "")
+        while (true) {
+            val m = io.next(TIMEOUT, ::fieldEnd) ?: return null
+            answered = true
+            // Commander writes in its Windows code page: one byte a character (the no-break space of "14 074,000" too).
+            val text = m.toString(Charsets.ISO_8859_1)
+            val name = text.substring(1, text.indexOf(':'))
+            if (name.equals(answer, ignoreCase = true)) return text.substring(text.indexOf('>') + 1)
+        }
+    }
+
+    companion object {
+        const val DEFAULT_PORT = 52002
+
+        fun field(name: String, value: String) = "<$name:${value.length}>$value"
+
+        /** "14,074.000", "14 074,000", "14.074,000" (kHz) → Hz: the last separator is the decimal one. */
+        fun khz(v: String): Long? {
+            val t = v.trim()
+            val at = t.indexOfLast { it == ',' || it == '.' }
+            val whole = (if (at < 0) t else t.substring(0, at)).filter(Char::isDigit)
+            val frac = if (at < 0) "" else t.substring(at + 1).filter(Char::isDigit)
+            if (whole.isEmpty() && frac.isEmpty()) return null
+            return (whole.ifEmpty { "0" }.toLong() * 1000) + (frac + "000").take(3).toLong()
+        }
+
+        /** The length of one "<NAME:LEN>VALUE" at the start of [b]: 0 — more bytes needed, negative — junk to skip. */
+        fun fieldEnd(b: ByteArray): Int {
+            val lt = b.indexOf('<'.code.toByte())
+            if (lt < 0) return -b.size
+            if (lt > 0) return -lt
+            val gt = b.indexOf('>'.code.toByte())
+            if (gt < 0) return if (b.size > 64) -1 else 0
+            val head = b.copyOfRange(1, gt).toString(Charsets.US_ASCII)
+            val len = head.substringAfter(':', "").substringBefore(':').trim().toIntOrNull() ?: return -1
+            val end = gt + 1 + len
+            return if (b.size >= end) end else 0
+        }
     }
 }
 

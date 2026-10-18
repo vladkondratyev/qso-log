@@ -10,13 +10,20 @@ import java.util.concurrent.locks.LockSupport
 /** The modem line of a USB serial adapter (CP2102, CH340, FT232) that closes the key, as N1MM does. */
 enum class CwLine { DTR, RTS }
 
+/** How the key is closed: a line of a USB adapter right here, or cwdaemon on another computer over the network. */
+enum class CwVia { SERIAL, CWDAEMON }
+
 /**
  * Telegraph from the log: the messages F1–F8 sent by switching [line] of the adapter [device]. On a CP2102 the TTL pins
  * of DTR and RTS go low when the line is on — what the CW jack of a Xiegu G90 wants (key down = low level).
  * [ptt] — the other line goes on for the whole message (radios without break-in).
+ * With [via] = [CwVia.CWDAEMON] the texts go over UDP to cwdaemon at [daemon] ("192.168.1.20" or "host:6789"),
+ * which keys the radio wired to that computer.
  */
 data class CwConfig(
     val enabled: Boolean = false,
+    val via: CwVia = CwVia.SERIAL,
+    val daemon: String = "",
     /** USB device name (Android) or the computer's serial port. */
     val device: String = "",
     val line: CwLine = CwLine.DTR,
@@ -26,7 +33,7 @@ data class CwConfig(
     val messages: List<String> = DEFAULT_MESSAGES,
 ) {
     fun toMap(): Map<String, String> = mapOf(
-        "cw_enabled" to enabled.toString(), "cw_device" to device, "cw_line" to line.name, "cw_invert" to invert.toString(),
+        "cw_enabled" to enabled.toString(), "cw_via" to via.name, "cw_daemon" to daemon, "cw_device" to device, "cw_line" to line.name, "cw_invert" to invert.toString(),
         "cw_ptt" to ptt.toString(), "cw_wpm" to wpm.toString(),
     ) + messages.mapIndexed { i, m -> "cw_msg${i + 1}" to m }
 
@@ -43,6 +50,8 @@ data class CwConfig(
             val d = CwConfig()
             return CwConfig(
                 enabled = m["cw_enabled"]?.toBooleanStrictOrNull() ?: d.enabled,
+                via = m["cw_via"]?.let { v -> CwVia.entries.firstOrNull { it.name == v } } ?: d.via,
+                daemon = m["cw_daemon"] ?: d.daemon,
                 device = m["cw_device"] ?: d.device,
                 line = m["cw_line"]?.let { v -> CwLine.entries.firstOrNull { it.name == v } } ?: d.line,
                 invert = m["cw_invert"]?.toBooleanStrictOrNull() ?: d.invert,
@@ -85,6 +94,15 @@ sealed interface CwState {
     data class Failed(val message: String) : CwState
 }
 
+/** What sends the messages: [CwKeyer] on a line of an adapter, or [CwDaemon] over the network. */
+interface CwSender {
+    var wpm: Int
+    fun send(text: String)
+    /** Stops the message being sent and drops the ones waiting. */
+    fun stop()
+    fun close()
+}
+
 /**
  * Sends texts in Morse on its own thread, one after another. Element times are counted from the start of the message,
  * so a late wake-up does not pile up: at 24 WPM a dot is 50 ms, and a millisecond or two of USB delay does not matter.
@@ -92,28 +110,27 @@ sealed interface CwState {
 class CwKeyer(
     private val open: () -> KeyLine,
     private val onState: (CwState) -> Unit,
-    @Volatile var wpm: Int = 24,
+    @Volatile override var wpm: Int = 24,
     private val usePtt: Boolean = false,
-) {
+) : CwSender {
     private val queue = LinkedBlockingQueue<String>()
     @Volatile private var abort = false
     @Volatile private var running = true
     private var line: KeyLine? = null
     private val thread = Thread(::loop, "CW").apply { isDaemon = true; start() }
 
-    fun send(text: String) {
+    override fun send(text: String) {
         if (text.isBlank()) return
         abort = false
         queue.add(text)
     }
 
-    /** Stops the message being sent and drops the ones waiting. */
-    fun stop() {
+    override fun stop() {
         queue.clear()
         abort = true
     }
 
-    fun close() {
+    override fun close() {
         running = false
         stop()
         thread.interrupt()

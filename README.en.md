@@ -16,7 +16,7 @@ callsigns, exchange numbers — go out from the F1–F8 keys; FT8 and FT4 QSOs c
 and MSHV. The app looks up the other station's name and city on QRZ.ru
 or QRZ.com, works out the distance and draws the path on a map. You can attach a voice note to a QSO. Contest mode
 gives fast entry with exchange numbers, and the log exports to Cabrillo and to ЕРМАК, the Russian contest format.
-A dashboard shows the log in charts. The log exports to ADIF and CSV and uploads to LoTW, Club Log and QRZ.com, and several devices can keep one log through
+A dashboard shows the log in charts. The log exports to ADIF and CSV and uploads to LoTW, eQSL, Club Log and QRZ.com, and several devices can keep one log through
 your own Google Sheet. Buttons and text are large, so you can log on the air; with an external keyboard you can log
 without touching the screen at all.
 
@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.5.0 | [QSO-LOG-2.5.0.apk](../../releases/tag/v2.5.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.5.0 | [QSO-LOG-2.5.0-macos-arm64.dmg](../../releases/tag/desktop-v2.5.0) |
-| macOS 11 or newer, Intel | 2.5.0 | [QSO-LOG-2.5.0-macos-x64.dmg](../../releases/tag/desktop-v2.5.0) |
-| Windows 10 and 11, 64-bit | 2.5.0 | [QSO-LOG-2.5.0-windows-x64.zip](../../releases/tag/desktop-v2.5.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.5.0 | [QSO-LOG-2.5.0-linux-amd64.deb](../../releases/tag/desktop-v2.5.0) |
+| Android 8.0 or newer | 2.6.0 | [QSO-LOG-2.6.0.apk](../../releases/tag/v2.6.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.6.0 | [QSO-LOG-2.6.0-macos-arm64.dmg](../../releases/tag/desktop-v2.6.0) |
+| macOS 11 or newer, Intel | 2.6.0 | [QSO-LOG-2.6.0-macos-x64.dmg](../../releases/tag/desktop-v2.6.0) |
+| Windows 10 and 11, 64-bit | 2.6.0 | [QSO-LOG-2.6.0-windows-x64.zip](../../releases/tag/desktop-v2.6.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.6.0 | [QSO-LOG-2.6.0-linux-amd64.deb](../../releases/tag/desktop-v2.6.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -58,7 +58,7 @@ is switched in Settings and changes at once.
 - [Voice notes](#voice-notes)
 - [Distance and maps](#distance-and-maps)
 - [Export and import](#export-and-import)
-- [Online logbooks: LoTW, Club Log, QRZ.com](#online-logbooks-lotw-club-log-qrzcom)
+- [Online logbooks: LoTW, eQSL, Club Log, QRZ.com](#online-logbooks-lotw-eqsl-club-log-qrzcom)
 - [Sync through a Google Sheet](#sync-through-a-google-sheet)
 - [Reference and calculators](#reference-and-calculators)
 - [Settings](#settings)
@@ -166,13 +166,14 @@ the transceiver answers right now.
 | Yaesu FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450 | Yaesu, new CAT |
 | Yaesu FT-817, FT-818, FT-857, FT-897 | Yaesu, old 5-byte CAT |
 | any transceiver Hamlib knows | rigctld over the network (also wfview, SDR++, flrig) |
+| any transceiver connected to DXLab Commander (Windows) | Commander directives over the network, port 52002 |
 
 Connection:
 
 - **Phone** — the transceiver's USB cable through an OTG adapter (ICOM with a USB socket directly, others with a CI-V/CAT
   cable on a CP210x, FTDI, CH340 or PL2303 adapter; Android asks for USB permission), **Bluetooth** (a transceiver or an
-  adapter paired in the Android settings, SPP profile — an IC-705, for one) or the **network** (rigctld, a network CAT
-  adapter, ser2net).
+  adapter paired in the Android settings, SPP profile — an IC-705, for one) or the **network** (rigctld, DXLab
+  Commander, a network CAT adapter, ser2net).
 - **Computer** — a **COM port** (the transceiver's USB cable or a CAT/CI-V interface; some need a CP210x, FTDI or CH340
   driver) or the **network**.
 
@@ -185,6 +186,13 @@ the frequency, the panel and the meters. If the program closes while transmittin
 receive. With "Let in programs from other computers of the network", JTDX on a computer can use a transceiver
 connected to the phone. A separate Hamlib rigctld (Settings → "Equipment and programs" → "Start together with QSO-LOG" → "Add Hamlib rigctld") is only
 needed when JTDX must work without QSO-LOG.
+
+**DXLab Commander** (since 2.6.0) is an addition to Hamlib for those whose transceiver is already connected to DXLab
+Suite on Windows. Choose "DXLab Commander" in the list of transceivers; the address is the computer with Commander
+(`127.0.0.1` on that computer), port 52002 (in Commander: Configuration → Radio → Net Serv, base 52000 + 2). QSO-LOG
+takes the frequency, mode and transmit state from Commander, and the panel, the card's buttons and the band scale tune
+the radio through it — together with DXKeeper, WinWarbler and the other DXLab programs. There is no S-meter or power
+meter through Commander. Hamlib rigctld and the built-in drivers stay as they were.
 
 <p>
 <img src="docs/screenshots/73-rig-panel.png" width="200" alt="The transceiver panel on the phone: S-meter and band scale">
@@ -206,7 +214,7 @@ while the QSO card (the usual or the contest one) is in CW; on a phone without a
 buttons under the frequency. **Esc** stops sending, **Alt+↑ / Alt+↓** change the speed (10–50 WPM). The keys can be
 reassigned.
 
-Settings → "Equipment and programs" → **"Telegraph (CW) — key on DTR/RTS"**: the adapter (through OTG on the phone), the key line, the speed, the
+Settings → "Equipment and programs" → **"Telegraph (CW) — DTR/RTS or cwdaemon"**: the adapter (through OTG on the phone), the key line, the speed, the
 message texts, "The other line is PTT" for radios without break-in, and "Test: send VVV". If CAT uses the same
 adapter (one CP2102 cable for both CI-V and the key), choose it here too — the port is shared.
 
@@ -214,6 +222,14 @@ adapter (one CP2102 cable for both CI-V and the key), choose it here too — the
 Wire the pin to the dot (or straight key) contact of the KEY jack through a transistor or an optocoupler (PC817),
 ground to ground, and choose the straight key in the radio's menu. If the key is closed when nothing is sent, switch
 on "Invert the key line".
+
+**CW over the network — cwdaemon** (since 2.6.0). When the transceiver is wired to another computer (Linux, Raspberry
+Pi), [cwdaemon](https://github.com/acerion/cwdaemon) runs there (`sudo apt install cwdaemon`, started e.g. as
+`cwdaemon -d ttyUSB0 -p 6789`), and QSO-LOG on a laptop or a phone sends it the F1–F8 messages and the speed over the
+network (UDP, port 6789), as tlf and other loggers do. In the CW settings choose "cwdaemon over the network" and enter
+the computer's address (`192.168.1.20` or `name:port`). Esc stops sending, Alt+↑ / Alt+↓ change the speed; cwdaemon
+reports when a message is over, and the card's "sending" line goes off. cwdaemon takes "+", "-" and "~" as speed and
+pause commands, so they are left out of the messages.
 
 <p>
 <img src="docs/screenshots/74-cw-card.png" width="200" alt="The card in CW: messages F1–F8">
@@ -555,9 +571,9 @@ and whether to mark them as exported. The marks are shown
 at the bottom of the card, and coloured dots next to the time in the log: blue ADIF, green CSV, orange contest report.
 Every QSO has a permanent GUID (ADIF `APP_QSOLOG_UID`), so duplicates are skipped on import.
 
-## Online logbooks: LoTW, Club Log, QRZ.com
+## Online logbooks: LoTW, eQSL, Club Log, QRZ.com
 
-Since 2.3.0 QSOs go to LoTW (ARRL), Club Log and the QRZ.com logbook: ⋮ → "Export and import" → "Online logbooks",
+Since 2.3.0 QSOs go to LoTW (ARRL), Club Log and the QRZ.com logbook, since 2.6.0 to eQSL too: ⋮ → "Export and import" → "Online logbooks",
 or "Export" on picked records. The dialog asks which logbook, only new QSOs (the default) or all, and whether to mark
 them. The mark with date and time shows in the QSO card; take it off and the QSO goes again.
 
@@ -565,12 +581,21 @@ them. The mark with date and time shows in the QSO card; take it off and the QSO
   access comes with a QRZ.com subscription). Duplicates count as "already there".
 - **Club Log** needs the account's e-mail and password and an application key, which Club Log gives on request
   (Help Desk → "Request an API key"). The callsign comes from "My station".
+- **eQSL** needs the eQSL login (callsign) and password, and the QTH Nickname if the callsign has several profiles.
+  Duplicates count as "already there".
 - **LoTW**: ARRL's TQSL signs the QSOs with your certificate. On the computer QSO-LOG runs TQSL itself: enter the
   Station Location (the name of the station location in TQSL); the app finds TQSL by itself. There is no TQSL for
   the phone: QSO-LOG saves an ADIF file you sign in TQSL on a computer ("Sign a log and upload it"), and the QSOs
   are marked "saved for TQSL".
 
-The accounts are in Settings → "Callbooks and online logs" → **"Online logbooks: LoTW, Club Log, QRZ.com"**. The password and keys are stored
+**eQSL cards** (since 2.6.0): ⋮ → "Export and import" → **"eQSL cards"** downloads the eQSL inbox — the cards sent to
+you. When the log has a QSO with the same station (a callsign with /P counts as the same), on the same band and mode
+and no more than 30 minutes apart, it gets the "eQSL received" mark with the card's date (shown in the QSO card, in the
+"Export" block, and exported to ADIF as `EQSL_QSL_RCVD`). Cards with no QSO in the log are listed: tick the ones you
+want and press "Add to the log" — they become new QSOs (the received RST taken from the card). Downloading again
+duplicates nothing.
+
+The accounts are in Settings → "Callbooks and online logs" → **"Online logbooks: LoTW, eQSL, Club Log, QRZ.com"**. The password and keys are stored
 encrypted (Android's keystore on the phone, the system keychain on the computer).
 
 <p>
@@ -637,10 +662,11 @@ Since 2.5.0 the settings are two levels deep; each block header says briefly wha
 QSO entry (time, keyboard and its hold time); Contests (CONTEST MODE, what is sent, locator exchange); bands and modes
 shown in the card; **Equipment and programs ›** — a page with CAT, digital modes, CW and "Start together with QSO-LOG"
 (on the phone, apps such as FT8CN or an SDR app that open with QSO-LOG and keep running in the background while QSO-LOG
-comes back in front; on the computer, any programs with their arguments, such as JTDX, WSJT-X or Hamlib rigctld, not
+comes back in front — or stay in front, with "Come back to QSO-LOG at once" off; Xiaomi, Redmi and Poco need "Display
+pop-up windows while running in the background" for QSO-LOG, and since 2.6.0 the page says so and opens that screen; on the computer, any programs with their arguments, such as JTDX, WSJT-X or Hamlib rigctld, not
 opened twice and optionally closed with QSO-LOG; the page also opens with a long press on the TRX badge on the phone,
 and from "File" → "Equipment and programs…" on the computer); **Callbooks and online logs ›** — a page with the station
-data sources and the LoTW, Club Log and QRZ.com accounts; logbook ("Export and import…", "Select part of the log…",
+data sources and the LoTW, eQSL, Club Log and QRZ.com accounts; logbook ("Export and import…", "Select part of the log…",
 sync — its header says whether Google sync is on, delete all); interface (language: system, Russian, English — changes
 at once; theme; keep the screen on (phone); "Assign keys" — any key of an external keyboard can be replaced, added or
 taken off). At the bottom: version, "What's new", "Report a problem" and
@@ -681,21 +707,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.5.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.5.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.6.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.6.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.5.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.5.0), unpack the
+Download `QSO-LOG-2.6.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.6.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.5.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.5.0) and install it:
+Download `QSO-LOG-2.6.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.6.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.5.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.6.0-linux-amd64.deb
 ```
 
 ## Where the data is kept
@@ -724,6 +750,8 @@ GitHub when checking for updates, and your Google Sheet (script.google.com) when
 - Tuning the transceiver and CW have been tested on protocol simulators, not on live radios of every model. Old Yaesu
   radios with their own 5-byte CAT (FT-840, FT-890, FT-990, FT-1000) are not supported yet; they can be reached through
   Hamlib rigctld on a computer.
+- DXLab Commander has been tested on a simulator of its network protocol, cwdaemon on a real cwdaemon 0.10 without a
+  radio. The eQSL download has been tested on eQSL's test account.
 
 ## For developers
 

@@ -16,7 +16,15 @@ enum class CatProtocol {
     /** Yaesu's 5-byte binary CAT of FT-817, FT-818, FT-857, FT-897. */
     YAESU_OLD,
     /** Hamlib rigctld (and programs that imitate it: wfview, SDR++, flrig's rigctld bridge) over the network. */
-    RIGCTLD;
+    RIGCTLD,
+    /** DXLab Commander (Windows), which holds the radio itself and takes directives over TCP. */
+    COMMANDER;
+
+    /** Reached over the network only, never a port of its own. */
+    val network: Boolean get() = this == RIGCTLD || this == COMMANDER
+
+    /** Its usual TCP port. */
+    val defaultPort: Int get() = if (this == COMMANDER) CommanderDriver.DEFAULT_PORT else 4532
 
     val title: String
         get() = when (this) {
@@ -25,6 +33,7 @@ enum class CatProtocol {
             YAESU -> tr("Yaesu — новый CAT (FT-991, FT-710, FTDX10…)")
             YAESU_OLD -> tr("Yaesu FT-817 / 818 / 857 / 897")
             RIGCTLD -> tr("Hamlib rigctld (по сети)")
+            COMMANDER -> tr("DXLab Commander (по сети, Windows)")
         }
 }
 
@@ -42,6 +51,7 @@ object Rigs {
     const val OTHER_KENWOOD = "Kenwood — другая модель"
     const val OTHER_YAESU = "Yaesu — другая модель (новый CAT)"
     const val RIGCTLD = "Hamlib rigctld / wfview / flrig"
+    const val COMMANDER = "DXLab Commander"
 
     val ALL: List<RigModel> = listOf(
         RigModel("IC-705", CatProtocol.ICOM, 0xA4, 115200),
@@ -95,6 +105,7 @@ object Rigs {
         RigModel("FT-817 / FT-818", CatProtocol.YAESU_OLD, baud = 9600),
         RigModel("FT-857 / FT-897", CatProtocol.YAESU_OLD, baud = 9600),
         RigModel(RIGCTLD, CatProtocol.RIGCTLD),
+        RigModel(COMMANDER, CatProtocol.COMMANDER),
     )
 
     fun byName(name: String): RigModel = ALL.firstOrNull { it.name == name } ?: ALL.first { it.name == "IC-7300" }

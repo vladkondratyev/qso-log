@@ -351,6 +351,14 @@ fun App(state: AppState, files: Exports) {
                     onUtf8 = state::chooseAdifUtf8,
                 )
             }
+            state.eqslInbox?.let { inbox ->
+                ru.r3xed.qsolog.ui.EqslInboxDialog(
+                    inbox,
+                    onOpenSettings = { state.closeEqslInbox(); state.openSettings(page = ru.r3xed.qsolog.SettingsPage.SOURCES) },
+                    onAdd = state::addEqslCards,
+                    onDismiss = state::closeEqslInbox,
+                )
+            }
             state.uploadTarget?.let { target ->
                 ru.r3xed.qsolog.ui.UploadDialog(
                     selected = target.only?.size,
@@ -371,6 +379,7 @@ fun App(state: AppState, files: Exports) {
                 total = state.total,
                 onExport = { format -> state.showTransfer = false; state.openExport(format, selectedOnly = false) },
                 onUpload = { state.showTransfer = false; state.openUpload(selectedOnly = false) },
+                onEqslInbox = { state.showTransfer = false; state.openEqslInbox() },
                 onSelect = { state.showTransfer = false; state.showSelect = true },
                 onImportAdif = { state.showTransfer = false; files.importAdif() },
                 onImportCsv = { state.showTransfer = false; files.importCsv() },

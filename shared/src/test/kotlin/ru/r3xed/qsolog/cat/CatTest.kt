@@ -385,4 +385,34 @@ class CatTest {
         assertNull(BandScale.of(15_000_000))
         assertEquals(0.6f, RigMeterScale.sPosition(54), 0.001f)
     }
+
+    /** DXLab Commander on a Windows with the Russian locale: "14 074,000" from CmdSendFreq, "14,074.000" from CmdGetFreq. */
+    @Test
+    fun commander() {
+        val sent = mutableListOf<String>()
+        val r = FakeRadio({ b -> b.toString(Charsets.UTF_8).split("<command:").filter { it.isNotEmpty() }.map { ("<command:" + it).toByteArray() } }) { b ->
+            val cmd = b.toString(Charsets.UTF_8).also { sent += it }
+            when {
+                "CmdSendFreq" in cmd -> "<CmdFreq:10>14\u00A0074,000"
+                "CmdGetFreq" in cmd -> "<CmdFreq:10>14,074.000"
+                "CmdSendMode" in cmd -> "<CmdMode:6>DATA-U"
+                "CmdSendTX" in cmd -> "<CmdTX:3>OFF"
+                else -> null
+            }?.toByteArray(Charsets.ISO_8859_1)
+        }
+        val d = CommanderDriver()
+        val s = d.poll(CatIo(r), RigState())
+        assertEquals(14_074_000, s.freqHz)
+        assertEquals("DATA-U", s.radioMode)
+        assertEquals(false, s.tx)
+        assertTrue(d.answered)
+        assertEquals("<command:11>CmdSendFreq<parameters:0>", sent.first())
+        d.setFreq(CatIo(r), 7_074_500)
+        assertEquals("<command:10>CmdSetFreq<parameters:20><xcvrfreq:8>7074,500", sent.last())
+        d.setMode(CatIo(r), RadioMode.CW)
+        assertEquals("<command:10>CmdSetMode<parameters:7><1:2>CW", sent.last())
+        assertEquals(500L, CommanderDriver.khz(".500"))
+        assertNull(CommanderDriver.khz(""))
+        assertEquals(0L, CommanderDriver.khz(".000"))
+    }
 }

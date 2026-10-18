@@ -75,7 +75,7 @@ class CatAndroid(private val context: Context) {
 
     /** Opens the link of [c]. Throws with a message for the user when it cannot. */
     fun open(c: CatConfig): CatLink = when {
-        c.protocol == CatProtocol.RIGCTLD || c.link == CatLinkType.NETWORK -> tcpLink(c.host, c.port)
+        c.protocol.network || c.link == CatLinkType.NETWORK -> tcpLink(c.host, c.port)
         c.link == CatLinkType.BLUETOOTH -> openBluetooth(c)
         else -> openUsb(c)
     }

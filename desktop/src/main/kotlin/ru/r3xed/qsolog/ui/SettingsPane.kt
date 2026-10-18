@@ -344,7 +344,7 @@ fun SettingsPane(
                         DigiSettings(vm)
                     }
 
-                    SettingsBlock(tr("Телеграф (CW) — ключ на DTR/RTS"), cwSummary(vm)) {
+                    SettingsBlock(tr("Телеграф (CW) — DTR/RTS или cwdaemon"), cwSummary(vm)) {
                         CwSettings(vm)
                     }
 
@@ -508,7 +508,7 @@ fun SettingsPane(
                         )
                     }
 
-                    SettingsBlock(tr("Онлайн-журналы: LoTW, Club Log, QRZ.com"), onlineSummary(vm.online, s.myCall, lotwReady = vm.uploadProblem(ru.r3xed.qsolog.data.OnlineLog.LOTW) == null)) {
+                    SettingsBlock(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com"), onlineSummary(vm.online, s.myCall, lotwReady = vm.uploadProblem(ru.r3xed.qsolog.data.OnlineLog.LOTW) == null)) {
                         OnlineSettings(vm.online, vm::changeOnline, computer = true, tqslFound = vm.tqslExecutable())
                     }
                     Spacer(Modifier.height(24.dp))
@@ -988,12 +988,12 @@ private fun CatSettings(vm: AppState) {
                     DropdownMenuItem(text = { Text(Rigs.title(m), fontWeight = if (m.name == c.rig) FontWeight.Bold else null) }, onClick = {
                         rigMenu = false
                         val link = when {
-                            m.protocol == CatProtocol.RIGCTLD -> CatLinkType.NETWORK
-                            c.link == CatLinkType.NETWORK && c.protocol == CatProtocol.RIGCTLD -> CatLinkType.SERIAL
+                            m.protocol.network -> CatLinkType.NETWORK
+                            c.link == CatLinkType.NETWORK && c.protocol.network -> CatLinkType.SERIAL
                             else -> c.link
                         }
                         vm.changeCat(c.copy(rig = m.name, civAddress = if (m.protocol == CatProtocol.ICOM) m.civ else c.civAddress, baud = m.baud, link = link,
-                            port = if (m.protocol == CatProtocol.RIGCTLD) 4532 else c.port))
+                            port = if (m.protocol.network) m.protocol.defaultPort else c.port))
                     })
                 }
             }
@@ -1001,16 +1001,17 @@ private fun CatSettings(vm: AppState) {
     }
     Note(model.protocol.title)
 
-    if (c.protocol != CatProtocol.RIGCTLD) {
+    if (!c.protocol.network) {
         Section(tr("Подключение"))
         Choice(listOf(CatLinkType.SERIAL to tr("COM-порт"), CatLinkType.NETWORK to tr("Сеть")), if (c.link == CatLinkType.NETWORK) c.link else CatLinkType.SERIAL) { vm.changeCat(c.copy(link = it)) }
     }
     when {
-        c.protocol == CatProtocol.RIGCTLD || c.link == CatLinkType.NETWORK -> {
+        c.protocol.network || c.link == CatLinkType.NETWORK -> {
             SettingField(tr("Адрес (IP или имя)"), c.host, { vm.changeCat(c.copy(host = it.trim())) }, mono = true)
             SettingField(tr("Порт"), c.port.toString(), { v -> v.filter(Char::isDigit).take(5).toIntOrNull()?.takeIf { it in 1..65535 }?.let { vm.changeCat(c.copy(port = it)) } }, mono = true)
             Note(
-                if (c.protocol == CatProtocol.RIGCTLD) tr("Hamlib rigctld на этом компьютере (127.0.0.1, порт 4532) или на Raspberry Pi рядом с трансивером, или программы с таким же сервером: wfview (4533), SDR++, flrig. Так QSO-LOG работает с трансивером одновременно с WSJT-X, если обе программы подключены к одному rigctld.")
+                if (c.protocol == CatProtocol.COMMANDER) tr("DXLab Commander держит трансивер сам, QSO-LOG спрашивает у него частоту, вид и передачу и перестраивает трансивер через него — вместе с DXKeeper, WinWarbler и другими программами DXLab. В Commander: Configuration → Radio → Net Serv — порт 52002 (база 52000 + 2). На этом же компьютере адрес 127.0.0.1.")
+                else if (c.protocol == CatProtocol.RIGCTLD) tr("Hamlib rigctld на этом компьютере (127.0.0.1, порт 4532) или на Raspberry Pi рядом с трансивером, или программы с таким же сервером: wfview (4533), SDR++, flrig. Так QSO-LOG работает с трансивером одновременно с WSJT-X, если обе программы подключены к одному rigctld.")
                 else tr("Трансивер за сетевым CAT-адаптером или сервером последовательного порта (ser2net, ESP32, Wi-Fi-адаптер): программа шлёт команды выбранного трансивера прямо в TCP-соединение.")
             )
         }
@@ -1021,7 +1022,7 @@ private fun CatSettings(vm: AppState) {
             ActionButton(tr("Обновить список"), Icons.Filled.Refresh) { tick++ }
         }
     }
-    if (c.protocol != CatProtocol.RIGCTLD && c.link != CatLinkType.NETWORK) {
+    if (!c.protocol.network && c.link != CatLinkType.NETWORK) {
         Section(tr("Скорость порта, бод"))
         Choice(Rigs.BAUDS.take(3).map { it to it.toString() }, c.baud) { vm.changeCat(c.copy(baud = it)) }
         Choice(Rigs.BAUDS.drop(3).map { it to it.toString() }, c.baud) { vm.changeCat(c.copy(baud = it)) }
@@ -1071,7 +1072,7 @@ private fun CatSettings(vm: AppState) {
 
     Section(tr("Поддерживаемые трансиверы"))
     Note(tr("ICOM (протокол CI-V): IC-705, IC-7300, IC-7610, IC-9700, IC-905, IC-7100, IC-7851, IC-7800, IC-7700, IC-7600, IC-7410, IC-7200, IC-9100, IC-7000, IC-756PRO, IC-746PRO, IC-910H, IC-718, IC-706MKIIG, IC-703, IC-R8600 и другие с CI-V — адрес можно задать вручную. Совместимые с CI-V: Xiegu X6100, X6200, G90, X5105, X108G."))
-    Note(tr("Другие стандарты: Kenwood (TS-590, TS-890, TS-990, TS-480, TS-2000), Elecraft (K3, K4, KX2, KX3), FlexRadio через SmartSDR CAT, Yaesu с новым CAT (FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450) и со старым (FT-817, FT-818, FT-857, FT-897), а также любой трансивер через Hamlib rigctld по сети."))
+    Note(tr("Другие стандарты: Kenwood (TS-590, TS-890, TS-990, TS-480, TS-2000), Elecraft (K3, K4, KX2, KX3), FlexRadio через SmartSDR CAT, Yaesu с новым CAT (FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450) и со старым (FT-817, FT-818, FT-857, FT-897), а также любой трансивер через Hamlib rigctld или DXLab Commander по сети."))
     Note(tr("Как это сделано: как в N1MM, Log4OM, WSJT-X и FT8CN — программа несколько раз в секунду спрашивает у трансивера частоту, вид связи и S-метр, а частоту, диапазон и вид меняет по вашей команде с пульта (нажмите на строку TRX в карточке) или кнопками карточки. В эфир она сама ничего не передаёт: линии DTR и RTS USB-порта держит выключенными, чтобы трансивер не перешёл на передачу. Подключение: кабель USB от трансивера (у ICOM с USB-разъёмом — напрямую, у остальных — кабель CI-V/CAT с адаптером CP210x, FTDI, CH340 или PL2303) или сеть. COM-порт одновременно может открыть только одна программа: если трансивером уже управляет WSJT-X или другой логгер, подключайтесь через rigctld."))
 }
 

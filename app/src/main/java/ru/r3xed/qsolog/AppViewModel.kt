@@ -1059,7 +1059,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val f = form
         if (call != f.call) cardFromLog = false
         form = if (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && locatorFree(f))) {
-            f.copy(call = call, name = "", qth = "", country = "", locator = "", lat = null, lon = null, infoFromQrz = false, adif = f.adif - HamQth.POSITION_FIELD)
+            f.copy(call = call, name = "", qth = "", country = "", locator = "", lat = null, lon = null, infoFromQrz = false, adif = f.adif - HISTORY_FIELDS)
         } else f.copy(call = call)
         // VHF contest: the station's locator from its earlier contact (the previous tour), shown at once.
         if (screen == Screen.Contest && ContestMode.hasGrids(form.adif) && form.isNew && locatorFree(form)) {
@@ -1121,7 +1121,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         name = info.fullName, qth = info.city, country = info.country,
                         locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
                         lat = info.lat, lon = info.lon, infoFromQrz = true,
-                        adif = withQrzExtras(f.adif - HamQth.POSITION_FIELD, info),
+                        // Region, RDA and zones are the found station's: none stay from the callsign typed before.
+                        adif = withQrzExtras(f.adif - HISTORY_FIELDS, info),
                     )
                 }
                 Lookup.Found(info)
@@ -2397,7 +2398,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     var cwConfig by mutableStateOf(prefs.cw); private set
     var cwState by mutableStateOf<CwState>(CwState.Idle); private set
-    private var keyer: CwKeyer? = null
+    private var keyer: ru.r3xed.qsolog.cw.CwSender? = null
 
     fun changeCw(c: CwConfig) {
         val old = cwConfig
@@ -2413,8 +2414,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         cwState = CwState.Idle
         val c = cwConfig
         if (!c.enabled) return
-        lateinit var k: CwKeyer
-        k = CwKeyer({ catAndroid.openKeyLine(c) }, { st -> mainHandler.post { if (keyer === k) cwState = st } }, c.wpm, c.ptt)
+        lateinit var k: ru.r3xed.qsolog.cw.CwSender
+        val onState = { st: CwState -> mainHandler.post { if (keyer === k) cwState = st }; Unit }
+        // cwdaemon on another computer keys its radio; otherwise a line of the adapter here.
+        k = if (c.via == ru.r3xed.qsolog.cw.CwVia.CWDAEMON) ru.r3xed.qsolog.cw.CwDaemon(c.daemon, onState, c.wpm)
+        else CwKeyer({ catAndroid.openKeyLine(c) }, onState, c.wpm, c.ptt)
         keyer = k
     }
 
@@ -2496,6 +2500,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             .map { (pkg, label) -> StartApp(pkg, label) }
     }
 
+    var startAppsReturn by mutableStateOf(prefs.startAppsReturn); private set
+
+    fun changeStartAppsReturn(on: Boolean) {
+        startAppsReturn = on
+        prefs.startAppsReturn = on
+    }
+
     /** The apps are started once per run of the app, not on every turn of the screen. */
     var startAppsDone = false
 
@@ -2546,6 +2557,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val r = when (log) {
                 OnlineLog.QRZCOM -> OnlineLogs.uploadQrzCom(c.qrzcomKey, list, ONLINE_AGENT)
                 OnlineLog.CLUBLOG -> OnlineLogs.uploadClubLog(c.clublogEmail, c.clublogPassword, call, c.clublogAppKey, list, ONLINE_AGENT)
+                OnlineLog.EQSL -> OnlineLogs.uploadEqsl(c.eqslUser, c.eqslPassword, c.eqslNickname, list, ONLINE_AGENT)
                 OnlineLog.LOTW -> UploadResult(emptyList(), 0, null)
             }
             if (mark) withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
@@ -2590,6 +2602,50 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 tr("Не удалось сохранить файл: %s", e.message)
             }
             say(msg)
+        }
+    }
+
+    // ---------- eQSL inbox: the cards confirm contacts of the log, the others can be added ----------
+
+    /** The inbox dialog; null when closed. */
+    var eqslInbox by mutableStateOf<ru.r3xed.qsolog.data.EqslInbox?>(null); private set
+
+    /** Downloads the inbox and marks the confirmed contacts at once; the cards with no contact wait in the dialog. */
+    fun openEqslInbox() {
+        if (eqslInbox == ru.r3xed.qsolog.data.EqslInbox.Loading) return
+        val c = online
+        c.problem(ru.r3xed.qsolog.data.OnlineLog.EQSL, settings.myCall)?.let {
+            eqslInbox = ru.r3xed.qsolog.data.EqslInbox.Failed(it, settings = true)
+            return
+        }
+        eqslInbox = ru.r3xed.qsolog.data.EqslInbox.Loading
+        viewModelScope.launch {
+            eqslInbox = try {
+                val records = ru.r3xed.qsolog.data.Eqsl.downloadInbox(c.eqslUser, c.eqslPassword, c.eqslNickname, ONLINE_AGENT)
+                val m = ru.r3xed.qsolog.data.Eqsl.match(records, allQsos)
+                withContext(Dispatchers.IO) { m.confirmed.forEach { db.save(it) } }
+                if (m.confirmed.isNotEmpty()) reload()
+                ru.r3xed.qsolog.data.EqslInbox.Done(m)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ru.r3xed.qsolog.data.EqslInbox.Failed(e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    fun closeEqslInbox() {
+        if (eqslInbox != ru.r3xed.qsolog.data.EqslInbox.Loading) eqslInbox = null
+    }
+
+    /** The cards picked in the dialog become contacts of the log (repeats are skipped, as in an import). */
+    fun addEqslCards(cards: List<Qso>) {
+        eqslInbox = null
+        if (cards.isEmpty()) return
+        viewModelScope.launch {
+            val added = withContext(Dispatchers.IO) { db.insertAll(cards.map { it.withDistance(settings.myPosition) }) }
+            reload()
+            say(tr("Добавлено связей из eQSL: %s", added))
         }
     }
 

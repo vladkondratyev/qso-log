@@ -32,12 +32,13 @@ import ru.r3xed.qsolog.tr
 /** The summary line of the block: the logbooks that are set up. */
 fun onlineSummary(c: OnlineConfig, myCall: String, lotwReady: Boolean): String = listOfNotNull(
     "LoTW".takeIf { lotwReady },
+    "eQSL".takeIf { c.problem(OnlineLog.EQSL, myCall) == null },
     "Club Log".takeIf { c.problem(OnlineLog.CLUBLOG, myCall) == null },
     "QRZ.com".takeIf { c.problem(OnlineLog.QRZCOM, myCall) == null },
 ).joinToString(", ").ifBlank { tr("учётные записи не указаны") }
 
 /**
- * The accounts of LoTW, Club Log and the QRZ.com logbook. Uploads are made from the log (⋮ → «Экспорт и импорт»,
+ * The accounts of LoTW, eQSL, Club Log and the QRZ.com logbook. Uploads are made from the log (⋮ → «Экспорт и импорт»,
  * or the picked records). [computer]: LoTW is signed by TQSL right here — its location and, if not found, its path;
  * [tqslFound] — where TQSL was found, or null.
  */
@@ -55,6 +56,11 @@ fun OnlineSettings(c: OnlineConfig, onChange: (OnlineConfig) -> Unit, computer: 
     } else {
         Note(tr("LoTW принимает только связи, подписанные вашим сертификатом в программе TQSL от ARRL. Для Android её нет: телефон сохраняет файл, вы подписываете его в TQSL на компьютере («Sign a log and upload it») — или выгружаете из QSO-LOG для компьютера, он вызывает TQSL сам."))
     }
+    Section("eQSL")
+    SettingField(tr("Логин eQSL (позывной)"), c.eqslUser, { onChange(c.copy(eqslUser = it.trim().uppercase())) }, mono = true)
+    SecretField(tr("Пароль eQSL"), c.eqslPassword) { onChange(c.copy(eqslPassword = it)) }
+    SettingField(tr("QTH Nickname, если у позывного несколько профилей"), c.eqslNickname, { onChange(c.copy(eqslNickname = it)) })
+    Note(tr("Связи уходят в eQSL из журнала, как в другие онлайн-журналы. Полученные карточки: ⋮ → «Экспорт и импорт» → «Карточки eQSL» — у найденных связей появится отметка «eQSL получена», а карточки, которых нет в журнале, можно добавить."))
     Section("Club Log")
     SettingField(tr("E-mail Club Log"), c.clublogEmail, { onChange(c.copy(clublogEmail = it.trim())) }, mono = true)
     SecretField(tr("Пароль Club Log"), c.clublogPassword) { onChange(c.copy(clublogPassword = it)) }
