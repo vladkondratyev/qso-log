@@ -149,4 +149,16 @@ class WsjtxTest {
         assertEquals("UA9DEMO", s.dxCall)
         assertEquals(false, s.transmitting)
     }
+
+    @Test
+    fun utcMarkedAsLocalStaysUtc() {
+        // JTDX on Windows: 12:17 UTC sent with the "local" mark, logged a few seconds later, the computer in Moscow.
+        val moscow = java.time.ZoneId.of("Europe/Moscow")
+        val t = LocalDateTime.of(2026, 10, 20, 12, 17, 0)
+        assertEquals(t, Wsjtx.localOrUtc(t, t.plusMinutes(2), moscow))
+        // A real local time (15:17 in Moscow) is turned into UTC.
+        assertEquals(t, Wsjtx.localOrUtc(t.plusHours(3), t.plusMinutes(2), moscow))
+        // Logged long after: taken as UTC.
+        assertEquals(t, Wsjtx.localOrUtc(t, t.plusDays(3), moscow))
+    }
 }

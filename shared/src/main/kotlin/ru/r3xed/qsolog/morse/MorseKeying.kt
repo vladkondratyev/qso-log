@@ -175,16 +175,28 @@ data class MorseKeyMap(val dot: Set<String>, val dah: Set<String>, val straight:
         straight = (straight - id).let { if (role == 0) it + id else it },
     )
 
-    fun save(store: MorseStore) {
-        store.put("keys_dot", dot.joinToString(","))
-        store.put("keys_dah", dah.joinToString(","))
-        store.put("keys_straight", straight.joinToString(","))
+    /** [prefix]: "keys_" — the trainer's keys, "cw_keys_" — the keys of the QSO card in CW. */
+    /**
+     * The QSO card's keys: a key is [role]'s too (1 dot, 2 dash, 0 straight). The straight key and the paddles are
+     * separate modes, so one key (left Ctrl) can be both a straight key and the dot paddle; only the dot and the dash
+     * take a key from each other.
+     */
+    fun withCardKey(id: String, role: Int): MorseKeyMap = when (role) {
+        0 -> copy(straight = straight + id)
+        1 -> copy(dot = dot + id, dah = dah - id)
+        else -> copy(dah = dah + id, dot = dot - id)
+    }
+
+    fun save(store: MorseStore, prefix: String = "keys_") {
+        store.put("${prefix}dot", dot.joinToString(","))
+        store.put("${prefix}dah", dah.joinToString(","))
+        store.put("${prefix}straight", straight.joinToString(","))
     }
 
     companion object {
-        fun load(store: MorseStore, default: MorseKeyMap): MorseKeyMap {
+        fun load(store: MorseStore, default: MorseKeyMap, prefix: String = "keys_"): MorseKeyMap {
             fun set(k: String, d: Set<String>) = store.get(k)?.split(',')?.filter { it.isNotBlank() }?.toSet() ?: d
-            return MorseKeyMap(set("keys_dot", default.dot), set("keys_dah", default.dah), set("keys_straight", default.straight))
+            return MorseKeyMap(set("${prefix}dot", default.dot), set("${prefix}dah", default.dah), set("${prefix}straight", default.straight))
         }
     }
 }

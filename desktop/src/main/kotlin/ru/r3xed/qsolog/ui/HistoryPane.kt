@@ -331,7 +331,12 @@ private fun SourceChip(source: SearchSource) {
     )
 }
 
-internal fun sourceTitle(s: SearchSource) = if (s == SearchSource.MANUAL) tr("вручную") else if (s == SearchSource.QRZ_RU_SITE) tr("QRZ.ru (сайт)") else s.title
+internal fun sourceTitle(s: SearchSource) = when (s) {
+    SearchSource.MANUAL -> tr("вручную")
+    SearchSource.QRZ_RU_SITE -> tr("QRZ.ru (сайт)")
+    SearchSource.HAMQTH -> tr("HamQTH (по префиксу)")
+    else -> s.title
+}
 
 private fun searchedAt(t: Long): String { val d = utc(t); return "${DATE_FMT.format(d)} ${TIME_FMT.format(d)} UTC" }
 

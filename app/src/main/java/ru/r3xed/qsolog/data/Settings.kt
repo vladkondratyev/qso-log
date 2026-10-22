@@ -31,6 +31,8 @@ class Settings(context: Context) {
         qrzLogin = prefs.getString("qrz_login", "") ?: "",
         qrzSiteEmail = prefs.getString("qrz_site_email", "") ?: "",
         qrzComLogin = prefs.getString("qrzcom_login", "") ?: "",
+        hamqthLogin = prefs.getString("hamqth_login", "") ?: "",
+        qrzcqLogin = prefs.getString("qrzcq_login", "") ?: "",
         power = prefs.getString("my_power", "") ?: "",
         station = AdifLabels.MINE.keys.associateWith { prefs.getString("station_$it", "") ?: "" }.filterValues { it.isNotEmpty() },
     )
@@ -40,6 +42,8 @@ class Settings(context: Context) {
         qrzPassword = secret.getString("qrz_password", "") ?: "",
         qrzSitePassword = secret.getString("qrz_site_password", "") ?: "",
         qrzComPassword = secret.getString("qrzcom_password", "") ?: "",
+        hamqthPassword = secret.getString("hamqth_password", "") ?: "",
+        qrzcqPassword = secret.getString("qrzcq_password", "") ?: "",
     )
 
     fun save(s: StationSettings) {
@@ -50,13 +54,16 @@ class Settings(context: Context) {
             .putString("qrz_login", s.qrzLogin.trim())
             .putString("qrz_site_email", s.qrzSiteEmail.trim())
             .putString("qrzcom_login", s.qrzComLogin.trim())
+            .putString("hamqth_login", s.hamqthLogin.trim())
+            .putString("qrzcq_login", s.qrzcqLogin.trim())
             .putString("my_power", s.power.trim())
             .apply {
                 for (key in AdifLabels.MINE.keys) putString("station_$key", s.station[key].orEmpty().trim())
             }
             .apply()
         secret.edit().putString("qrz_password", s.qrzPassword).putString("qrz_site_password", s.qrzSitePassword)
-            .putString("qrzcom_password", s.qrzComPassword).apply()
+            .putString("qrzcom_password", s.qrzComPassword).putString("hamqth_password", s.hamqthPassword)
+            .putString("qrzcq_password", s.qrzcqPassword).apply()
     }
 
     /** The online logbooks' accounts: the e-mail and the TQSL location plain, the keys and the password encrypted. Slow — off the main thread. */
@@ -139,6 +146,14 @@ class Settings(context: Context) {
     var whatsNewSeen: String
         get() = prefs.getString("whats_new_seen", "") ?: ""
         set(v) = prefs.edit().putString("whats_new_seen", v).apply()
+    /** A newer version is looked for at every start (on since 2.7). */
+    var autoUpdateCheck: Boolean
+        get() = prefs.getBoolean("auto_update_check", true)
+        set(v) = prefs.edit().putBoolean("auto_update_check", v).apply()
+    /** The version whose "Доступна версия" window was closed: it is not offered again at start. */
+    var updateDismissed: String
+        get() = prefs.getString("update_dismissed", "") ?: ""
+        set(v) = prefs.edit().putString("update_dismissed", v).apply()
     var launchCount: Int
         get() = prefs.getInt("launch_count", 0)
         set(v) = prefs.edit().putInt("launch_count", v).apply()
@@ -193,8 +208,18 @@ class Settings(context: Context) {
         set(v) = prefs.edit().putBoolean("contest_rst_shown", v).apply()
     /** CAT: the transceiver's frequency, mode and S-meter (see ru.r3xed.qsolog.cat). */
     var cat: ru.r3xed.qsolog.cat.CatConfig
-        get() = ru.r3xed.qsolog.cat.CatConfig.fromMap(ru.r3xed.qsolog.cat.CatConfig.KEYS.associateWith { prefs.getString(it, null) }, ru.r3xed.qsolog.cat.CatLinkType.USB)
-        set(v) = prefs.edit().apply { v.toMap().forEach { (k, x) -> putString(k, x) } }.apply()
+        get() = ru.r3xed.qsolog.cat.CatConfig.fromMap(
+            ru.r3xed.qsolog.cat.CatConfig.KEYS.associateWith { prefs.getString(it, null) } +
+                (ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD to secret.getString(ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD, "")),
+            ru.r3xed.qsolog.cat.CatLinkType.USB,
+        )
+        set(v) {
+            // The radio's network password is kept encrypted, with the other passwords.
+            val m = v.toMap()
+            prefs.edit().apply { (m - ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD).forEach { (k, x) -> putString(k, x) } }.apply()
+            val pw = m[ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD].orEmpty()
+            if (secret.getString(ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD, "") != pw) secret.edit().putString(ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD, pw).apply()
+        }
     /** Contacts from WSJT-X, JTDX, MSHV over UDP (see ru.r3xed.qsolog.digi). */
     var digi: ru.r3xed.qsolog.digi.DigiConfig
         get() = ru.r3xed.qsolog.digi.DigiConfig.fromMap(ru.r3xed.qsolog.digi.DigiConfig.KEYS.associateWith { prefs.getString(it, null) })

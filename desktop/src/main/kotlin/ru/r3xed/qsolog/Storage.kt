@@ -334,11 +334,24 @@ class Settings {
 
     /** CAT: the transceiver's frequency, mode and S-meter (see ru.r3xed.qsolog.cat). */
     var cat: ru.r3xed.qsolog.cat.CatConfig
-        get() = ru.r3xed.qsolog.cat.CatConfig.fromMap(ru.r3xed.qsolog.cat.CatConfig.KEYS.associateWith { props.getProperty(it) }, ru.r3xed.qsolog.cat.CatLinkType.SERIAL)
+        get() = ru.r3xed.qsolog.cat.CatConfig.fromMap(
+            ru.r3xed.qsolog.cat.CatConfig.KEYS.associateWith { props.getProperty(it) } +
+                (ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD to lanPassword),
+            ru.r3xed.qsolog.cat.CatLinkType.SERIAL,
+        )
         set(v) {
-            v.toMap().forEach { (k, x) -> props.setProperty(k, x) }
+            val m = v.toMap()
+            (m - ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD).forEach { (k, x) -> props.setProperty(k, x) }
             file.outputStream().use { props.store(it, "QSO Log") }
+            // The radio's network password goes to the keychain, as the other passwords; written only when it changes.
+            val pw = m[ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD].orEmpty()
+            if (pw != lanPassword) {
+                savePassword(pw, account = ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD, key = ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD)
+                lanPassword = pw
+            }
         }
+
+    private var lanPassword: String = loadPassword(account = ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD, key = ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD)
 
     /** Contacts from WSJT-X, JTDX, MSHV over UDP (see ru.r3xed.qsolog.digi). */
     var digi: ru.r3xed.qsolog.digi.DigiConfig
@@ -366,6 +379,8 @@ class Settings {
     private var cachedPassword: String? = null
     private var cachedSitePassword: String? = null
     private var cachedComPassword: String? = null
+    private var cachedHamqthPassword: String? = null
+    private var cachedQrzcqPassword: String? = null
 
     /** Everything except the password, which may wait on a keychain prompt; read it with [password]. */
     fun load() = StationSettings(
@@ -378,6 +393,10 @@ class Settings {
         qrzSitePassword = cachedSitePassword.orEmpty(),
         qrzComLogin = get("qrzcom_login"),
         qrzComPassword = cachedComPassword.orEmpty(),
+        hamqthLogin = get("hamqth_login"),
+        hamqthPassword = cachedHamqthPassword.orEmpty(),
+        qrzcqLogin = get("qrzcq_login"),
+        qrzcqPassword = cachedQrzcqPassword.orEmpty(),
         power = get("my_power"),
         station = AdifLabels.MINE.keys.associateWith { get("station_$it") }.filterValues { it.isNotEmpty() },
     )
@@ -385,6 +404,8 @@ class Settings {
     fun password(): String = cachedPassword ?: loadPassword().also { cachedPassword = it }
     fun sitePassword(): String = cachedSitePassword ?: loadPassword(SITE_ACCOUNT, "qrz_site_password").also { cachedSitePassword = it }
     fun comPassword(): String = cachedComPassword ?: loadPassword(COM_ACCOUNT, "qrzcom_password").also { cachedComPassword = it }
+    fun hamqthPassword(): String = cachedHamqthPassword ?: loadPassword(HAMQTH_ACCOUNT, "hamqth_password").also { cachedHamqthPassword = it }
+    fun qrzcqPassword(): String = cachedQrzcqPassword ?: loadPassword(QRZCQ_ACCOUNT, "qrzcq_password").also { cachedQrzcqPassword = it }
 
     fun save(s: StationSettings) {
         props.setProperty("my_call", s.myCall.trim().uppercase())
@@ -394,10 +415,20 @@ class Settings {
         for (key in AdifLabels.MINE.keys) props.setProperty("station_$key", s.station[key].orEmpty().trim())
         props.setProperty("qrz_site_email", s.qrzSiteEmail.trim())
         props.setProperty("qrzcom_login", s.qrzComLogin.trim())
+        props.setProperty("hamqth_login", s.hamqthLogin.trim())
+        props.setProperty("qrzcq_login", s.qrzcqLogin.trim())
         put("qrz_login", s.qrzLogin.trim())
         if (cachedSitePassword != null && s.qrzSitePassword != cachedSitePassword) {
             cachedSitePassword = s.qrzSitePassword
             savePassword(s.qrzSitePassword, SITE_ACCOUNT, "qrz_site_password")
+        }
+        if (cachedHamqthPassword != null && s.hamqthPassword != cachedHamqthPassword) {
+            cachedHamqthPassword = s.hamqthPassword
+            savePassword(s.hamqthPassword, HAMQTH_ACCOUNT, "hamqth_password")
+        }
+        if (cachedQrzcqPassword != null && s.qrzcqPassword != cachedQrzcqPassword) {
+            cachedQrzcqPassword = s.qrzcqPassword
+            savePassword(s.qrzcqPassword, QRZCQ_ACCOUNT, "qrzcq_password")
         }
         if (cachedComPassword != null && s.qrzComPassword != cachedComPassword) {
             cachedComPassword = s.qrzComPassword
@@ -481,6 +512,16 @@ class Settings {
         get() = get("whats_new_seen", "")
         set(v) = put("whats_new_seen", v)
 
+    /** A newer version is looked for at every start (on since 2.7). */
+    var autoUpdateCheck: Boolean
+        get() = get("auto_update_check", "true").toBoolean()
+        set(v) = put("auto_update_check", v.toString())
+
+    /** The version whose "Доступна версия" window was closed: it is not offered again at start. */
+    var updateDismissed: String
+        get() = get("update_dismissed", "")
+        set(v) = put("update_dismissed", v)
+
     var hamqthEnabled: Boolean
         get() = get("hamqth_enabled", "true") == "true"
         set(v) = put("hamqth_enabled", v.toString())
@@ -559,5 +600,7 @@ class Settings {
         const val SITE_ACCOUNT = "www.qrz.ru"
         /** QRZ.com login (callsign or e-mail). */
         const val COM_ACCOUNT = "www.qrz.com"
+        const val HAMQTH_ACCOUNT = "www.hamqth.com"
+        const val QRZCQ_ACCOUNT = "www.qrzcq.com"
     }
 }

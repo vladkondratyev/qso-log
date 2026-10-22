@@ -42,6 +42,7 @@ fun TransferDialog(
     onExport: (ExportFormat) -> Unit,
     onUpload: () -> Unit,
     onEqslInbox: () -> Unit,
+    onLotwSync: () -> Unit,
     onSelect: () -> Unit,
     onImportAdif: () -> Unit,
     onImportCsv: () -> Unit,
@@ -63,6 +64,7 @@ fun TransferDialog(
                 Text(tr("Онлайн-журналы"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
                 Choice("LoTW · eQSL · Club Log · QRZ.com", tr("выгрузить новые связи"), Icons.Filled.CloudUpload, onUpload)
                 Choice(tr("Карточки eQSL"), tr("загрузить полученные: отметки в журнале и связи, которых в нём нет"), Icons.Filled.CloudDownload, onEqslInbox)
+                Choice(tr("Подтверждения LoTW"), tr("отметить подтверждённые связи: в журнале они станут зелёными"), Icons.Filled.CloudDownload, onLotwSync)
                 Text(tr("Импорт в журнал"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
                 Choice("ADIF", tr("файл .adi или .adif"), Icons.Filled.FileDownload, onImportAdif)
                 Choice("CSV", tr("таблица с разделителем «;»"), Icons.Filled.FileDownload, onImportCsv)

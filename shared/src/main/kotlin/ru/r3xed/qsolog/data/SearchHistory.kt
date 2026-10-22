@@ -11,6 +11,8 @@ enum class SearchSource(val key: String, val title: String) {
     QRZ_RU_SITE("qrzru-site", "QRZ.ru (сайт)"),
     QRZ_COM("qrzcom", "QRZ.com"),
     HAMQTH("hamqth", "HamQTH"),
+    HAMQTH_BOOK("hamqth-book", "HamQTH"),
+    QRZCQ("qrzcq", "QRZCQ"),
     MANUAL("manual", "вручную");
 
     companion object {

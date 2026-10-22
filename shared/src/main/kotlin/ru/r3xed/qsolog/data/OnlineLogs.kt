@@ -59,7 +59,7 @@ enum class OnlineLog(val title: String, val statusField: String, val dateField: 
         private val SHOW_DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
         /** Every field the upload marks (and the eQSL confirmations) use; the card shows them in their own block. */
-        val FIELDS: Set<String> = entries.flatMap { listOf(it.statusField, it.dateField, it.timeField) }.toSet() + Eqsl.RCVD_FIELDS
+        val FIELDS: Set<String> = entries.flatMap { listOf(it.statusField, it.dateField, it.timeField) }.toSet() + Eqsl.RCVD_FIELDS + Lotw.RCVD_FIELDS
     }
 }
 
@@ -80,6 +80,16 @@ data class OnlineConfig(
     val eqslUser: String = "",
     val eqslPassword: String = "",
     val eqslNickname: String = "",
+    /** The password of the LoTW certificate file (.p12); the file itself is kept by the app (see [Lotw.loadP12]). */
+    val lotwP12Password: String = "",
+    /** The LoTW website login and password: the confirmations are downloaded with them. */
+    val lotwUser: String = "",
+    val lotwPassword: String = "",
+    /** The station's zones for the signed contacts (TQSL's Station Location); the locator is the station's. */
+    val lotwCqz: String = "",
+    val lotwItuz: String = "",
+    /** The day confirmations were last downloaded ("2026-10-22"): the next download asks only for newer ones. */
+    val lotwSince: String = "",
 ) {
     /** What is missing for [log], or null when it can be sent (LoTW: see the platform's own check). */
     fun problem(log: OnlineLog, myCall: String): String? = when (log) {
@@ -93,20 +103,27 @@ data class OnlineConfig(
     fun publicMap(): Map<String, String> = mapOf(
         "clublog_email" to clublogEmail, "lotw_location" to lotwLocation, "tqsl_path" to tqslPath,
         "eqsl_user" to eqslUser, "eqsl_nickname" to eqslNickname,
+        "lotw_user" to lotwUser, "lotw_cqz" to lotwCqz, "lotw_ituz" to lotwItuz, "lotw_since" to lotwSince,
     )
     fun secretMap(): Map<String, String> = mapOf(
         "qrzcom_key" to qrzcomKey, "clublog_password" to clublogPassword, "clublog_key" to clublogAppKey, "eqsl_password" to eqslPassword,
+        "lotw_password" to lotwPassword, "lotw_p12_password" to lotwP12Password,
     )
 
+    /** What is missing to download the LoTW confirmations, or null. */
+    val lotwSyncProblem: String? get() = if (lotwUser.isBlank() || lotwPassword.isBlank()) tr("Укажите логин и пароль сайта LoTW") else null
+
     companion object {
-        val PUBLIC_KEYS = listOf("clublog_email", "lotw_location", "tqsl_path", "eqsl_user", "eqsl_nickname")
-        val SECRET_KEYS = listOf("qrzcom_key", "clublog_password", "clublog_key", "eqsl_password")
+        val PUBLIC_KEYS = listOf("clublog_email", "lotw_location", "tqsl_path", "eqsl_user", "eqsl_nickname", "lotw_user", "lotw_cqz", "lotw_ituz", "lotw_since")
+        val SECRET_KEYS = listOf("qrzcom_key", "clublog_password", "clublog_key", "eqsl_password", "lotw_password", "lotw_p12_password")
 
         fun from(m: Map<String, String?>) = OnlineConfig(
             qrzcomKey = m["qrzcom_key"].orEmpty(), clublogEmail = m["clublog_email"].orEmpty(),
             clublogPassword = m["clublog_password"].orEmpty(), clublogAppKey = m["clublog_key"].orEmpty(),
             lotwLocation = m["lotw_location"].orEmpty(), tqslPath = m["tqsl_path"].orEmpty(),
             eqslUser = m["eqsl_user"].orEmpty(), eqslPassword = m["eqsl_password"].orEmpty(), eqslNickname = m["eqsl_nickname"].orEmpty(),
+            lotwP12Password = m["lotw_p12_password"].orEmpty(), lotwUser = m["lotw_user"].orEmpty(), lotwPassword = m["lotw_password"].orEmpty(),
+            lotwCqz = m["lotw_cqz"].orEmpty(), lotwItuz = m["lotw_ituz"].orEmpty(), lotwSince = m["lotw_since"].orEmpty(),
         )
     }
 }

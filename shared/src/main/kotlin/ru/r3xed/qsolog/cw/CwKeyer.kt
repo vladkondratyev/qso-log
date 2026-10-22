@@ -7,6 +7,23 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.LockSupport
 
+/**
+ * Waits until the [System.nanoTime] [at], to a fraction of a millisecond. Windows wakes a sleeping thread only every
+ * 1–16 ms, which made dots of a different length ("not crisp" keying): the thread sleeps until the last 3 ms and spins
+ * through them. [stop] ends the wait early.
+ */
+fun preciseWait(at: Long, stop: () -> Boolean = { false }) {
+    while (!stop()) {
+        val left = at - System.nanoTime()
+        if (left <= 0) return
+        if (left > SPIN_NS) LockSupport.parkNanos(left - SPIN_NS) else Thread.onSpinWait()
+        if (Thread.interrupted()) throw InterruptedException()
+    }
+}
+
+/** How long before the moment a waiting thread stops sleeping and spins: Windows' timer is coarse, the others' fine. */
+private val SPIN_NS: Long = if (System.getProperty("os.name").orEmpty().startsWith("Windows")) 3_000_000 else 300_000
+
 /** The modem line of a USB serial adapter (CP2102, CH340, FT232) that closes the key, as N1MM does. */
 enum class CwLine { DTR, RTS }
 
@@ -31,10 +48,14 @@ data class CwConfig(
     val ptt: Boolean = false,
     val wpm: Int = 24,
     val messages: List<String> = DEFAULT_MESSAGES,
+    /** Keys of an external keyboard as a straight key or paddles in the CW card: see [CwKeyMode]. */
+    val keyMode: CwKeyMode = CwKeyMode.OFF,
+    /** The device's speaker beeps along with what is sent (self-monitoring), when the radio's own sidetone is not heard. */
+    val sidetone: Boolean = true,
 ) {
     fun toMap(): Map<String, String> = mapOf(
         "cw_enabled" to enabled.toString(), "cw_via" to via.name, "cw_daemon" to daemon, "cw_device" to device, "cw_line" to line.name, "cw_invert" to invert.toString(),
-        "cw_ptt" to ptt.toString(), "cw_wpm" to wpm.toString(),
+        "cw_ptt" to ptt.toString(), "cw_wpm" to wpm.toString(), "cw_key_mode" to keyMode.name, "cw_sidetone" to sidetone.toString(),
     ) + messages.mapIndexed { i, m -> "cw_msg${i + 1}" to m }
 
     companion object {
@@ -58,6 +79,8 @@ data class CwConfig(
                 ptt = m["cw_ptt"]?.toBooleanStrictOrNull() ?: d.ptt,
                 wpm = m["cw_wpm"]?.toIntOrNull()?.coerceIn(MIN_WPM, MAX_WPM) ?: d.wpm,
                 messages = DEFAULT_MESSAGES.indices.map { i -> m["cw_msg${i + 1}"] ?: DEFAULT_MESSAGES[i] },
+                keyMode = m["cw_key_mode"]?.let { v -> CwKeyMode.entries.firstOrNull { it.name == v } } ?: d.keyMode,
+                sidetone = m["cw_sidetone"]?.toBooleanStrictOrNull() ?: d.sidetone,
             )
         }
 
@@ -81,6 +104,30 @@ object CwMacros {
     }
 }
 
+/**
+ * Keying by hand from an external keyboard while the QSO card is in CW. [OFF]: the keys type as usual. [STRAIGHT]: a
+ * key held down keys the radio, as a straight key. [IAMBIC_A], [IAMBIC_B]: two keys are the dot and dash paddles of an
+ * electronic keyer. Which keys (left and right Ctrl, [ and ] by default) is set as for the Morse trainer.
+ */
+enum class CwKeyMode {
+    OFF, STRAIGHT, IAMBIC_A, IAMBIC_B;
+
+    val title: String
+        get() = when (this) {
+            OFF -> tr("Выкл.")
+            STRAIGHT -> tr("Прямой ключ")
+            IAMBIC_A -> tr("Ямбический A")
+            IAMBIC_B -> tr("Ямбический B")
+        }
+
+    val keyType: ru.r3xed.qsolog.morse.KeyType
+        get() = when (this) {
+            IAMBIC_A -> ru.r3xed.qsolog.morse.KeyType.IAMBIC_A
+            IAMBIC_B -> ru.r3xed.qsolog.morse.KeyType.IAMBIC_B
+            else -> ru.r3xed.qsolog.morse.KeyType.STRAIGHT
+        }
+}
+
 /** The adapter's lines; opened once and kept open while the key line is on. */
 interface KeyLine : Closeable {
     fun key(down: Boolean)
@@ -101,6 +148,30 @@ interface CwSender {
     /** Stops the message being sent and drops the ones waiting. */
     fun stop()
     fun close()
+
+    /** Keys the radio by hand (a straight key or a paddle keyer here); false when this sender cannot — it takes only text. */
+    fun hand(down: Boolean): Boolean = false
+}
+
+/**
+ * cwdaemon keys the radio far away; [mirror] plays the same texts on a line of nothing, so the speaker here beeps along
+ * (see [CwKeyer.onKey]). The state is the daemon's.
+ */
+class MirroredSender(val main: CwSender, private val mirror: CwSender) : CwSender {
+    override var wpm: Int
+        get() = main.wpm
+        set(v) { main.wpm = v; mirror.wpm = v }
+
+    override fun send(text: String) { main.send(text); mirror.send(text) }
+    override fun stop() { main.stop(); mirror.stop() }
+    override fun close() { main.close(); mirror.close() }
+}
+
+/** A key line of nothing: for [MirroredSender]'s speaker-only keyer. */
+object NoLine : KeyLine {
+    override fun key(down: Boolean) = Unit
+    override fun ptt(on: Boolean) = Unit
+    override fun close() = Unit
 }
 
 /**
@@ -112,12 +183,47 @@ class CwKeyer(
     private val onState: (CwState) -> Unit,
     @Volatile override var wpm: Int = 24,
     private val usePtt: Boolean = false,
+    /** Every key down and up, for the speaker's self-monitoring tone. */
+    private val onKey: (Boolean) -> Unit = {},
 ) : CwSender {
     private val queue = LinkedBlockingQueue<String>()
     @Volatile private var abort = false
     @Volatile private var running = true
     private var line: KeyLine? = null
+    private val lineLock = Any()
+    /** PTT is on: it stays on between the letters typed one by one, and goes off after [PTT_HANG_MS] of silence. */
+    @Volatile private var pttOn = false
+    @Volatile private var lastKeyAt = 0L
+    @Volatile private var handDown = false
     private val thread = Thread(::loop, "CW").apply { isDaemon = true; start() }
+
+    private fun line(): KeyLine = synchronized(lineLock) { line ?: open().also { line = it } }
+
+    private fun key(l: KeyLine, down: Boolean) {
+        l.key(down)
+        onKey(down)
+        lastKeyAt = System.currentTimeMillis()
+    }
+
+    override fun hand(down: Boolean): Boolean {
+        // A key pressed by hand cuts the message being sent.
+        if (down && (sending || queue.isNotEmpty())) stop()
+        try {
+            val l = line()
+            if (down && usePtt && !pttOn) {
+                l.ptt(true)
+                pttOn = true
+            }
+            handDown = down
+            key(l, down)
+        } catch (e: Exception) {
+            handDown = false
+            onState(CwState.Failed(e.message?.ifBlank { null } ?: e.javaClass.simpleName))
+        }
+        return true
+    }
+
+    @Volatile private var sending = false
 
     override fun send(text: String) {
         if (text.isBlank()) return
@@ -139,17 +245,30 @@ class CwKeyer(
     private fun loop() {
         try {
             while (running) {
-                val text = queue.poll(500, TimeUnit.MILLISECONDS) ?: continue
+                val text = queue.poll(if (pttOn) 100 else 500, TimeUnit.MILLISECONDS)
+                if (text == null) {
+                    // Nothing more to send for a while (and no key held): the radio goes back to receive.
+                    if (pttOn && !handDown && System.currentTimeMillis() - lastKeyAt > PTT_HANG_MS) {
+                        runCatching { synchronized(lineLock) { line }?.ptt(false) }
+                        pttOn = false
+                    }
+                    continue
+                }
                 abort = false
                 try {
-                    val l = line ?: open().also { line = it }
-                    play(l, text)
+                    sending = true
+                    play(line(), text)
+                    sending = false
                     onState(CwState.Idle)
                 } catch (e: InterruptedException) {
                     break
                 } catch (e: Exception) {
-                    runCatching { line?.close() }
-                    line = null
+                    sending = false
+                    synchronized(lineLock) {
+                        runCatching { line?.close() }
+                        line = null
+                    }
+                    pttOn = false
                     queue.clear()
                     onState(CwState.Failed(e.message?.ifBlank { null } ?: e.javaClass.simpleName))
                 }
@@ -158,6 +277,7 @@ class CwKeyer(
             Unit
         } finally {
             runCatching { line?.key(false); line?.ptt(false) }
+            onKey(false)
             runCatching { line?.close() }
             line = null
         }
@@ -166,16 +286,10 @@ class CwKeyer(
     private fun play(l: KeyLine, text: String) {
         var t = System.nanoTime()
         fun dot() = 1_200_000_000L / wpm.coerceIn(CwConfig.MIN_WPM, CwConfig.MAX_WPM)
-        fun waitUntil(at: Long) {
-            while (!abort) {
-                val left = at - System.nanoTime()
-                if (left <= 0) return
-                LockSupport.parkNanos(left)
-                if (Thread.interrupted()) throw InterruptedException()
-            }
-        }
-        if (usePtt) {
+        fun waitUntil(at: Long) = preciseWait(at) { abort }
+        if (usePtt && !pttOn) {
             l.ptt(true)
+            pttOn = true
             t += 30_000_000 // the radio switches to transmit
         }
         try {
@@ -190,18 +304,86 @@ class CwKeyer(
                 code.forEachIndexed { j, e ->
                     waitUntil(t)
                     if (abort) return
-                    l.key(true)
+                    key(l, true)
                     t += (if (e == '-') 3 else 1) * dot()
                     waitUntil(t)
-                    l.key(false)
+                    key(l, false)
                     if (j < code.length - 1) t += dot()
                 }
                 t += 3 * dot()
             }
             waitUntil(t)
         } finally {
-            l.key(false)
-            if (usePtt) l.ptt(false)
+            key(l, false)
+            // A stopped message lets the radio go at once; otherwise PTT hangs a moment for the next letters.
+            if (usePtt && abort) {
+                l.ptt(false)
+                pttOn = false
+            }
         }
+    }
+}
+
+/** PTT stays on this long after the last element, so letters typed one by one do not switch the radio each time. */
+private const val PTT_HANG_MS = 700L
+
+/**
+ * Keying by hand from the card: the keyboard (or the phone's screen) is a straight key or the paddles of an iambic
+ * keyer ([type]). A thread looks at the paddles every millisecond and keys through [keyDown]; [decoder] turns what was
+ * keyed into letters for the tape. A sender that cannot key by hand (cwdaemon) gets the letters as text instead.
+ */
+class CwHand(
+    type: ru.r3xed.qsolog.morse.KeyType,
+    wpm: Int,
+    private val keyDown: (Boolean) -> Boolean,
+    private val onText: (String) -> Unit,
+    private val onTone: (Boolean) -> Unit = {},
+) {
+    val session = ru.r3xed.qsolog.morse.MorseKeySession(wpm, type, cyrillic = false)
+    @Volatile private var running = true
+    private var tone = false
+    private var direct = true
+    private var told = 0
+
+    /** What has been keyed so far, as letters. */
+    fun text(): String = session.read(System.nanoTime() / 1_000_000) { it.text }
+
+    fun clear() {
+        session.clear()
+        told = 0
+    }
+
+    private val thread = Thread({
+        try {
+            while (running) {
+                val now = System.nanoTime()
+                val on = session.toneAt(now / 1_000_000)
+                if (on != tone) {
+                    tone = on
+                    onTone(on)
+                    if (direct && !keyDown(on)) direct = false
+                }
+                // Letters as text for a sender that cannot be keyed by hand (the tape reads [text] itself).
+                if (!direct) {
+                    val t = text()
+                    if (t.length > told) onText(t.substring(told))
+                    told = t.length
+                }
+                val busy = on || session.dit || session.dah || session.straight
+                if (busy) preciseWait(now + 1_000_000) else LockSupport.parkNanos(4_000_000)
+            }
+        } catch (e: InterruptedException) {
+            Unit
+        } finally {
+            if (tone) { onTone(false); if (direct) keyDown(false) }
+        }
+    }, "CW-hand").apply { isDaemon = true; priority = Thread.MAX_PRIORITY; start() }
+
+    /** A paddle or the straight key: 0 straight, 1 dot, 2 dash (see [ru.r3xed.qsolog.morse.MorseKeySession.press]). */
+    fun press(which: Int, down: Boolean) = session.press(which, down)
+
+    fun close() {
+        running = false
+        thread.interrupt()
     }
 }

@@ -11,12 +11,12 @@ QSO-LOG is a logbook for radio amateurs. It runs on Android, macOS, Windows and 
 on the phone and on the computer.
 
 A QSO takes a few taps: callsign, frequency, RST. The frequency, band and mode can come from the transceiver over CAT
-(ICOM CI-V, Kenwood, Elecraft, Yaesu, Hamlib rigctld), and the app tunes it from its own panel with meters and a band scale; CW messages — CQ,
-callsigns, exchange numbers — go out from the F1–F8 keys; FT8 and FT4 QSOs come in by themselves from WSJT-X, JTDX
-and MSHV. The app looks up the other station's name and city on QRZ.ru
-or QRZ.com, works out the distance and draws the path on a map. You can attach a voice note to a QSO. Contest mode
+(ICOM CI-V — by cable and over the network, Kenwood, Elecraft, Yaesu, Hamlib rigctld, OmniRig), and the app tunes it from its own panel with meters and a band scale; CW messages — CQ,
+callsigns, exchange numbers — go out from the F1–F8 keys, and from the keyboard any text, or the keyboard works as a key; FT8 and FT4 QSOs come in by themselves from WSJT-X, JTDX
+and MSHV. The app looks up the other station's name and city on QRZ.ru,
+QRZ.com, HamQTH or QRZCQ, works out the distance and draws the path on a map. You can attach a voice note to a QSO. Contest mode
 gives fast entry with exchange numbers, and the log exports to Cabrillo and to ЕРМАК, the Russian contest format.
-A dashboard shows the log in charts. The log exports to ADIF and CSV and uploads to LoTW, eQSL, Club Log and QRZ.com, and several devices can keep one log through
+A dashboard shows the log in charts. The log exports to ADIF and CSV and uploads to LoTW (directly, without TQSL), eQSL, Club Log and QRZ.com, and several devices can keep one log through
 your own Google Sheet. Buttons and text are large, so you can log on the air; with an external keyboard you can log
 without touching the screen at all.
 
@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.6.0 | [QSO-LOG-2.6.0.apk](../../releases/tag/v2.6.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.6.0 | [QSO-LOG-2.6.0-macos-arm64.dmg](../../releases/tag/desktop-v2.6.0) |
-| macOS 11 or newer, Intel | 2.6.0 | [QSO-LOG-2.6.0-macos-x64.dmg](../../releases/tag/desktop-v2.6.0) |
-| Windows 10 and 11, 64-bit | 2.6.0 | [QSO-LOG-2.6.0-windows-x64.zip](../../releases/tag/desktop-v2.6.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.6.0 | [QSO-LOG-2.6.0-linux-amd64.deb](../../releases/tag/desktop-v2.6.0) |
+| Android 8.0 or newer | 2.7.0 | [QSO-LOG-2.7.0.apk](../../releases/tag/v2.7.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.7.0 | [QSO-LOG-2.7.0-macos-arm64.dmg](../../releases/tag/desktop-v2.7.0) |
+| macOS 11 or newer, Intel | 2.7.0 | [QSO-LOG-2.7.0-macos-x64.dmg](../../releases/tag/desktop-v2.7.0) |
+| Windows 10 and 11, 64-bit | 2.7.0 | [QSO-LOG-2.7.0-windows-x64.zip](../../releases/tag/desktop-v2.7.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.7.0 | [QSO-LOG-2.7.0-linux-amd64.deb](../../releases/tag/desktop-v2.7.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -131,6 +131,13 @@ Gestures: swipe left across the keypad and, without lifting the finger, back rig
 the keypad becomes a trackpad: slide sideways to move the cursor between the letters, as when holding the space bar on
 an iPhone; the next key inserts there. The hold time (0.2–1.5 s) is set in "QSO entry" too.
 
+With [CW](#cw-from-the-f1f8-keys) on and the card in CW, one more row appears above the digits (since 2.7.0):
+**F1–F8** — the messages, **−** and **+** — the speed, **■** — stop sending.
+
+<p>
+<img src="docs/screenshots/84-cw-keypad-row.png" width="200" alt="The built-in keypad in a CW card: F1–F8, speed and Stop">
+</p>
+
 ## CAT — transceiver
 
 QSO-LOG talks to the transceiver the way N1MM, Log4OM, WSJT-X or FT8CN do: a few times a second it asks for the
@@ -167,6 +174,8 @@ the transceiver answers right now.
 | Yaesu FT-817, FT-818, FT-857, FT-897 | Yaesu, old 5-byte CAT |
 | any transceiver Hamlib knows | rigctld over the network (also wfview, SDR++, flrig) |
 | any transceiver connected to DXLab Commander (Windows) | Commander directives over the network, port 52002 |
+| networked ICOM: IC-705, IC-7610, IC-7760, IC-9700, IC-905 and others | Icom network (as RS-BA1 and wfview), UDP 50001 |
+| any transceiver set up in OmniRig (Windows) | OmniRig, Rig 1 or Rig 2 |
 
 Connection:
 
@@ -194,6 +203,23 @@ takes the frequency, mode and transmit state from Commander, and the panel, the 
 the radio through it — together with DXKeeper, WinWarbler and the other DXLab programs. There is no S-meter or power
 meter through Commander. Hamlib rigctld and the built-in drivers stay as they were.
 
+**ICOM over the network** (since 2.7.0). IC-705, IC-7610, IC-7760, IC-9700, IC-905 and other ICOMs with a network socket
+or Wi-Fi connect directly, with no computer by the radio — by the same protocol as RS-BA1, wfview and SDR-Control (UDP,
+ports 50001–50003). In the radio's menu: Network → **Network Control — ON**, **Network User1** — a name and password
+(Administrator rights), Control Port — 50001. In QSO-LOG: an ICOM model, connection "Network" → "Icom network (LAN,
+Wi-Fi)", the radio's address, port 50001 and the same name and password. It works on a home network, on the IC-705's
+own access point and through a VPN (NetBird, WireGuard, Tailscale): enter the radio's address in the tunnel and allow
+UDP 50001–50003 — no network discovery is needed. When the login fails the app says why: no answer, wrong name or
+password, the radio is busy with another program. "TCP adapter" remains for CI-V through ser2net or a Wi-Fi adapter.
+
+**Kenwood TS-590S/SG, TS-890S, TS-990S** (since 2.7.0) answer CAT only while the computer holds the RTS line on (RTS/CTS
+hardware flow control); for these models QSO-LOG turns it on itself, for others there is "Keep the RTS line on" in the
+CAT settings. When a Kenwood or Yaesu stays silent, the app tries the other port speeds and keeps the one it answered at.
+
+**OmniRig** (since 2.7.0, Windows). If the transceiver is already set up in OmniRig, choose "OmniRig" and Rig 1 or Rig 2:
+QSO-LOG takes the frequency, mode and transmit state from OmniRig and tunes the radio through it, together with MixW,
+JTDX and other programs working through OmniRig.
+
 <p>
 <img src="docs/screenshots/73-rig-panel.png" width="200" alt="The transceiver panel on the phone: S-meter and band scale">
 <img src="docs/screenshots/78-rig-tx.png" width="200" alt="The panel on transmit: power, SWR, ALC">
@@ -211,8 +237,17 @@ As in N1MM, QSO-LOG sends stored CW messages by keying the transmitter with the 
 (CP2102, CH340, FTDI). Eight messages on **F1–F8** — CQ, exchange, "TU", my and his callsign, repeat, "?", "AGN?" —
 take the card's fields: `{MYCALL}`, `{CALL}`, `{RST}`, `{NR}` (serial number sent), `{NAME}`, `{MYLOC}`. The keys work
 while the QSO card (the usual or the contest one) is in CW; on a phone without a keyboard the same messages are
-buttons under the frequency. **Esc** stops sending, **Alt+↑ / Alt+↓** change the speed (10–50 WPM). The keys can be
-reassigned.
+buttons under the frequency. **Esc** stops sending, **PageUp / PageDown** (or **Alt+↑ / Alt+↓**) change the speed
+(10–50 WPM). The keys can be reassigned.
+
+**Key on an external keyboard** (since 2.7.0) — no need to carry a CW key. Choose "Straight key" or "Iambic A/B" in the
+CW settings, and while the QSO card is in CW, keys of an external keyboard work as the key: left Ctrl or `[` — dot,
+right Ctrl or `]` — dash (as USB paddle adapters such as Vail send them); as a straight key, the key is closed while a key
+is held. The keys of the iambic and the straight key are reassigned in the CW settings too: "Assign", then press the key. The speed is that of the messages.
+The card does not change: only once the key is worked in it, a tape appears under the message buttons — the characters
+sent, each with its dots and dashes. "Sidetone from the speaker" in the CW settings makes the phone or the computer beep
+with the key when the radio's own sidetone is not heard. cwdaemon takes only text: it gets the finished letters.
+On Windows the keying is now crisp: dot and dash lengths no longer depend on the system's coarse timer.
 
 Settings → "Equipment and programs" → **"Telegraph (CW) — DTR/RTS or cwdaemon"**: the adapter (through OTG on the phone), the key line, the speed, the
 message texts, "The other line is PTT" for radios without break-in, and "Test: send VVV". If CAT uses the same
@@ -513,7 +548,7 @@ What you can do:
 
 ## Station data
 
-The app looks for the other station's name, city and position in four places, in this order. All of them are set up
+The app looks for the other station's name, city and position in six places, in this order. All of them are set up
 in Settings → "Callbooks and online logs" → "Station data sources".
 
 1. **QRZ.ru XML API.** The main way, meant by QRZ.ru for logging programs. QRZ.ru issues a separate API login:
@@ -524,7 +559,13 @@ in Settings → "Callbooks and online logs" → "Station data sources".
    callsign page. It breaks if the site changes its layout.
 3. **QRZ.com site.** For callsigns QRZ.ru doesn't know. Your QRZ.com login (callsign or e-mail) and password; a free
    account is enough. Gives name, address, country, locator, position and CQ/ITU zones. Two-factor login is not supported.
-4. **HamQTH.** No account needed, but only country, region and CQ/ITU zones. The distance is then to the centre of the
+4. **HamQTH callbook** (since 2.7.0) — a free hamqth.com account: name, QTH, locator and position.
+5. **QRZCQ** (since 2.7.0) — the qrzcq.com callbook; it answers programs only for premium members.
+
+The callbooks are asked in turn. When QRZ.ru finds the callsign but without a QTH or position, the missing part is
+looked up further down the list — QRZ.com, HamQTH, QRZCQ — while the name and whatever was found stay from the first answer.
+
+6. **HamQTH by prefix.** No account needed, but only country, region and CQ/ITU zones. The distance is then to the centre of the
    region and marked "≈". Can be switched off.
 
 Without internet the QSO is saved anyway; fill in the data later with ⟳.
@@ -551,7 +592,9 @@ worked on OpenStreetMap; a tap on a point opens the last QSO with that station.
 All formats are in one window: ⋮ menu → **"Export and import…"** (on the computer, the "File" menu; Settings → "Logbook" has a button for the same window).
 
 - **ADIF** (.adi) for LogHX, UR5EQF, HamLog, N1MM, QRZ.com and others, and for moving the log between phone and
-  computer. Choose UTF-8 or Windows-1251 when exporting; on import the encoding is detected and all fields are kept.
+  computer. Choose UTF-8 or Windows-1251 when exporting. On import (since 2.7.0) the encoding is chosen in a window —
+  UTF-8 by default, Windows-1251, KOI8-R, CP866 (DOS), Windows-1252, ISO-8859-1 — with the file's first records shown
+  in it: garbage instead of letters means another encoding. All fields are kept, even unknown ones.
 - **CSV** for Excel, separated by semicolons.
 - **Cabrillo 3.0** for international contests and **ЕРМАК** ([ermak.srr.ru](https://ermak.srr.ru/)) for Russian
   ones. The app asks for the contest code and category first.
@@ -583,10 +626,16 @@ them. The mark with date and time shows in the QSO card; take it off and the QSO
   (Help Desk → "Request an API key"). The callsign comes from "My station".
 - **eQSL** needs the eQSL login (callsign) and password, and the QTH Nickname if the callsign has several profiles.
   Duplicates count as "already there".
-- **LoTW**: ARRL's TQSL signs the QSOs with your certificate. On the computer QSO-LOG runs TQSL itself: enter the
-  Station Location (the name of the station location in TQSL); the app finds TQSL by itself. There is no TQSL for
-  the phone: QSO-LOG saves an ADIF file you sign in TQSL on a computer ("Sign a log and upload it"), and the QSOs
-  are marked "saved for TQSL".
+- **LoTW without TQSL** (since 2.7.0) — as in RUMlog and SDR-Control: load your `.p12` certificate file in the settings
+  (in TQSL on a computer: Callsign Certificates → your callsign → "Save the callsign certificate"), and the QSOs are
+  signed right in QSO-LOG and go to LoTW at a tap — from the phone and the computer. The callsign and country come from
+  the certificate, the locator from "My station", the CQ and ITU zones can be entered. QSOs with another station
+  callsign (`/P`, say, which needs its own certificate) or outside the certificate's dates are not signed; the app says so.
+- **LoTW confirmations** (since 2.7.0): with the LoTW website login and password, ⋮ → "Export and import" → **"LoTW
+  confirmations"** downloads the confirmations since the last time. Confirmed QSOs are marked (`LOTW_QSL_RCVD`, the date
+  shows in the card) and **turn green in the log** with a ✓.
+- **LoTW through TQSL** — without a `.p12` file it works as before: on the computer QSO-LOG runs TQSL itself (enter the
+  Station Location), on the phone it saves an ADIF file for TQSL.
 
 **eQSL cards** (since 2.6.0): ⋮ → "Export and import" → **"eQSL cards"** downloads the eQSL inbox — the cards sent to
 you. When the log has a QSO with the same station (a callsign with /P counts as the same), on the same band and mode
@@ -670,7 +719,9 @@ data sources and the LoTW, eQSL, Club Log and QRZ.com accounts; logbook ("Export
 sync — its header says whether Google sync is on, delete all); interface (language: system, Russian, English — changes
 at once; theme; keep the screen on (phone); "Assign keys" — any key of an external keyboard can be replaced, added or
 taken off). At the bottom: version, "What's new", "Report a problem" and
-"Check for updates". "Report a problem" opens a new GitHub issue in the browser with a template, the app version and
+"Check for updates", with "Check for a new version when the app starts" under it (on since 2.7.0): at start the app
+quietly asks GitHub and, when a new version is out, shows its new features once with an "Update" button; a closed window
+does not come back for that version, and with the switch off nothing is checked. "Report a problem" opens a new GitHub issue in the browser with a template, the app version and
 the device model — no log, callsign or passwords; you send it yourself (a GitHub account is needed).
 
 <p>
@@ -707,21 +758,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.6.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.6.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.7.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.7.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.6.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.6.0), unpack the
+Download `QSO-LOG-2.7.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.7.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.6.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.6.0) and install it:
+Download `QSO-LOG-2.7.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.7.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.6.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.7.0-linux-amd64.deb
 ```
 
 ## Where the data is kept

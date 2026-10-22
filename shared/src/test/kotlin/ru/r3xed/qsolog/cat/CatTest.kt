@@ -415,4 +415,60 @@ class CatTest {
         assertNull(CommanderDriver.khz(""))
         assertEquals(0L, CommanderDriver.khz(".000"))
     }
+
+    @Test
+    fun silentKenwoodIsTriedAtOtherSpeeds() {
+        // A TS-590S set to 9600 while the program says 115200: silence, then the speeds in turn.
+        val tried = CopyOnWriteArrayList<Int>()
+        val found = LinkedBlockingQueue<Int>()
+        val statuses = LinkedBlockingQueue<CatStatus>()
+        val kenwood = { baud: Int ->
+            tried += baud
+            FakeRadio(::text) { c -> if (baud == 9600 && c.toString(Charsets.US_ASCII) == "FA") "FA00014025000;".toByteArray() else null }
+        }
+        val c = CatConfig(rig = "TS-590S / SG", baud = 115200)
+        val session = CatSession(c, { kenwood(c.baud) }, { statuses.put(it) }, pollMs = 1, openAt = kenwood, onBaud = { found.put(it) })
+        session.start()
+        val baud = found.poll(30, TimeUnit.SECONDS)
+        session.stop()
+        assertEquals(9600, baud)
+        assertEquals(listOf(115200, 57600, 38400, 19200, 9600), tried.take(5))
+    }
+
+    @Test
+    fun omniRigLines() {
+        val radio = FakeRadio(::text) { c ->
+            when (c.toString(Charsets.US_ASCII).trim()) {
+                "poll" -> "S 4 7012340 ${OmniRigDriver.PM_CW_U} ${OmniRigDriver.PM_TX} \n".toByteArray()
+                else -> "OK\n".toByteArray()
+            }
+        }
+        val d = OmniRigDriver(1)
+        val s = d.poll(CatIo(radio), RigState())
+        assertEquals(7_012_340, s.freqHz)
+        assertEquals("CW", s.radioMode)
+        assertEquals(true, s.tx)
+        assertTrue(d.setMode(CatIo(radio), RadioMode.USB))
+        assertEquals("mode ${OmniRigDriver.PM_SSB_U}", radio.heard.last().toString(Charsets.US_ASCII).trim())
+        // OmniRig on line but its radio silent: the status text is shown.
+        val off = FakeRadio(::text) { "S 3 0 0 0 Rig is not responding\n".toByteArray() }
+        val d2 = OmniRigDriver(2)
+        d2.poll(CatIo(off), RigState())
+        assertEquals(false, d2.answered)
+        assertTrue(d2.what.contains("not responding"))
+    }
+
+    @Test
+    fun lanAndRtsSettingsRoundTrip() {
+        val c = CatConfig(rig = "IC-7760", link = CatLinkType.NETWORK, host = "100.64.0.5", port = 50001, lanUser = "r0demo", lanPassword = "pw", rts = false)
+        val back = CatConfig.fromMap(c.toMap(), CatLinkType.SERIAL)
+        assertEquals(c, back)
+        assertTrue(back.viaIcomLan)
+        assertEquals(0xB2, Rigs.byName("IC-7760").civ)
+        // An Icom on a serial server's port before 2.7 stays on TCP.
+        val old = CatConfig.fromMap(mapOf("cat_rig" to "IC-7300", "cat_link" to "NETWORK", "cat_port" to "4000"), CatLinkType.SERIAL)
+        assertEquals(false, old.viaIcomLan)
+        assertTrue(CatConfig(rig = "TS-590S / SG").rtsOn)
+        assertEquals(false, CatConfig(rig = "TS-480").rtsOn)
+    }
 }

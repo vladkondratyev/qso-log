@@ -24,6 +24,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -161,6 +164,18 @@ internal fun keyHeight(compact: Boolean) = if (compact) 35.dp else 50.dp
 internal fun keypadButtonHeight(compact: Boolean) = if (compact) 40.dp else 54.dp
 
 /**
+ * The telegraph row of the keypad (CW on, the card in CW): the messages F1–F8 ([labels], an empty one is off), the
+ * speed down and up, and Stop while a message goes out ([sending]).
+ */
+internal class CwKeys(
+    val labels: List<String>,
+    val sending: Boolean,
+    val onSend: (Int) -> Unit,
+    val onSpeed: (Int) -> Unit,
+    val onStop: () -> Unit,
+)
+
+/**
  * The app's keyboard, in the spirit of contest loggers: digits on top, Latin letters, "/" for portable calls, "-" for
  * dB reports, "." for the frequency. Holding ⌫ keeps deleting, as on a phone keyboard. [compact] makes it 30% lower.
  * A swipe to the left and, without lifting the finger, back to the right wipes the field ([onClear]); a finger held still for [holdMs] turns it into a
@@ -174,6 +189,7 @@ internal fun Keypad(
     onClear: () -> Unit = {},
     onCaret: (Int) -> Unit = {},
     holdMs: Int = 400,
+    cw: CwKeys? = null,
 ) {
     val x = LocalExtra.current
     val c = MaterialTheme.colorScheme
@@ -252,6 +268,32 @@ internal fun Keypad(
         }
     }
     Column(gestures.graphicsLayer { alpha = if (trackpad) 0.45f else 1f }, verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp)) {
+        if (cw != null) Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)) {
+            @Composable
+            fun key(label: String?, description: String, enabled: Boolean = true, accent: Boolean = false, onClick: () -> Unit, icon: @Composable () -> Unit = {}) = Box(
+                Modifier.weight(1f).height(h).clip(RoundedCornerShape(if (compact) 6.dp else 8.dp))
+                    .background(if (accent) c.errorContainer else c.secondaryContainer)
+                    .graphicsLayer { alpha = if (enabled) 1f else 0.35f }
+                    .semantics { contentDescription = description; role = Role.Button }
+                    .clickable(enabled = enabled) { tap(); onClick() },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (label != null) Text(label, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = if (compact) 13.sp else 15.sp, color = c.onSecondaryContainer, maxLines = 1)
+                else icon()
+            }
+            cw.labels.take(8).forEachIndexed { i, m ->
+                key("F${i + 1}", tr("Передать сообщение %s: %s", i + 1, m), enabled = m.isNotBlank(), onClick = { cw.onSend(i) })
+            }
+            key(null, tr("Медленнее"), onClick = { cw.onSpeed(-2) }) {
+                Icon(Icons.Filled.Remove, null, Modifier.size(if (compact) 18.dp else 22.dp), tint = c.onSecondaryContainer)
+            }
+            key(null, tr("Быстрее"), onClick = { cw.onSpeed(2) }) {
+                Icon(Icons.Filled.Add, null, Modifier.size(if (compact) 18.dp else 22.dp), tint = c.onSecondaryContainer)
+            }
+            key(null, tr("Остановить передачу"), accent = cw.sending, onClick = cw.onStop) {
+                Icon(Icons.Filled.Stop, null, Modifier.size(if (compact) 20.dp else 24.dp), tint = if (cw.sending) c.onErrorContainer else c.onSecondaryContainer)
+            }
+        }
         rows.forEachIndexed { i, keys ->
             Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)) {
                 keys.forEach { k ->

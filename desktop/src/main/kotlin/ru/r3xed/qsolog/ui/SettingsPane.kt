@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.FilterList
+import ru.r3xed.qsolog.cat.CatConfig
 import ru.r3xed.qsolog.cat.CatLinkType
 import ru.r3xed.qsolog.cat.CatProtocol
 import ru.r3xed.qsolog.cat.CatStatus
@@ -493,7 +494,19 @@ fun SettingsPane(
                         }
                         ActionButton(tr("Проверить вход"), null, vm::testQrzCom)
                         Note(tr("Ограничения те же, что у сайта QRZ.ru: страница — не интерфейс для программ и может измениться; учётные записи с двухфакторным входом не поддерживаются."))
-                        Section(tr("4. HamQTH — страна и область"))
+                        CallbookAccount(
+                            tr("4. HamQTH — справочник"),
+                            tr("Бесплатная учётная запись hamqth.com (регистрация на сайте). Имя, QTH, локатор и координаты станции — для зарубежных и российских позывных; спрашивается после QRZ.ru и QRZ.com, а также когда они нашли позывной без QTH или координат."),
+                            s.hamqthLogin, s.hamqthPassword, vm.callbookStatus["hamqth"],
+                            { vm.updateSettings(s.copy(hamqthLogin = it)) }, { vm.updateSettings(s.copy(hamqthPassword = it)) }, { vm.testCallbook("hamqth") },
+                        )
+                        CallbookAccount(
+                            tr("5. QRZCQ"),
+                            tr("Справочник qrzcq.com. Поиск через программы QRZCQ даёт только премиум-участникам; спрашивается последним — когда остальные не нашли позывной, QTH или координаты."),
+                            s.qrzcqLogin, s.qrzcqPassword, vm.callbookStatus["qrzcq"],
+                            { vm.updateSettings(s.copy(qrzcqLogin = it)) }, { vm.updateSettings(s.copy(qrzcqPassword = it)) }, { vm.testCallbook("qrzcq") },
+                        )
+                        Section(tr("6. HamQTH — страна и область"))
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                                 .toggleable(value = vm.hamqthEnabled, role = Role.Switch, onValueChange = vm::setHamqth)
@@ -509,7 +522,20 @@ fun SettingsPane(
                     }
 
                     SettingsBlock(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com"), onlineSummary(vm.online, s.myCall, lotwReady = vm.uploadProblem(ru.r3xed.qsolog.data.OnlineLog.LOTW) == null)) {
-                        OnlineSettings(vm.online, vm::changeOnline, computer = true, tqslFound = vm.tqslExecutable())
+                        OnlineSettings(
+                            vm.online, vm::changeOnline, computer = true, tqslFound = vm.tqslExecutable(),
+                            lotwCert = vm.lotwCert?.let(ru.r3xed.qsolog.data.Lotw::describe),
+                            onPickP12 = {
+                                val d = java.awt.FileDialog(null as java.awt.Frame?, tr("Сертификат LoTW (.p12)"), java.awt.FileDialog.LOAD)
+                                d.setFilenameFilter { _, name -> name.lowercase().endsWith(".p12") || name.lowercase().endsWith(".pfx") }
+                                if (!ru.r3xed.qsolog.IS_MAC) d.file = "*.p12"
+                                d.isVisible = true
+                                val name = d.file
+                                val dir = d.directory
+                                if (name != null && dir != null) vm.importLotwP12(java.io.File(dir, name))
+                            },
+                            onForgetP12 = vm::forgetLotwCert,
+                        )
                     }
                     Spacer(Modifier.height(24.dp))
                 }
@@ -542,7 +568,17 @@ private fun UpdateCheck(vm: AppState) {
             is UpdateState.Failed -> Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
             else -> {}
         }
+        SwitchRow(tr("Автоматически проверять новую версию при запуске программы"), vm.autoUpdateCheck) { vm.changeAutoUpdateCheck(it) }
     }
+}
+
+/**
+ * "Доступна версия": what is new in it and the download. Shown over any screen — after "Проверить обновления" or by
+ * the check at start; closed, that version is not offered at start again.
+ */
+@Composable
+fun UpdateDialog(vm: AppState) {
+    val state = vm.update
     if (state is UpdateState.Available) {
         val r = state.release
         AlertDialog(
@@ -557,7 +593,7 @@ private fun UpdateCheck(vm: AppState) {
             },
             confirmButton = {
                 // The file for this system (DMG, ZIP or DEB) downloads in the browser; install it over the current version.
-                Button(onClick = { openUrl(r.downloadUrl); vm.dismissUpdate() }) { Text(tr("Скачать")) }
+                Button(onClick = { openUrl(r.downloadUrl); vm.dismissUpdate() }) { Text(tr("Обновить")) }
             },
             dismissButton = { TextButton(onClick = vm::dismissUpdate) { Text(tr("Позже")) } },
         )
@@ -982,13 +1018,15 @@ private fun CatSettings(vm: AppState) {
             Icon(Icons.Filled.ArrowDropDown, null)
         }
         DropdownMenu(expanded = rigMenu, onDismissRequest = { rigMenu = false }, modifier = Modifier.heightIn(max = 460.dp)) {
-            CatProtocol.entries.forEach { p ->
+            // OmniRig is a Windows program.
+            CatProtocol.entries.filter { !it.local || ru.r3xed.qsolog.IS_WINDOWS }.forEach { p ->
                 Text(p.title, style = MaterialTheme.typography.labelMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                 Rigs.ALL.filter { it.protocol == p }.forEach { m ->
                     DropdownMenuItem(text = { Text(Rigs.title(m), fontWeight = if (m.name == c.rig) FontWeight.Bold else null) }, onClick = {
                         rigMenu = false
                         val link = when {
                             m.protocol.network -> CatLinkType.NETWORK
+                            m.protocol.local -> CatLinkType.SERIAL
                             c.link == CatLinkType.NETWORK && c.protocol.network -> CatLinkType.SERIAL
                             else -> c.link
                         }
@@ -1001,11 +1039,33 @@ private fun CatSettings(vm: AppState) {
     }
     Note(model.protocol.title)
 
-    if (!c.protocol.network) {
+    if (!c.protocol.network && !c.protocol.local) {
         Section(tr("Подключение"))
-        Choice(listOf(CatLinkType.SERIAL to tr("COM-порт"), CatLinkType.NETWORK to tr("Сеть")), if (c.link == CatLinkType.NETWORK) c.link else CatLinkType.SERIAL) { vm.changeCat(c.copy(link = it)) }
+        Choice(listOf(CatLinkType.SERIAL to tr("COM-порт"), CatLinkType.NETWORK to tr("Сеть")), if (c.link == CatLinkType.NETWORK) c.link else CatLinkType.SERIAL) { l ->
+            // An Icom on the network: its own protocol on port 50001.
+            vm.changeCat(c.copy(link = l, port = if (l == CatLinkType.NETWORK && c.protocol == CatProtocol.ICOM && c.icomLan && c.port == 4532) CatConfig.ICOM_LAN_PORT else c.port))
+        }
     }
     when {
+        c.protocol == CatProtocol.OMNIRIG -> {
+            Choice(listOf(1 to "Rig 1", 2 to "Rig 2"), c.omniRig) { vm.changeCat(c.copy(omniRig = it)) }
+            Note(tr("OmniRig держит трансивер сам, QSO-LOG спрашивает у него частоту, вид и передачу и перестраивает трансивер через него — вместе с другими программами, работающими через OmniRig (MixW, JTDX, N1MM, HDSDR). Установите OmniRig (dxatlas.com/omnirig), выберите в нём трансивер и COM-порт для Rig 1 или Rig 2 и тот же номер здесь."))
+        }
+        c.protocol == CatProtocol.ICOM && c.link == CatLinkType.NETWORK -> {
+            Choice(listOf(true to tr("Сеть Icom (LAN, Wi-Fi)"), false to tr("TCP-адаптер")), c.icomLan) { lan ->
+                vm.changeCat(c.copy(icomLan = lan, port = if (lan) CatConfig.ICOM_LAN_PORT else if (c.port == CatConfig.ICOM_LAN_PORT) 4532 else c.port))
+            }
+            SettingField(tr("Адрес трансивера (IP или имя)"), c.host, { vm.changeCat(c.copy(host = it.trim())) }, mono = true)
+            SettingField(tr("Порт"), c.port.toString(), { v -> v.filter(Char::isDigit).take(5).toIntOrNull()?.takeIf { it in 1..65535 }?.let { vm.changeCat(c.copy(port = it)) } }, mono = true)
+            if (c.icomLan) {
+                SettingField(tr("Имя пользователя (Network User)"), c.lanUser, { vm.changeCat(c.copy(lanUser = it.trim())) }, mono = true)
+                SecretField(tr("Пароль пользователя"), c.lanPassword) { vm.changeCat(c.copy(lanPassword = it)) }
+                Note(tr("Как в RS-BA1, wfview и SDR-Control: программа входит в трансивер по его сетевому протоколу (UDP, порты 50001–50003). В меню трансивера: Network → Network Control — ON; Network User1 — имя и пароль (права Administrator); Control Port — 50001. Адрес трансивера — в его меню (Network → IP Address), в том числе когда компьютер подключён к точке доступа самого трансивера. Через VPN (NetBird, WireGuard, Tailscale) укажите адрес трансивера в туннеле и разрешите UDP 50001–50003; автопоиск по сети не нужен."))
+                Note(tr("Одновременно трансивер обслуживает одну программу: закройте RS-BA1, wfview или SDR-Control. Если подключение оборвалось, трансивер держит его ещё около минуты."))
+            } else {
+                Note(tr("Трансивер за сетевым CAT-адаптером или сервером последовательного порта (ser2net, ESP32, Wi-Fi-адаптер): программа шлёт команды CI-V прямо в TCP-соединение."))
+            }
+        }
         c.protocol.network || c.link == CatLinkType.NETWORK -> {
             SettingField(tr("Адрес (IP или имя)"), c.host, { vm.changeCat(c.copy(host = it.trim())) }, mono = true)
             SettingField(tr("Порт"), c.port.toString(), { v -> v.filter(Char::isDigit).take(5).toIntOrNull()?.takeIf { it in 1..65535 }?.let { vm.changeCat(c.copy(port = it)) } }, mono = true)
@@ -1022,11 +1082,14 @@ private fun CatSettings(vm: AppState) {
             ActionButton(tr("Обновить список"), Icons.Filled.Refresh) { tick++ }
         }
     }
-    if (!c.protocol.network && c.link != CatLinkType.NETWORK) {
+    if (c.serial) {
         Section(tr("Скорость порта, бод"))
         Choice(Rigs.BAUDS.take(3).map { it to it.toString() }, c.baud) { vm.changeCat(c.copy(baud = it)) }
         Choice(Rigs.BAUDS.drop(3).map { it to it.toString() }, c.baud) { vm.changeCat(c.copy(baud = it)) }
         Note(tr("Как в меню трансивера (у ICOM: «CI-V USB Baud Rate» или «CI-V Baud Rate»). Если там «Auto» — подойдёт любая."))
+        if (c.protocol != CatProtocol.ICOM) Note(tr("Если трансивер молчит, программа сама переберёт скорости и запомнит ту, на которой он ответил."))
+        SwitchRow(tr("Держать линию RTS включённой"), c.rtsOn) { vm.changeCat(c.copy(rts = it)) }
+        Note(tr("Kenwood TS-590S/SG, TS-890S, TS-990S отвечают, только пока включена линия RTS (аппаратное управление потоком RTS/CTS) — для них включено само. Другим трансиверам RTS может включить передачу или телеграф (меню «USB SEND», «USB Keying»): держите выключенной."))
     }
     if (c.protocol == CatProtocol.ICOM) {
         var text by remember(c.civAddress) { mutableStateOf("%02X".format(c.civAddress)) }
@@ -1073,7 +1136,7 @@ private fun CatSettings(vm: AppState) {
     Section(tr("Поддерживаемые трансиверы"))
     Note(tr("ICOM (протокол CI-V): IC-705, IC-7300, IC-7610, IC-9700, IC-905, IC-7100, IC-7851, IC-7800, IC-7700, IC-7600, IC-7410, IC-7200, IC-9100, IC-7000, IC-756PRO, IC-746PRO, IC-910H, IC-718, IC-706MKIIG, IC-703, IC-R8600 и другие с CI-V — адрес можно задать вручную. Совместимые с CI-V: Xiegu X6100, X6200, G90, X5105, X108G."))
     Note(tr("Другие стандарты: Kenwood (TS-590, TS-890, TS-990, TS-480, TS-2000), Elecraft (K3, K4, KX2, KX3), FlexRadio через SmartSDR CAT, Yaesu с новым CAT (FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450) и со старым (FT-817, FT-818, FT-857, FT-897), а также любой трансивер через Hamlib rigctld или DXLab Commander по сети."))
-    Note(tr("Как это сделано: как в N1MM, Log4OM, WSJT-X и FT8CN — программа несколько раз в секунду спрашивает у трансивера частоту, вид связи и S-метр, а частоту, диапазон и вид меняет по вашей команде с пульта (нажмите на строку TRX в карточке) или кнопками карточки. В эфир она сама ничего не передаёт: линии DTR и RTS USB-порта держит выключенными, чтобы трансивер не перешёл на передачу. Подключение: кабель USB от трансивера (у ICOM с USB-разъёмом — напрямую, у остальных — кабель CI-V/CAT с адаптером CP210x, FTDI, CH340 или PL2303) или сеть. COM-порт одновременно может открыть только одна программа: если трансивером уже управляет WSJT-X или другой логгер, подключайтесь через rigctld."))
+    Note(tr("Как это сделано: как в N1MM, Log4OM, WSJT-X и FT8CN — программа несколько раз в секунду спрашивает у трансивера частоту, вид связи и S-метр, а частоту, диапазон и вид меняет по вашей команде с пульта (нажмите на строку TRX в карточке) или кнопками карточки. В эфир она сама ничего не передаёт: линии DTR и RTS USB-порта держит выключенными, чтобы трансивер не перешёл на передачу (RTS включает только тем трансиверам, которым она нужна для обмена). Подключение: кабель USB от трансивера (у ICOM с USB-разъёмом — напрямую, у остальных — кабель CI-V/CAT с адаптером CP210x, FTDI, CH340 или PL2303) или сеть. COM-порт одновременно может открыть только одна программа: если трансивером уже управляет WSJT-X или другой логгер, подключайтесь через rigctld."))
 }
 
 /**

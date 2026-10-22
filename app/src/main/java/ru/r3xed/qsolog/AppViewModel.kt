@@ -50,6 +50,8 @@ import ru.r3xed.qsolog.data.LatLon
 import ru.r3xed.qsolog.data.QrzClient
 import ru.r3xed.qsolog.data.QrzSite
 import ru.r3xed.qsolog.data.QrzCom
+import ru.r3xed.qsolog.data.complete
+import ru.r3xed.qsolog.data.fillFrom
 import ru.r3xed.qsolog.data.Contest
 import ru.r3xed.qsolog.data.ContestBook
 import ru.r3xed.qsolog.data.ContestMode
@@ -203,6 +205,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         qrzPassword = s.qrzPassword.ifEmpty { p.qrzPassword },
         qrzSitePassword = s.qrzSitePassword.ifEmpty { p.qrzSitePassword },
         qrzComPassword = s.qrzComPassword.ifEmpty { p.qrzComPassword },
+        hamqthPassword = s.hamqthPassword.ifEmpty { p.hamqthPassword },
+        qrzcqPassword = s.qrzcqPassword.ifEmpty { p.qrzcqPassword },
     )
 
     private fun applySecrets() {
@@ -213,14 +217,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val qrz = QrzClient { settings.qrzLogin to settings.qrzPassword }
     private val qrzSite = QrzSite { settings.qrzSiteEmail to settings.qrzSitePassword }
     private val qrzCom = QrzCom { settings.qrzComLogin to settings.qrzComPassword }
+    private val hamqthBook = ru.r3xed.qsolog.data.HamQthBook { settings.hamqthLogin to settings.hamqthPassword }
+    private val qrzCq = ru.r3xed.qsolog.data.QrzCq { settings.qrzcqLogin to settings.qrzcqPassword }
 
-    /** Some callsign account is set: the QRZ.ru XML API (preferred), the QRZ.ru site's e-mail login or QRZ.com. */
-    val hasQrzAccount get() = settings.qrzLogin.isNotBlank() || settings.qrzSiteEmail.isNotBlank() || settings.qrzComLogin.isNotBlank()
+    /** Some callsign account is set: the QRZ.ru XML API (preferred), the QRZ.ru site's e-mail login, QRZ.com, HamQTH or QRZCQ. */
+    val hasQrzAccount get() = settings.qrzLogin.isNotBlank() || settings.qrzSiteEmail.isNotBlank() || settings.qrzComLogin.isNotBlank() ||
+        settings.hamqthLogin.isNotBlank() || settings.qrzcqLogin.isNotBlank()
 
     /**
      * Station data for a callsign: through the QRZ.ru XML API when its account is set (it wins when several are set),
-     * otherwise — or when the API fails — from the QRZ.ru site's callsign page with the e-mail login, and then from
-     * the QRZ.com page (also when QRZ.ru does not know the callsign: foreign stations). Null: known to none of them.
+     * otherwise — or when the API fails — from the QRZ.ru site's callsign page with the e-mail login, then QRZ.com,
+     * HamQTH and QRZCQ (also when QRZ.ru does not know the callsign: foreign stations). An answer without the QTH or
+     * the station's position is completed from the next callbooks in this order. Null: known to none of them.
      */
     private suspend fun qrzLookup(call: String, stillWanted: () -> Boolean = { true }): QrzInfo? {
         // Callbooks know R0DEMO, not R0DEMO/P or DL/R0DEMO; the card keeps the callsign as typed.
@@ -237,11 +245,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (problem == null) problem = e
             null
         }
+        // The first answer is the card's; what it lacks (the QTH, the position) the next callbooks fill in.
+        var found: QrzInfo? = null
+        suspend fun next(from: SearchSource, source: suspend () -> QrzInfo?) {
+            if (found?.complete == true) return
+            val info = ask(source) ?: return
+            found = found?.fillFrom(info) ?: info.copy(source = from.key)
+        }
         // The XML API gives no RDA district: for a Russian station it is read from the callsign page of the site.
-        if (settings.qrzLogin.isNotBlank()) ask { qrz.lookup(home, stillWanted) }?.let { return qrzSite.withRda(it).copy(source = SearchSource.QRZ_RU.key) }
+        if (settings.qrzLogin.isNotBlank()) next(SearchSource.QRZ_RU) { qrz.lookup(home, stillWanted)?.let { qrzSite.withRda(it) } }
         // The QRZ.ru site is the same database as its XML API: asked only when the API is not set or failed.
-        if (settings.qrzSiteEmail.isNotBlank() && !notFound) ask { qrzSite.lookup(home) }?.let { return it.copy(source = SearchSource.QRZ_RU_SITE.key) }
-        if (settings.qrzComLogin.isNotBlank()) ask { qrzCom.lookup(home) }?.let { return it.copy(source = SearchSource.QRZ_COM.key) }
+        if (settings.qrzSiteEmail.isNotBlank() && !notFound && found == null) next(SearchSource.QRZ_RU_SITE) { qrzSite.lookup(home) }
+        if (settings.qrzComLogin.isNotBlank()) next(SearchSource.QRZ_COM) { qrzCom.lookup(home) }
+        if (settings.hamqthLogin.isNotBlank()) next(SearchSource.HAMQTH_BOOK) { hamqthBook.lookup(home) }
+        if (settings.qrzcqLogin.isNotBlank()) next(SearchSource.QRZCQ) { qrzCq.lookup(home) }
+        found?.let { return it }
         if (notFound) return null
         throw problem ?: QrzException(403, tr("Укажите учётную запись QRZ.ru в настройках"))
     }
@@ -587,8 +605,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Closing the "Доступна версия" window: that version is not offered at start again. */
     fun dismissUpdate() {
+        (update as? UpdateState.Available)?.let { prefs.updateDismissed = it.release.version }
         update = UpdateState.Idle
+    }
+
+    var autoUpdateCheck by mutableStateOf(prefs.autoUpdateCheck); private set
+
+    fun changeAutoUpdateCheck(on: Boolean) {
+        autoUpdateCheck = on
+        prefs.autoUpdateCheck = on
+    }
+
+    /**
+     * At start, when switched on: a quiet look for a newer version. Found and not closed before — the window with
+     * what is new and "Обновить"; nothing found or no internet — nothing is said.
+     */
+    private fun checkUpdateAtStart() {
+        if (!prefs.autoUpdateCheck) return
+        viewModelScope.launch {
+            delay(4000)
+            if (update != UpdateState.Idle) return@launch
+            try {
+                val r = withContext(Dispatchers.IO) { UpdateChecker.latest() }
+                if (UpdateChecker.isNewer(r.version, BuildConfig.VERSION_NAME) && r.version != prefs.updateDismissed && update == UpdateState.Idle) update = UpdateState.Available(r)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+        }
     }
 
     /** Where "Назад" in the settings returns: the log, or the card that sent the user there. */
@@ -673,8 +718,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // After the constructor: the CAT fields are declared further down.
         android.os.Handler(android.os.Looper.getMainLooper()).post { restartCat(); restartDigi(); restartCw() }
         viewModelScope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
+        checkUpdateAtStart()
         // The online logbooks' keys and passwords: from the encrypted file, off the main thread.
-        viewModelScope.launch { online = withContext(Dispatchers.IO) { prefs.loadOnline() } }
+        viewModelScope.launch { online = withContext(Dispatchers.IO) { prefs.loadOnline() }; loadLotwCert() }
     }
 
     override fun onCleared() {
@@ -2201,7 +2247,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if ((rigServer != null) != (c.enabled && c.serve)) restartServer()
         if (!c.enabled) return
         lateinit var session: CatSession
-        session = CatSession(c, { catAndroid.open(c) }, { st -> mainHandler.post { if (catSession === session) onCat(st) } })
+        session = CatSession(c, { catAndroid.open(c) }, { st -> mainHandler.post { if (catSession === session) onCat(st) } },
+            openAt = if (c.serial) ({ b -> catAndroid.open(c, b) }) else null,
+            onBaud = { b -> mainHandler.post { if (catSession === session) { catConfig = catConfig.copy(baud = b); prefs.cat = catConfig } } })
         catSession = session
         session.start()
     }
@@ -2406,6 +2454,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.cw = c
         keyer?.wpm = c.wpm
         if (c.copy(wpm = old.wpm, messages = old.messages) != old) restartCw()
+        // The hand keyer counts its dots from the speed: a new speed, a new keyer at the next key.
+        else if (c.wpm != old.wpm) closeCwHand(keepTape = true)
     }
 
     fun restartCw() {
@@ -2417,9 +2467,111 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         lateinit var k: ru.r3xed.qsolog.cw.CwSender
         val onState = { st: CwState -> mainHandler.post { if (keyer === k) cwState = st }; Unit }
         // cwdaemon on another computer keys its radio; otherwise a line of the adapter here.
-        k = if (c.via == ru.r3xed.qsolog.cw.CwVia.CWDAEMON) ru.r3xed.qsolog.cw.CwDaemon(c.daemon, onState, c.wpm)
-        else CwKeyer({ catAndroid.openKeyLine(c) }, onState, c.wpm, c.ptt)
+        // The speaker beeps along when asked: with each key of the line here, or with a copy of cwdaemon's texts.
+        val tone = if (c.sidetone) ru.r3xed.qsolog.ui.CwSidetone() else null
+        cwTone = tone
+        val onKey = { down: Boolean -> tone?.key(down); Unit }
+        k = if (c.via == ru.r3xed.qsolog.cw.CwVia.CWDAEMON) {
+            val daemon = ru.r3xed.qsolog.cw.CwDaemon(c.daemon, onState, c.wpm)
+            if (tone == null) daemon else ru.r3xed.qsolog.cw.MirroredSender(daemon, CwKeyer({ ru.r3xed.qsolog.cw.NoLine }, {}, c.wpm, onKey = onKey))
+        } else CwKeyer({ catAndroid.openKeyLine(c) }, onState, c.wpm, c.ptt, onKey)
         keyer = k
+        closeCwHand(keepTape = true)
+    }
+
+    /** The speaker's beep of the telegraph; null when switched off. */
+    private var cwTone: ru.r3xed.qsolog.ui.CwSidetone? = null
+
+    // ---------- the telegraph by hand: keys of an external keyboard as a straight key or paddles ----------
+
+    /** What was keyed by hand in this card, as letters (the CW bar shows it). */
+    private var cwTape = ""
+
+    /** The hand keyer, made at the first key of the card in CW (see [cwHandKey]). */
+    private var cwHand: ru.r3xed.qsolog.cw.CwHand? = null
+
+    /** Where the card's keys are kept: with the Morse trainer's settings, under their own names. */
+    private val cwKeyStore = object : ru.r3xed.qsolog.morse.MorseStore {
+            private val p = getApplication<Application>().getSharedPreferences("morse_trainer", android.content.Context.MODE_PRIVATE)
+            override fun get(key: String) = p.getString(key, null)
+            override fun put(key: String, value: String) { p.edit().putString(key, value).apply() }
+        }
+
+    private val CW_KEYS = "cw_keys_"
+
+    private fun openCwHand(): ru.r3xed.qsolog.cw.CwHand? {
+        closeCwHand(keepTape = true)
+        val c = cwConfig
+        if (c.keyMode == ru.r3xed.qsolog.cw.CwKeyMode.OFF) return null
+        val k = keyer ?: return null
+        return ru.r3xed.qsolog.cw.CwHand(
+            c.keyMode.keyType, c.wpm,
+            keyDown = { down -> keyer?.hand(down) ?: false },
+            // cwdaemon cannot be keyed by hand: the keyed letters go to it as text (to the daemon only, the speaker already beeped).
+            onText = { t -> ((k as? ru.r3xed.qsolog.cw.MirroredSender)?.main ?: k).send(t) },
+            onTone = { down -> if (k !is CwKeyer) cwTone?.key(down) },
+        ).also { cwHand = it }
+    }
+
+    fun closeCwHand(keepTape: Boolean = false) {
+        cwHand?.let { h -> cwTape = if (keepTape) (cwTape + h.text()).takeLast(200) else "" }
+        if (!keepTape) cwTape = ""
+        cwHand?.close()
+        cwHand = null
+    }
+
+    /** The external keyboard's keys of the card in CW: dot, dash and straight key (CW settings, «Назначить»). */
+    var cwKeys by mutableStateOf(ru.r3xed.qsolog.morse.MorseKeyMap.load(cwKeyStore, ru.r3xed.qsolog.ui.defaultCwKeyMap(), CW_KEYS)); private set
+
+    /** The role waiting for a key in the settings (1 dot, 2 dash, 0 straight); null — none. */
+    var cwLearn by mutableStateOf<Int?>(null)
+
+    private fun saveCwKeys(m: ru.r3xed.qsolog.morse.MorseKeyMap) {
+        cwKeys = m
+        m.save(cwKeyStore, CW_KEYS)
+    }
+
+    /** «Очистить» of one role: no key for it. */
+    fun clearCwKeys(role: Int) = saveCwKeys(
+        when (role) {
+            0 -> cwKeys.copy(straight = emptySet())
+            1 -> cwKeys.copy(dot = emptySet())
+            else -> cwKeys.copy(dah = emptySet())
+        },
+    )
+
+    fun resetCwKeys() {
+        cwLearn = null
+        saveCwKeys(ru.r3xed.qsolog.ui.defaultCwKeyMap())
+    }
+
+    /** The letters keyed by hand in this card so far. */
+    fun cwTapeNow(): String = (cwTape + (cwHand?.text() ?: "")).takeLast(200)
+
+    /**
+     * A key of an external keyboard ([id] — the platform's key code) while the card is in CW and the hand keyer is on:
+     * the dot or dash paddle, or the straight key. True when it was taken (it then types nothing). Space always types.
+     */
+    fun cwHandKey(id: String, down: Boolean, repeat: Boolean): Boolean {
+        // «Назначить» in the settings: the next key pressed becomes the role's.
+        cwLearn?.let { role ->
+            if (down && !repeat) {
+                cwLearn = null
+                saveCwKeys(cwKeys.withCardKey(id, role))
+            }
+            return true
+        }
+        val c = cwConfig
+        if (!cwActive || c.keyMode == ru.r3xed.qsolog.cw.CwKeyMode.OFF || id == android.view.KeyEvent.KEYCODE_SPACE.toString()) return false
+        val k = cwKeys
+        // The straight key and the paddles have keys of their own: one key may be in both.
+        val role = if (c.keyMode == ru.r3xed.qsolog.cw.CwKeyMode.STRAIGHT) (if (id in k.straight) 0 else -1)
+        else if (id in k.dot) 1 else if (id in k.dah) 2 else -1
+        if (role < 0) return false
+        if (repeat) return true
+        val h = cwHand ?: openCwHand() ?: return false
+        h.press(role, down)
+        return true
     }
 
     /** The card is in CW and the key line is on: F1–F8 send the messages. */
@@ -2450,6 +2602,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     val cwSending: Boolean get() = cwState is CwState.Sending
+
+    /** The telegraph row of the app's keypad (F1–F8, speed, Stop), while the card is in CW and the key line is on. */
+    internal fun cwKeypadKeys(): ru.r3xed.qsolog.ui.CwKeys? = if (!cwActive) null else ru.r3xed.qsolog.ui.CwKeys(
+        labels = cwConfig.messages, sending = cwSending, onSend = ::sendCw, onSpeed = ::changeCwSpeed, onStop = ::stopCw,
+    )
 
     fun changeCwSpeed(delta: Int) {
         changeCw(cwConfig.copy(wpm = (cwConfig.wpm + delta).coerceIn(CwConfig.MIN_WPM, CwConfig.MAX_WPM)))
@@ -2515,8 +2672,76 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var online by mutableStateOf(OnlineConfig()); private set
 
     fun changeOnline(c: OnlineConfig) {
+        val pw = c.lotwP12Password != online.lotwP12Password
         online = c
         prefs.saveOnline(c)
+        if (pw && lotwCert == null) loadLotwCert()
+    }
+
+    // ---------- LoTW without TQSL: the callsign certificate signs here ----------
+
+    /** The LoTW certificate loaded from its .p12 file (kept in the app's private folder); null — none. */
+    var lotwCert by mutableStateOf<ru.r3xed.qsolog.data.LotwCert?>(null); private set
+    private val lotwFile get() = java.io.File(getApplication<Application>().filesDir, "lotw.p12")
+
+    private fun loadLotwCert() {
+        val f = lotwFile
+        if (!f.exists()) return
+        val pw = online.lotwP12Password
+        viewModelScope.launch {
+            lotwCert = withContext(Dispatchers.IO) { runCatching { ru.r3xed.qsolog.data.Lotw.loadP12(f.readBytes(), pw) }.getOrNull() }
+        }
+    }
+
+    /** The .p12 file picked in the settings: checked with the password typed there, then kept. */
+    fun importLotwP12(uri: Uri) {
+        viewModelScope.launch {
+            val msg = try {
+                val bytes = withContext(Dispatchers.IO) { getApplication<Application>().contentResolver.openInputStream(uri)!!.use { it.readBytes() } }
+                val c = withContext(Dispatchers.Default) { ru.r3xed.qsolog.data.Lotw.loadP12(bytes, online.lotwP12Password) }
+                withContext(Dispatchers.IO) { lotwFile.writeBytes(bytes) }
+                lotwCert = c
+                tr("Сертификат LoTW для %s загружен", c.callsign)
+            } catch (e: ru.r3xed.qsolog.data.LotwException) {
+                e.message.orEmpty()
+            } catch (e: Exception) {
+                tr("Не удалось прочитать файл: %s", e.message)
+            }
+            say(msg)
+        }
+    }
+
+    fun forgetLotwCert() {
+        lotwFile.delete()
+        lotwCert = null
+    }
+
+    var lotwSyncing by mutableStateOf(false); private set
+
+    /** Downloads LoTW's confirmations since the last time and marks the matching contacts (they turn green in the log). */
+    fun syncLotw() {
+        if (lotwSyncing) return
+        val c = online
+        c.lotwSyncProblem?.let { say(it); openSettings(page = SettingsPage.SOURCES); return }
+        lotwSyncing = true
+        viewModelScope.launch {
+            val msg = try {
+                val since = runCatching { LocalDate.parse(c.lotwSince).minusDays(1) }.getOrNull()
+                val records = ru.r3xed.qsolog.data.Lotw.confirmations(c.lotwUser, c.lotwPassword, since, ONLINE_AGENT)
+                val m = ru.r3xed.qsolog.data.Lotw.match(records, allQsos)
+                withContext(Dispatchers.IO) { m.confirmed.forEach { db.save(it) } }
+                if (m.confirmed.isNotEmpty()) reload()
+                changeOnline(online.copy(lotwSince = LocalDate.now(ZoneOffset.UTC).toString()))
+                ru.r3xed.qsolog.data.Lotw.summary(m)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e.message ?: e.javaClass.simpleName
+            } finally {
+                lotwSyncing = false
+            }
+            say(msg)
+        }
     }
 
     /** The upload dialog is open: for [UploadTarget.only] records picked in the log, or the whole log when null. */
@@ -2546,7 +2771,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun upload(log: OnlineLog, onlyNew: Boolean, mark: Boolean) {
         val target = uploadTarget ?: return
-        if (uploading != null || log == OnlineLog.LOTW) return
+        if (uploading != null || (log == OnlineLog.LOTW && lotwCert == null)) return
         uploadProblem(log)?.let { say(it); return }
         val c = online
         val call = settings.myCall.trim()
@@ -2558,7 +2783,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 OnlineLog.QRZCOM -> OnlineLogs.uploadQrzCom(c.qrzcomKey, list, ONLINE_AGENT)
                 OnlineLog.CLUBLOG -> OnlineLogs.uploadClubLog(c.clublogEmail, c.clublogPassword, call, c.clublogAppKey, list, ONLINE_AGENT)
                 OnlineLog.EQSL -> OnlineLogs.uploadEqsl(c.eqslUser, c.eqslPassword, c.eqslNickname, list, ONLINE_AGENT)
-                OnlineLog.LOTW -> UploadResult(emptyList(), 0, null)
+                OnlineLog.LOTW -> ru.r3xed.qsolog.data.Lotw.send(lotwCert!!, ru.r3xed.qsolog.data.Lotw.Station(settings.myLocator, c.lotwCqz, c.lotwItuz), list, ONLINE_AGENT)
             }
             if (mark) withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
             reload()
@@ -2662,6 +2887,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val credentialsChanged = s.qrzLogin != settings.qrzLogin || s.qrzPassword != settings.qrzPassword
         val siteChanged = s.qrzSiteEmail != settings.qrzSiteEmail || s.qrzSitePassword != settings.qrzSitePassword
         val comChanged = s.qrzComLogin != settings.qrzComLogin || s.qrzComPassword != settings.qrzComPassword
+        val hamqthChanged = s.hamqthLogin != settings.hamqthLogin || s.hamqthPassword != settings.hamqthPassword
+        val qrzcqChanged = s.qrzcqLogin != settings.qrzcqLogin || s.qrzcqPassword != settings.qrzcqPassword
         settings = s
         prefs.save(s)
         if (credentialsChanged) {
@@ -2674,10 +2901,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             qrzSiteOk = null
             qrzSiteStatus = null
         }
+        if (hamqthChanged) {
+            hamqthBook.reset()
+            callbookStatus = callbookStatus - "hamqth"
+        }
+        if (qrzcqChanged) {
+            qrzCq.reset()
+            callbookStatus = callbookStatus - "qrzcq"
+        }
         if (comChanged) {
             qrzCom.reset()
             qrzComOk = null
             qrzComStatus = null
+        }
+    }
+
+    /** "Проверить вход" of HamQTH ("hamqth") and QRZCQ ("qrzcq"): logged in or not, and what was said. */
+    var callbookStatus by mutableStateOf<Map<String, Pair<Boolean?, String>>>(emptyMap()); private set
+
+    fun testCallbook(which: String) {
+        viewModelScope.launch {
+            callbookStatus = callbookStatus + (which to (null to tr("Проверяю…")))
+            val result: Pair<Boolean?, String> = try {
+                if (which == "hamqth") { hamqthBook.reset(); hamqthBook.check() } else { qrzCq.reset(); qrzCq.check() }
+                true to tr("Вход выполнен")
+            } catch (e: QrzException) {
+                false to (e.message ?: "")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false to (if (e is java.net.UnknownHostException) tr("Нет интернета") else e.message ?: e.javaClass.simpleName)
+            }
+            callbookStatus = callbookStatus + (which to result)
         }
     }
 
@@ -2785,11 +3040,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- CSV ----------
 
+    /** An ADIF file read and waiting for its encoding (see AdifImportDialog): its name and bytes. */
+    var adifImport by mutableStateOf<Pair<String, ByteArray>?>(null)
+
+    /** Reads the file and shows the import dialog, where the encoding is chosen. */
     fun importAdif(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) { getApplication<Application>().contentResolver.openInputStream(uri)!!.use { it.readBytes() } }
+                adifImport = (uri.lastPathSegment?.substringAfterLast('/') ?: "ADIF") to bytes
+            } catch (e: Exception) {
+                _messages.send(Message(tr("Не удалось прочитать файл: %s", e.message)))
+            }
+        }
+    }
+
+    fun importAdif(bytes: ByteArray, charset: java.nio.charset.Charset) {
+        adifImport = null
         viewModelScope.launch {
             val msg = try {
                 val (added, dup, bad) = withContext(Dispatchers.IO) {
-                    val r = getApplication<Application>().contentResolver.openInputStream(uri)!!.use { Adif.import(it) }
+                    val r = Adif.import(bytes, charset)
                     // A voice note name only means something if the file is on this phone.
                     val rows = r.rows.map { q ->
                         val withAudio = if (q.audio.isNotBlank() && !voice.file(q.audio).exists()) q.copy(audio = "") else q

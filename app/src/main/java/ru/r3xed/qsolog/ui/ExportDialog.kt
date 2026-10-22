@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -121,6 +122,16 @@ fun ExportDot(format: ExportFormat, on: Boolean = true, size: Dp = 12.dp) {
     Box(
         Modifier.size(size).clip(CircleShape)
             .then(if (on) Modifier.background(c) else Modifier.border(1.5.dp, c.copy(alpha = 0.5f), CircleShape)),
+    )
+}
+
+/** A green seal on the log row of a contact the other station confirmed in LoTW. */
+@Composable
+fun ConfirmedMark(adif: Map<String, String>) {
+    if (!ru.r3xed.qsolog.data.Lotw.isReceived(adif)) return
+    androidx.compose.material3.Icon(
+        androidx.compose.material.icons.Icons.Filled.Verified, tr("Подтверждена в LoTW"),
+        Modifier.padding(end = 8.dp).size(20.dp), tint = LocalExtra.current.ok,
     )
 }
 

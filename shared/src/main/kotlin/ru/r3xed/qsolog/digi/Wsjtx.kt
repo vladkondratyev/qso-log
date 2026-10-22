@@ -171,11 +171,22 @@ object Wsjtx {
             if (jd <= 0 || ms >= 86_400_000L) return null
             val t = LocalDateTime.of(LocalDate.ofEpochDay(jd - JD_EPOCH), LocalTime.ofNanoOfDay(ms * 1_000_000))
             return when (spec) {
-                0 -> t.atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()
+                0 -> localOrUtc(t, LocalDateTime.now(ZoneOffset.UTC), java.time.ZoneId.systemDefault())
                 2 -> t.minusSeconds(offsetS.toLong())
                 else -> t
             }
         }
+    }
+
+    /**
+     * A time sent as "local": WSJT-X sends UTC, but JTDX on Windows marks its UTC time as local, and taking it as local
+     * moved the contact by the time zone (12:17 UTC became 09:17 in Moscow). Whichever reading is nearer to [nowUtc]
+     * wins — a contact is logged when it ends; one far from now is taken as UTC, as all these programs keep it.
+     */
+    fun localOrUtc(t: LocalDateTime, nowUtc: LocalDateTime, zone: java.time.ZoneId): LocalDateTime {
+        val asLocal = t.atZone(zone).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()
+        fun away(x: LocalDateTime) = kotlin.math.abs(java.time.Duration.between(x, nowUtc).toMinutes())
+        return if (asLocal != t && away(asLocal) < away(t) && away(asLocal) <= 60) asLocal else t
     }
 
     /** The Julian day of 1970-01-01. */

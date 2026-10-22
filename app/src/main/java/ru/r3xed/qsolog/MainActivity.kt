@@ -72,6 +72,8 @@ class MainActivity : ComponentActivity() {
         if (ru.r3xed.qsolog.morse.MorseKeyBus.key(event.keyCode.toString(), event.action == KeyEvent.ACTION_DOWN, event.repeatCount > 0)) return true
         val soft = event.flags and KeyEvent.FLAG_SOFT_KEYBOARD != 0
         val physical = !soft && event.deviceId != KeyCharacterMap.VIRTUAL_KEYBOARD
+        // The card in CW with the hand keyer on: the external keyboard's paddle keys key the radio.
+        if (!soft && vm.cwHandKey(event.keyCode.toString(), event.action == KeyEvent.ACTION_DOWN, event.repeatCount > 0)) return true
         // Typing on a keyboard whose attachment the system did not report: switch to the text fields all the same.
         if (physical && event.action == KeyEvent.ACTION_DOWN && vm.keypadShown && event.isPrintingKey &&
             (vm.screen == Screen.Edit || vm.screen == Screen.Contest)) vm.hardKeyboard = true
@@ -319,6 +321,7 @@ class MainActivity : ComponentActivity() {
                             onExport = { vm.showTransfer = false; vm.openExport(it, selectedOnly = false) },
                             onUpload = { vm.showTransfer = false; vm.openUpload(selectedOnly = false) },
                             onEqslInbox = { vm.showTransfer = false; vm.openEqslInbox() },
+                            onLotwSync = { vm.showTransfer = false; vm.syncLotw() },
                             onSelect = { vm.showTransfer = false; vm.showSelect = true },
                             onImportAdif = { vm.showTransfer = false; importAdif.launch(arrayOf("*/*")) },
                             onImportCsv = { vm.showTransfer = false; import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
@@ -326,6 +329,8 @@ class MainActivity : ComponentActivity() {
                             onDismiss = { vm.showTransfer = false },
                         )
                         if (vm.showSelect) ru.r3xed.qsolog.ui.SelectDialog(vm.allQsos, onPick = vm::selectIds, onDismiss = { vm.showSelect = false })
+                        if (!vm.showWhatsNew) ru.r3xed.qsolog.ui.UpdateDialog(vm)
+                        vm.adifImport?.let { (name, bytes) -> ru.r3xed.qsolog.ui.AdifImportDialog(name, bytes, onImport = { vm.importAdif(bytes, it) }, onDismiss = { vm.adifImport = null }) }
                         // Not over the first-start setup: it waits until the log.
                         if (vm.showWhatsNew && vm.screen != Screen.Welcome) ru.r3xed.qsolog.ui.WhatsNewDialog(BuildConfig.VERSION_NAME, desktop = false, onClose = vm::closeWhatsNew)
                         if (vm.historyAsk) HistoryOnDialog(onConfirm = { vm.changeHistoryOn(true) }, onDismiss = { vm.historyAsk = false })
@@ -356,12 +361,13 @@ class MainActivity : ComponentActivity() {
                                 count = { log, onlyNew -> vm.uploadCandidates(log, target.only, onlyNew).size },
                                 problem = vm::uploadProblem,
                                 busy = vm.uploading,
-                                lotwNote = tr("LoTW принимает только связи, подписанные вашим сертификатом в программе TQSL от ARRL. Для Android её нет: сохраните файл, перенесите на компьютер и подпишите в TQSL («Sign a log and upload it») — или выгружайте из QSO-LOG для компьютера, он вызывает TQSL сам."),
-                                lotwAction = tr("Сохранить файл"),
+                                lotwNote = if (vm.lotwCert != null) tr("Связи подписываются вашим сертификатом LoTW (%s) и сразу уходят в LoTW.", vm.lotwCert!!.callsign)
+                                else tr("Загрузите в настройках файл сертификата .p12 из TQSL — и связи будут уходить в LoTW прямо отсюда. Пока его нет, сохраните файл, перенесите на компьютер и подпишите в TQSL («Sign a log and upload it»)."),
+                                lotwAction = if (vm.lotwCert != null) tr("Отправить") else tr("Сохранить файл"),
                                 onOpenSettings = { vm.closeUpload(); vm.openSettings() },
                                 onDismiss = vm::closeUpload,
                                 onConfirm = { log, onlyNew, mark ->
-                                    if (log == ru.r3xed.qsolog.data.OnlineLog.LOTW) exportLotw.launch(vm.prepareLotw(onlyNew, mark)) else vm.upload(log, onlyNew, mark)
+                                    if (log == ru.r3xed.qsolog.data.OnlineLog.LOTW && vm.lotwCert == null) exportLotw.launch(vm.prepareLotw(onlyNew, mark)) else vm.upload(log, onlyNew, mark)
                                 },
                             )
                         }

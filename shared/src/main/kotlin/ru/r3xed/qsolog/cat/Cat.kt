@@ -18,10 +18,15 @@ enum class CatProtocol {
     /** Hamlib rigctld (and programs that imitate it: wfview, SDR++, flrig's rigctld bridge) over the network. */
     RIGCTLD,
     /** DXLab Commander (Windows), which holds the radio itself and takes directives over TCP. */
-    COMMANDER;
+    COMMANDER,
+    /** OmniRig (Windows): a COM server holding the radio; QSO-LOG asks it through PowerShell. */
+    OMNIRIG;
 
     /** Reached over the network only, never a port of its own. */
     val network: Boolean get() = this == RIGCTLD || this == COMMANDER
+
+    /** Neither a port nor the network: another program of this computer holds the radio. */
+    val local: Boolean get() = this == OMNIRIG
 
     /** Its usual TCP port. */
     val defaultPort: Int get() = if (this == COMMANDER) CommanderDriver.DEFAULT_PORT else 4532
@@ -34,14 +39,18 @@ enum class CatProtocol {
             YAESU_OLD -> tr("Yaesu FT-817 / 818 / 857 / 897")
             RIGCTLD -> tr("Hamlib rigctld (по сети)")
             COMMANDER -> tr("DXLab Commander (по сети, Windows)")
+            OMNIRIG -> tr("OmniRig (Windows)")
         }
 }
 
 /** How the app reaches the radio. USB and Bluetooth are Android's, SERIAL is the computer's COM port. */
 enum class CatLinkType { USB, BLUETOOTH, SERIAL, NETWORK }
 
-/** A transceiver in the model list: its protocol and the factory CI-V address and speed. */
-data class RigModel(val name: String, val protocol: CatProtocol, val civ: Int = 0, val baud: Int = 19200) {
+/**
+ * A transceiver in the model list: its protocol and the factory CI-V address and speed. [rts] — the radio sends only
+ * while the computer holds RTS on (RTS/CTS flow control of Kenwood TS-590, TS-890, TS-990).
+ */
+data class RigModel(val name: String, val protocol: CatProtocol, val civ: Int = 0, val baud: Int = 19200, val rts: Boolean = false) {
     /** Elecraft's S-meter counts 0–21 bars, Kenwood's 0–30. */
     val elecraft get() = name.startsWith("Elecraft")
 }
@@ -52,9 +61,11 @@ object Rigs {
     const val OTHER_YAESU = "Yaesu — другая модель (новый CAT)"
     const val RIGCTLD = "Hamlib rigctld / wfview / flrig"
     const val COMMANDER = "DXLab Commander"
+    const val OMNIRIG = "OmniRig"
 
     val ALL: List<RigModel> = listOf(
         RigModel("IC-705", CatProtocol.ICOM, 0xA4, 115200),
+        RigModel("IC-7760", CatProtocol.ICOM, 0xB2, 115200),
         RigModel("IC-7300", CatProtocol.ICOM, 0x94, 115200),
         RigModel("IC-7610", CatProtocol.ICOM, 0x98, 115200),
         RigModel("IC-9700", CatProtocol.ICOM, 0xA2, 115200),
@@ -83,9 +94,9 @@ object Rigs {
         RigModel("Xiegu X5105", CatProtocol.ICOM, 0x70, 19200),
         RigModel("Xiegu X108G", CatProtocol.ICOM, 0x70, 19200),
         RigModel(OTHER_ICOM, CatProtocol.ICOM, 0x94, 19200),
-        RigModel("TS-590S / SG", CatProtocol.KENWOOD, baud = 115200),
-        RigModel("TS-890S", CatProtocol.KENWOOD, baud = 115200),
-        RigModel("TS-990S", CatProtocol.KENWOOD, baud = 115200),
+        RigModel("TS-590S / SG", CatProtocol.KENWOOD, baud = 115200, rts = true),
+        RigModel("TS-890S", CatProtocol.KENWOOD, baud = 115200, rts = true),
+        RigModel("TS-990S", CatProtocol.KENWOOD, baud = 115200, rts = true),
         RigModel("TS-480", CatProtocol.KENWOOD, baud = 57600),
         RigModel("TS-2000", CatProtocol.KENWOOD, baud = 57600),
         RigModel("Elecraft K3 / K3S", CatProtocol.KENWOOD, baud = 38400),
@@ -106,6 +117,7 @@ object Rigs {
         RigModel("FT-857 / FT-897", CatProtocol.YAESU_OLD, baud = 9600),
         RigModel(RIGCTLD, CatProtocol.RIGCTLD),
         RigModel(COMMANDER, CatProtocol.COMMANDER),
+        RigModel(OMNIRIG, CatProtocol.OMNIRIG),
     )
 
     fun byName(name: String): RigModel = ALL.firstOrNull { it.name == name } ?: ALL.first { it.name == "IC-7300" }
@@ -146,9 +158,30 @@ data class CatConfig(
     val servePort: Int = RigServer.DEFAULT_PORT,
     /** The server takes programs on other computers of the network too, not only on this one. */
     val serveLan: Boolean = false,
+    /**
+     * An Icom on the network is reached by Icom's own protocol (RS-BA1, wfview: UDP 50001 with a login), not by plain
+     * TCP to a serial server (ser2net, a Wi-Fi CI-V adapter).
+     */
+    val icomLan: Boolean = true,
+    /** The radio's "Network User" — its name and password from the radio's menu (Network → Network User1). */
+    val lanUser: String = "",
+    val lanPassword: String = "",
+    /** RTS of the serial port held on; null — as the model wants (see [RigModel.rts]). */
+    val rts: Boolean? = null,
+    /** OmniRig's radio: 1 or 2. */
+    val omniRig: Int = 1,
 ) {
     val model get() = Rigs.byName(rig)
     val protocol get() = model.protocol
+
+    /** RTS on: the radio's flow control wants it, or the user said so. */
+    val rtsOn: Boolean get() = rts ?: model.rts
+
+    /** The radio is an Icom reached by Icom's network protocol (see [icomLan]). */
+    val viaIcomLan: Boolean get() = protocol == CatProtocol.ICOM && link == CatLinkType.NETWORK && icomLan
+
+    /** The link is a serial port (USB, a COM port), where the speed matters. */
+    val serial: Boolean get() = !protocol.network && !protocol.local && (link == CatLinkType.USB || link == CatLinkType.SERIAL)
 
     fun toMap(): Map<String, String> = mapOf(
         "cat_enabled" to enabled.toString(), "cat_rig" to rig, "cat_civ" to civAddress.toString(16),
@@ -156,6 +189,8 @@ data class CatConfig(
         "cat_port" to port.toString(), "cat_follow_freq" to followFreq.toString(), "cat_follow_mode" to followMode.toString(),
         "cat_smeter_rst" to sMeterToRst.toString(), "cat_control" to control.toString(),
         "cat_serve" to serve.toString(), "cat_serve_port" to servePort.toString(), "cat_serve_lan" to serveLan.toString(),
+        "cat_icom_lan" to icomLan.toString(), "cat_lan_user" to lanUser, LAN_PASSWORD to lanPassword,
+        "cat_rts" to (rts?.toString() ?: "auto"), "cat_omnirig" to omniRig.toString(),
     )
 
     companion object {
@@ -177,8 +212,20 @@ data class CatConfig(
                 serve = m["cat_serve"]?.toBooleanStrictOrNull() ?: d.serve,
                 servePort = m["cat_serve_port"]?.toIntOrNull()?.takeIf { it in 1..65535 } ?: d.servePort,
                 serveLan = m["cat_serve_lan"]?.toBooleanStrictOrNull() ?: d.serveLan,
+                // Before 2.7 an Icom on the network was reached by TCP only: kept for a serial server's port, not Icom's.
+                icomLan = m["cat_icom_lan"]?.toBooleanStrictOrNull() ?: (m["cat_port"]?.toIntOrNull()?.let { it in 50001..50003 } ?: d.icomLan),
+                lanUser = m["cat_lan_user"] ?: d.lanUser,
+                lanPassword = m[LAN_PASSWORD] ?: d.lanPassword,
+                rts = m["cat_rts"]?.toBooleanStrictOrNull(),
+                omniRig = m["cat_omnirig"]?.toIntOrNull()?.takeIf { it == 1 || it == 2 } ?: d.omniRig,
             )
         }
+
+        /** The one secret key: kept where the app keeps passwords, not in the plain settings. */
+        const val LAN_PASSWORD = "cat_lan_password"
+
+        /** Icom's network control port (Network → Control Port (UDP)). */
+        const val ICOM_LAN_PORT = 50001
 
         val KEYS = CatConfig().toMap().keys
     }

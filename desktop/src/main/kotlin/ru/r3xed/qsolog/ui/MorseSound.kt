@@ -80,6 +80,57 @@ class MorseSidetone(private val session: ru.r3xed.qsolog.morse.MorseKeySession, 
     }
 }
 
+/**
+ * The telegraph's self-monitoring beep from the computer's speaker: sounds while [key] says the key is down. The sound
+ * line opens with the first key and closes after a few seconds of silence.
+ */
+class CwSidetone(private val hz: Double = 700.0) {
+    @Volatile private var on = false
+    @Volatile private var running = false
+    @Volatile private var lastOn = 0L
+
+    fun key(down: Boolean) {
+        on = down
+        if (down) lastOn = System.currentTimeMillis()
+        if (down && !running) {
+            running = true
+            kotlin.concurrent.thread(name = "cw-sidetone", isDaemon = true, priority = Thread.MAX_PRIORITY) { loop() }
+        }
+    }
+
+    fun stop() { running = false }
+
+    private fun loop() {
+        val rate = MorseTone.RATE
+        val frames = 128
+        val line = try {
+            AudioSystem.getSourceDataLine(AudioFormat(rate.toFloat(), 16, 1, true, false)).apply { open(format, frames * 2 * 8); start() }
+        } catch (e: Exception) {
+            running = false
+            return
+        }
+        val buf = ShortArray(frames)
+        var phase = 0.0
+        var env = 0.0
+        val step = 1.0 / (rate * 0.005)
+        val dPhase = 2 * Math.PI * hz / rate
+        while (running && (on || System.currentTimeMillis() - lastOn < 5000)) {
+            val down = on
+            for (i in 0 until frames) {
+                env = if (down) minOf(1.0, env + step) else maxOf(0.0, env - step)
+                buf[i] = (kotlin.math.sin(phase) * env * 0.5 * Short.MAX_VALUE).toInt().toShort()
+                phase += dPhase
+                if (phase > 2 * Math.PI) phase -= 2 * Math.PI
+            }
+            val bytes = MorseTone.bytes(buf)
+            line.write(bytes, 0, bytes.size)
+        }
+        running = false
+        line.stop()
+        line.close()
+    }
+}
+
 /** The trainer's settings in the user's preferences of this computer. */
 @androidx.compose.runtime.Composable
 fun rememberMorseStore(): ru.r3xed.qsolog.morse.MorseStore = androidx.compose.runtime.remember {
@@ -98,6 +149,13 @@ fun defaultMorseKeyMap() = ru.r3xed.qsolog.morse.MorseKeyMap(
     dot = setOf(androidx.compose.ui.input.key.Key.CtrlLeft, androidx.compose.ui.input.key.Key.LeftBracket).map { "${it.keyCode}" }.toSet(),
     dah = setOf(androidx.compose.ui.input.key.Key.CtrlRight, androidx.compose.ui.input.key.Key.RightBracket).map { "${it.keyCode}" }.toSet(),
     straight = setOf(androidx.compose.ui.input.key.Key.Spacebar).map { "${it.keyCode}" }.toSet(),
+)
+
+/** The QSO card's keys of an external keyboard (CW settings): Ctrl and brackets are paddles, either Ctrl a straight key. */
+fun defaultCwKeyMap() = ru.r3xed.qsolog.morse.MorseKeyMap(
+    dot = setOf(androidx.compose.ui.input.key.Key.CtrlLeft, androidx.compose.ui.input.key.Key.LeftBracket).map { "${it.keyCode}" }.toSet(),
+    dah = setOf(androidx.compose.ui.input.key.Key.CtrlRight, androidx.compose.ui.input.key.Key.RightBracket).map { "${it.keyCode}" }.toSet(),
+    straight = setOf(androidx.compose.ui.input.key.Key.CtrlLeft, androidx.compose.ui.input.key.Key.CtrlRight).map { "${it.keyCode}" }.toSet(),
 )
 
 /** A key id as people call it. */

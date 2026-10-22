@@ -3,6 +3,10 @@ package ru.r3xed.qsolog.ui
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -39,22 +43,49 @@ fun onlineSummary(c: OnlineConfig, myCall: String, lotwReady: Boolean): String =
 
 /**
  * The accounts of LoTW, eQSL, Club Log and the QRZ.com logbook. Uploads are made from the log (⋮ → «Экспорт и импорт»,
- * or the picked records). [computer]: LoTW is signed by TQSL right here — its location and, if not found, its path;
+ * or the picked records). LoTW: the callsign certificate (.p12 from TQSL) signs the contacts right here — [lotwCert]
+ * describes the loaded one, [onPickP12] opens a file, [onForgetP12] removes it; the website login downloads the
+ * confirmations. [computer]: without the certificate, TQSL itself can sign — its location and, if not found, its path;
  * [tqslFound] — where TQSL was found, or null.
  */
 @Composable
-fun OnlineSettings(c: OnlineConfig, onChange: (OnlineConfig) -> Unit, computer: Boolean, tqslFound: String? = null) {
+fun OnlineSettings(
+    c: OnlineConfig,
+    onChange: (OnlineConfig) -> Unit,
+    computer: Boolean,
+    tqslFound: String? = null,
+    lotwCert: String? = null,
+    onPickP12: () -> Unit = {},
+    onForgetP12: () -> Unit = {},
+) {
     Note(tr("Здесь — только учётные записи. Выгрузка — из журнала: ⋮ → «Экспорт и импорт» → «Онлайн-журналы», или «Экспорт» у выбранных записей. Отметка о выгрузке с датой и временем видна в карточке каждой связи, и в следующий раз уходят только новые связи."))
     Section("LoTW (ARRL)")
-    if (computer) {
-        SettingField(tr("Station Location из TQSL"), c.lotwLocation, { onChange(c.copy(lotwLocation = it)) })
+    if (lotwCert != null) {
+        Text(lotwCert, style = MaterialTheme.typography.titleSmall, color = LocalExtra.current.ok)
+        ActionButton(tr("Загрузить другой файл .p12…"), null, onPickP12)
+        ActionButton(tr("Удалить сертификат"), null, onForgetP12)
+    } else {
+        SecretField(tr("Пароль файла .p12 (если задавали в TQSL)"), c.lotwP12Password) { onChange(c.copy(lotwP12Password = it)) }
+        ActionButton(tr("Загрузить сертификат .p12…"), null, onPickP12)
+    }
+    Note(tr("Как в RUMlog и SDR-Control: связи подписываются вашим сертификатом прямо здесь и уходят в LoTW по кнопке — TQSL не нужен. Файл .p12: в TQSL на компьютере — вкладка Callsign Certificates → ваш позывной → «Save the callsign certificate» (Сохранить сертификат); пароль — тот, что вы задали при сохранении (или пусто)."))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.weight(1f)) { SettingField(tr("Зона CQ"), c.lotwCqz, { onChange(c.copy(lotwCqz = it.filter(Char::isDigit).take(2))) }, mono = true) }
+        Box(Modifier.weight(1f)) { SettingField(tr("Зона ITU"), c.lotwItuz, { onChange(c.copy(lotwItuz = it.filter(Char::isDigit).take(2))) }, mono = true) }
+    }
+    Note(tr("Позывной и страна — из сертификата, локатор — из «Моей станции», зоны — как в Station Location в TQSL (можно не указывать)."))
+    SettingField(tr("Логин сайта LoTW"), c.lotwUser, { onChange(c.copy(lotwUser = it.trim())) }, mono = true)
+    SecretField(tr("Пароль сайта LoTW"), c.lotwPassword) { onChange(c.copy(lotwPassword = it)) }
+    Note(tr("С логином сайта программа скачивает подтверждения: ⋮ → «Экспорт и импорт» → «Подтверждения LoTW». Подтверждённые связи отмечаются в журнале зелёным."))
+    if (computer && lotwCert == null) {
+        SettingField(tr("Или через TQSL: Station Location"), c.lotwLocation, { onChange(c.copy(lotwLocation = it)) })
         SettingField(tr("Путь к TQSL, если он не найден сам"), c.tqslPath, { onChange(c.copy(tqslPath = it.trim())) }, mono = true)
         Note(
             (if (tqslFound != null) tr("TQSL найден: %s.", tqslFound) else tr("TQSL не найден: установите его с lotw.arrl.org или укажите путь.")) + " " +
-                tr("QSO-LOG передаёт связи в TQSL, он подписывает их вашим сертификатом и отправляет в LoTW. Station Location — название места станции, как оно записано в TQSL (Station → Station Locations)."),
+                tr("Без файла .p12 QSO-LOG передаёт связи в TQSL, он подписывает их и отправляет в LoTW. Station Location — название места станции, как оно записано в TQSL (Station → Station Locations)."),
         )
-    } else {
-        Note(tr("LoTW принимает только связи, подписанные вашим сертификатом в программе TQSL от ARRL. Для Android её нет: телефон сохраняет файл, вы подписываете его в TQSL на компьютере («Sign a log and upload it») — или выгружаете из QSO-LOG для компьютера, он вызывает TQSL сам."))
+    } else if (lotwCert == null) {
+        Note(tr("Без файла .p12 телефон сохраняет связи в файл, а подписываете вы его в TQSL на компьютере («Sign a log and upload it»)."))
     }
     Section("eQSL")
     SettingField(tr("Логин eQSL (позывной)"), c.eqslUser, { onChange(c.copy(eqslUser = it.trim().uppercase())) }, mono = true)
@@ -73,7 +104,7 @@ fun OnlineSettings(c: OnlineConfig, onChange: (OnlineConfig) -> Unit, computer: 
 
 /** A key or a password: hidden, with an eye to show it. */
 @Composable
-private fun SecretField(label: String, value: String, onChange: (String) -> Unit) {
+internal fun SecretField(label: String, value: String, onChange: (String) -> Unit) {
     var show by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = value,

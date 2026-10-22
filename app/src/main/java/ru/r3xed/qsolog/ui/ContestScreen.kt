@@ -480,6 +480,7 @@ fun ContestScreen(vm: AppViewModel) {
                     onClear = { setValue(active, ""); caret = null; replace = false },
                     onCaret = { steps -> replace = false; caret = moveCaret(valueOf(active), caret, steps) },
                     holdMs = vm.keypadHoldMs,
+                    cw = vm.cwKeypadKeys(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (!f.isNew) deleteButton(keypadButtonHeight(compact).value.toInt())

@@ -108,9 +108,11 @@ object Adif {
 
     class ImportResult(val rows: List<Qso>, val skipped: Int, val charset: Charset)
 
-    fun import(input: InputStream): ImportResult {
-        val bytes = input.readBytes()
-        val charset = detectCharset(bytes)
+    fun import(input: InputStream): ImportResult = import(input.readBytes())
+
+    /** A file's contacts read in [charset] (null — guessed: UTF-8 if the bytes are valid UTF-8, else Windows-1251). */
+    fun import(bytes: ByteArray, charset: Charset? = null): ImportResult {
+        val charset = charset ?: detectCharset(bytes)
         val records = parseRecords(bytes, charset)
         var skipped = 0
         val rows = records.mapNotNull { r ->
@@ -228,6 +230,25 @@ object Adif {
         for (i in from until size) if (this[i] == b) return i
         return -1
     }
+
+    /**
+     * The encodings a log file can come in, as the import dialog offers them: UTF-8 (ADIF 3), Windows-1251 (most
+     * Russian logs of the 2000s), KOI8-R, CP866 (DOS logs), and the Western code pages.
+     */
+    val ENCODINGS: List<Pair<String, Charset>> by lazy {
+        listOf("UTF-8" to Charsets.UTF_8, "Windows-1251" to WINDOWS_1251) +
+            listOf("KOI8-R" to "KOI8-R", "CP866 (DOS)" to "IBM866", "Windows-1252" to "windows-1252", "ISO-8859-1" to "ISO-8859-1")
+                .mapNotNull { (n, c) -> runCatching { n to Charset.forName(c) }.getOrNull() }
+    }
+
+    /** The first [n] contacts as the import will read them in [charset]: call, name and QTH, to see the letters. */
+    fun preview(bytes: ByteArray, charset: Charset, n: Int = 5): List<Triple<String, String, String>> =
+        parseRecords(bytes, charset).asSequence()
+            .map { Triple(it["CALL"].orEmpty().trim(), it["NAME"].orEmpty().trim(), (it["QTH"] ?: it["COMMENT"]).orEmpty().trim()) }
+            .filter { it.first.isNotEmpty() }.take(n).toList()
+
+    /** Whether [bytes] read as UTF-8 without a broken character. */
+    fun isUtf8(bytes: ByteArray): Boolean = detectCharset(bytes) == Charsets.UTF_8
 
     /** UTF-8 if the bytes are valid UTF-8 (pure ASCII included), otherwise Windows-1251. */
     fun detectCharset(bytes: ByteArray): Charset = try {

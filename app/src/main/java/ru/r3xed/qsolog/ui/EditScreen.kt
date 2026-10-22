@@ -522,6 +522,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                     onClear = { setValue(target, ""); caret = null; replace = false },
                     onCaret = { steps -> replace = false; caret = moveCaret(valueOf(target), caret, steps) },
                     holdMs = vm.keypadHoldMs,
+                    cw = vm.cwKeypadKeys(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     OutlinedIconButton(
@@ -999,7 +1000,8 @@ private fun ExportMarks(adif: Map<String, String>, onClear: (ExportFormat) -> Un
                             at == null -> tr("не выгружалась")
                             log.isQueued(adif) -> tr("сохранена для TQSL %s", at)
                             else -> at.ifBlank { tr("выгружена") }
-                        } + (if (log == ru.r3xed.qsolog.data.OnlineLog.EQSL) ru.r3xed.qsolog.data.Eqsl.receivedAt(adif)?.let { tr(" · eQSL получена %s", it).trimEnd() }.orEmpty() else ""),
+                        } + (if (log == ru.r3xed.qsolog.data.OnlineLog.EQSL) ru.r3xed.qsolog.data.Eqsl.receivedAt(adif)?.let { tr(" · eQSL получена %s", it).trimEnd() }.orEmpty() else "") +
+                            (if (log == ru.r3xed.qsolog.data.OnlineLog.LOTW) ru.r3xed.qsolog.data.Lotw.receivedAt(adif)?.let { tr(" · подтверждена в LoTW %s", it).trimEnd() }.orEmpty() else ""),
                         style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted,
                     )
                 }

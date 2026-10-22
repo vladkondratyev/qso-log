@@ -64,3 +64,32 @@ class CwKeyerTest {
         k.close()
     }
 }
+
+class CwHandTest {
+    @org.junit.jupiter.api.Test
+    fun paddleKeysTheLineAndDecodes() {
+        val edges = java.util.concurrent.CopyOnWriteArrayList<Boolean>()
+        val hand = CwHand(ru.r3xed.qsolog.morse.KeyType.IAMBIC_B, 30, keyDown = { edges += it; true }, onText = {})
+        // 30 WPM: a dot is 40 ms. The dot paddle held for three dots and released: "S".
+        hand.press(1, true)
+        Thread.sleep(200)
+        hand.press(1, false)
+        Thread.sleep(400)
+        kotlin.test.assertEquals("S", hand.text().trim())
+        kotlin.test.assertEquals(listOf(true, false, true, false, true, false), edges.toList())
+        hand.close()
+    }
+
+    @org.junit.jupiter.api.Test
+    fun aSenderWithoutHandKeyingGetsLetters() {
+        val sent = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val hand = CwHand(ru.r3xed.qsolog.morse.KeyType.STRAIGHT, 20, keyDown = { false }, onText = { sent += it })
+        // 20 WPM: dash 180 ms, gap 60 ms: "T" then "E".
+        hand.press(0, true); Thread.sleep(180); hand.press(0, false)
+        Thread.sleep(400)
+        hand.press(0, true); Thread.sleep(60); hand.press(0, false)
+        Thread.sleep(400)
+        kotlin.test.assertEquals("TE", sent.joinToString("").replace(" ", ""))
+        hand.close()
+    }
+}

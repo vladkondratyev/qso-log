@@ -81,6 +81,7 @@ import ru.r3xed.qsolog.keys.KeyAction
 import ru.r3xed.qsolog.keys.KeyMap
 import ru.r3xed.qsolog.keys.KeyScope
 import ru.r3xed.qsolog.tr
+import androidx.compose.ui.text.style.TextAlign
 
 @Composable
 private fun SwitchLine(text: String, on: Boolean, strong: Boolean = false, onChange: (Boolean) -> Unit) {
@@ -158,6 +159,56 @@ fun CwSettings(vm: AppState) {
         value = c.wpm.toFloat(), onValueChange = { vm.changeCw(c.copy(wpm = it.toInt())) },
         valueRange = CwConfig.MIN_WPM.toFloat()..CwConfig.MAX_WPM.toFloat(), steps = CwConfig.MAX_WPM - CwConfig.MIN_WPM - 1,
     )
+    Section(tr("Ключ на внешней клавиатуре"))
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ru.r3xed.qsolog.cw.CwKeyMode.entries.forEach { m ->
+            val on = m == c.keyMode
+            Box(
+                Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp))
+                    .background(if (on) MaterialTheme.colorScheme.primary else LocalExtra.current.field)
+                    .selectable(on, role = Role.RadioButton) { vm.changeCw(c.copy(keyMode = m)) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(m.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, lineHeight = 15.sp, maxLines = 2,
+                    color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+    if (c.keyMode != ru.r3xed.qsolog.cw.CwKeyMode.OFF) {
+        val roles = if (c.keyMode == ru.r3xed.qsolog.cw.CwKeyMode.STRAIGHT) listOf(0 to tr("Прямой ключ"))
+        else listOf(1 to tr("Точка"), 2 to tr("Тире"))
+        roles.forEach { (role, name) ->
+            val keys = when (role) {
+                0 -> vm.cwKeys.straight
+                1 -> vm.cwKeys.dot
+                else -> vm.cwKeys.dah
+            }
+            val learning = vm.cwLearn == role
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LocalExtra.current.field)
+                    .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(name, style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        if (learning) tr("Нажмите клавишу на внешней клавиатуре…")
+                        else keys.joinToString(", ") { morseKeyLabel(it) }.ifEmpty { tr("не назначено") },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (learning) MaterialTheme.colorScheme.primary else LocalExtra.current.muted,
+                    )
+                }
+                if (learning) TextButton(onClick = { vm.cwLearn = null }) { Text(tr("Отмена")) }
+                else {
+                    TextButton(onClick = { vm.cwLearn = role }) { Text(tr("Назначить")) }
+                    if (keys.isNotEmpty()) TextButton(onClick = { vm.clearCwKeys(role) }) { Text(tr("Очистить")) }
+                }
+            }
+        }
+        TextButton(onClick = vm::resetCwKeys) { Text(tr("Клавиши по умолчанию")) }
+    }
+    SwitchLine(tr("Звук самоконтроля через динамик"), c.sidetone) { vm.changeCw(c.copy(sidetone = it)) }
+    Note(tr("Ключ можно не носить с собой: пока карточка QSO в виде CW, клавиши внешней клавиатуры работают ключом. «Прямой ключ» — ключ замкнут, пока клавиша нажата. «Ямбический A/B» — электронный ключ: по умолчанию левый Ctrl или [ — точка, правый Ctrl или ] — тире (так шлют и USB-адаптеры манипуляторов), прямой ключ — любой Ctrl; в режиме B ключ дописывает знак, начатый при сжатых манипуляторах. Клавиши можно переназначить: «Назначить» и нажмите нужную клавишу. Скорость — та же, что у сообщений. Когда в карточке начинают работать ключом, под кнопками сообщений появляется лента переданных знаков. Звук через динамик телефона или компьютера — когда не слышно самоконтроля трансивера; cwdaemon принимает только текст: ему уходят готовые буквы."))
     Section(tr("Сообщения"))
     c.messages.forEachIndexed { i, m ->
         OutlinedTextField(
@@ -171,7 +222,7 @@ fun CwSettings(vm: AppState) {
     }
     Note(CwMacros.HELP)
     ActionButton(tr("Проверить: передать «VVV»"), Icons.Filled.PlayArrow) { vm.testCw() }
-    Note(tr("Сообщения передаются, когда в карточке QSO выбран вид CW: клавиши F1–F8 (их можно переназначить в «Дополнительных настройках»), кнопки под частотой, Esc — остановить, Alt+↑ и Alt+↓ — скорость. Так работает N1MM: программа замыкает ключ линией DTR или RTS USB-адаптера."))
+    Note(tr("Сообщения передаются, когда в карточке QSO выбран вид CW: клавиши F1–F8 (их можно переназначить в «Дополнительных настройках»), кнопки под частотой, Esc — остановить, PageUp и PageDown (или Alt+↑ и Alt+↓) — скорость. Так работает N1MM: программа замыкает ключ линией DTR или RTS USB-адаптера."))
     if (c.via == CwVia.SERIAL) {
         Note(tr("Xiegu G90 и другие трансиверы, у которых ключ замыкается на массу: у адаптера CP2102 выводы DTR и RTS при передаче опускаются в 0 В. Соедините вывод с «точкой» (или прямым ключом) гнезда KEY через транзистор или оптрон (PC817), массу — с массой. В меню трансивера выберите прямой ключ (Straight). Если ключ замкнут без передачи, включите «Инвертировать»."))
         Note(tr("Если CAT идёт через тот же COM-порт (один кабель CP2102 для CI-V и ключа), выберите его и здесь: порт будет общим."))

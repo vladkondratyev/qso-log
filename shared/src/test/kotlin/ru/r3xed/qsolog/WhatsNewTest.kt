@@ -15,14 +15,15 @@ class WhatsNewTest {
     }
 
     @Test
-    fun eqslCwdaemonCommanderOnBoth() {
-        // 2.6.0: eQSL, cwdaemon and Commander on both; the Xiaomi note of "Запускать вместе" only on the phone.
+    fun keyboardCwIcomLanLotwOnBoth() {
+        // 2.7.0: the key on an external keyboard first; the keypad row only on the phone, OmniRig only on the computer.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = false).first().startsWith("eQSL"))
-            assertTrue(WhatsNew.items(desktop = true).any { "cwdaemon" in it } && WhatsNew.items(desktop = true).any { "Commander" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "Poco" in it })
-            assertTrue(WhatsNew.items(desktop = true).none { "Poco" in it })
+            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Ключ на внешней клавиатуре"))
+            assertTrue(WhatsNew.items(desktop = true).any { "Icom" in it } && WhatsNew.items(desktop = true).any { "LoTW" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "F1–F8" in it })
+            assertTrue(WhatsNew.items(desktop = true).any { "OmniRig" in it })
+            assertTrue(WhatsNew.items(desktop = false).none { "OmniRig" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

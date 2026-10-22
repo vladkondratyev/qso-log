@@ -117,7 +117,7 @@ private fun DateField(label: String, value: String, bad: Boolean, modifier: Modi
 
 /** A chip that is on or off: filled when on. */
 @Composable
-private fun PickChip(text: String, on: Boolean, onClick: () -> Unit) {
+internal fun PickChip(text: String, on: Boolean, onClick: () -> Unit) {
     val x = LocalExtra.current
     val shape = RoundedCornerShape(10.dp)
     Text(

@@ -116,8 +116,8 @@ enum class KeyAction(val scope: KeyScope, vararg defaults: Chord) {
     CW_7(KeyScope.CW, c("F7")),
     CW_8(KeyScope.CW, c("F8")),
     CW_STOP(KeyScope.CW, c("Esc")),
-    CW_FASTER(KeyScope.CW, c("Up", alt = true)),
-    CW_SLOWER(KeyScope.CW, c("Down", alt = true));
+    CW_FASTER(KeyScope.CW, c("PgUp"), c("Up", alt = true)),
+    CW_SLOWER(KeyScope.CW, c("PgDn"), c("Down", alt = true));
 
     val defaults: List<Chord> = defaults.toList()
 

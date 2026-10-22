@@ -14,6 +14,9 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * Talks to the radio on its own thread: opens the link with [open], polls every [pollMs] and reports to [onStatus]
  * (from that thread). A lost link is opened again every few seconds until [stop].
+ *
+ * With [openAt] (a serial port opened at a given speed) a Kenwood or Yaesu that stays silent is tried at the other
+ * speeds in turn — a TS-590S on 9600 while the program says 115200 — and the speed it answers at goes to [onBaud].
  */
 class CatSession(
     private val config: CatConfig,
@@ -21,6 +24,8 @@ class CatSession(
     private val onStatus: (CatStatus) -> Unit,
     private val pollMs: Long = 250,
     private val retryMs: Long = 3000,
+    private val openAt: ((Int) -> CatLink)? = null,
+    private val onBaud: (Int) -> Unit = {},
 ) {
     @Volatile private var running = false
     @Volatile private var link: CatLink? = null
@@ -56,13 +61,24 @@ class CatSession(
         thread = null
     }
 
+    /** The speeds to try, the set one first; one speed (no trying) when the radio's speed cannot be guessed so. */
+    private val bauds: List<Int> =
+        if (openAt != null && config.protocol in setOf(CatProtocol.KENWOOD, CatProtocol.YAESU, CatProtocol.YAESU_OLD))
+            listOf(config.baud) + (Rigs.BAUDS.reversed() - config.baud)
+        else listOf(config.baud)
+
     private fun loop() {
         val driver = RigDriver.of(config)
         var state = RigState(freqHz = null)
+        var baudAt = 0
+        // Once the radio has answered at a speed, the speed stays (a radio switched off is not a wrong speed).
+        var baudFound = bauds.size == 1
         while (running) {
             try {
-                onStatus(CatStatus.Connecting(driver.what))
-                val l = open()
+                val baud = bauds[baudAt]
+                val label = if (baudFound) driver.what else driver.what + " · " + tr("%s бод", baud)
+                onStatus(CatStatus.Connecting(label))
+                val l = if (openAt != null && !baudFound) openAt.invoke(baud) else open()
                 link = l
                 if (!running) { l.close(); break }
                 val io = CatIo(l)
@@ -83,9 +99,19 @@ class CatSession(
                     if (driver.answered) {
                         heard = true
                         silentPolls = 0
+                        if (!baudFound) {
+                            baudFound = true
+                            if (baud != config.baud) onBaud(baud)
+                        }
                     } else silentPolls++
+                    if (!baudFound && !heard && silentPolls >= 6) {
+                        // Not a word at this speed: the next one. After all of them, back to the set speed, and it stays.
+                        baudAt++
+                        if (baudAt >= bauds.size) { baudAt = 0; baudFound = true }
+                        break
+                    }
                     val silent = silentPolls >= 3
-                    onStatus(CatStatus.Connected(driver.what, if (heard) state else null, silent))
+                    onStatus(CatStatus.Connected(if (baudFound) driver.what else label, if (heard) state else null, silent))
                     // A command wakes the loop at once; otherwise the next poll comes after the pause.
                     wake.tryAcquire(pollMs, TimeUnit.MILLISECONDS)
                     wake.drainPermits()

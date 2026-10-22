@@ -101,6 +101,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -562,7 +563,15 @@ private fun QsoRow(
     val shape = RoundedCornerShape(14.dp)
     Column(
         modifier.fillMaxWidth()
-            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape)
+            .background(
+                when {
+                    selected -> MaterialTheme.colorScheme.primaryContainer
+                    // Confirmed in LoTW: the row turns light green, as in the logs of RUMlog and SDR-Control.
+                    ru.r3xed.qsolog.data.Lotw.isReceived(qso.adif) -> x.ok.copy(alpha = 0.12f).compositeOver(MaterialTheme.colorScheme.surface)
+                    else -> MaterialTheme.colorScheme.surface
+                },
+                shape,
+            )
             .border(if (selected || cursor) 2.dp else 1.dp, if (selected || cursor) MaterialTheme.colorScheme.primary else x.line, shape)
             .combinedClickable(
                 onClick = onClick,
@@ -606,6 +615,7 @@ private fun QsoRow(
                 Spacer(Modifier.width(8.dp))
             }
             // Exported to ADIF / CSV / a contest report: a small dot of each format's colour.
+            ConfirmedMark(qso.adif)
             ExportDots(qso.adif)
             // Outside the date sort there are no day headers, so the row carries its own date.
             val t = utc(qso.timeUtc)

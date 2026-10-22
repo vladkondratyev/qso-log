@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.cat
 
+import ru.r3xed.qsolog.tr
 import java.io.Closeable
 import java.io.IOException
 
@@ -83,6 +84,7 @@ interface RigDriver {
             CatProtocol.YAESU_OLD -> YaesuOldDriver(c.model.name, sMeter)
             CatProtocol.RIGCTLD -> RigctldDriver(sMeter)
             CatProtocol.COMMANDER -> CommanderDriver()
+            CatProtocol.OMNIRIG -> OmniRigDriver(c.omniRig)
         }
     }
 }
@@ -684,3 +686,100 @@ class CommanderDriver : RigDriver {
 }
 
 private fun digits(s: String): Long? = s.trim().takeIf { it.isNotEmpty() && it.all(Char::isDigit) }?.toLongOrNull()
+
+/**
+ * OmniRig (Windows): the radio is held by OmniRig's COM server, and QSO-LOG reaches it through a PowerShell helper
+ * ([SCRIPT]) speaking lines: "poll" → "S <status> <freq> <mode bits> <tx bits> <status text>", "freq N", "mode BITS",
+ * "tx 1|0" → "OK". Status 4 is "on line"; the mode and transmit are OmniRig's PM_* bits.
+ */
+class OmniRigDriver(private val rig: Int = 1) : RigDriver {
+    override var answered = false; private set
+    private var status: String? = null
+    override val what get() = "OmniRig · Rig $rig" + (status?.let { " · $it" } ?: "")
+
+    override fun poll(io: CatIo, last: RigState): RigState {
+        var s = last
+        answered = false
+        io.clear()
+        val r = ask(io, "poll") ?: return s
+        val p = r.split(' ', limit = 6)
+        if (p.size < 5 || p[0] != "S") return s
+        val online = p[1] == "4"
+        status = if (online) null else p.getOrNull(5)?.trim()?.ifBlank { null } ?: tr("трансивер не отвечает")
+        if (!online) return s
+        answered = true
+        p[2].toLongOrNull()?.takeIf { it > 0 }?.let { s = s.copy(freqHz = it, at = System.currentTimeMillis()) }
+        p[3].toLongOrNull()?.let { m -> modeName(m)?.let { s = s.copy(radioMode = it) } }
+        p[4].toLongOrNull()?.let { t -> if (t and (PM_TX or PM_RX) != 0L) s = s.copy(tx = t and PM_TX != 0L) }
+        return s
+    }
+
+    override fun setFreq(io: CatIo, hz: Long): Boolean = ask(io, "freq $hz") == "OK"
+
+    override fun setMode(io: CatIo, mode: RadioMode): Boolean = ask(io, "mode " + when (mode) {
+        RadioMode.LSB -> PM_SSB_L
+        RadioMode.USB -> PM_SSB_U
+        RadioMode.CW -> PM_CW_U
+        RadioMode.AM -> PM_AM
+        RadioMode.FM -> PM_FM
+        RadioMode.RTTY, RadioMode.DATA -> PM_DIG_U
+    }) == "OK"
+
+    override fun setPtt(io: CatIo, on: Boolean): Boolean = ask(io, "tx " + if (on) 1 else 0) == "OK"
+
+    private fun ask(io: CatIo, cmd: String): String? {
+        io.send("$cmd\n".toByteArray(Charsets.US_ASCII))
+        // OmniRig answers from its own process: slower than a radio's port.
+        return io.line(1500, '\n')?.trim()
+    }
+
+    companion object {
+        const val PM_CW_U = 0x00800000L
+        const val PM_CW_L = 0x01000000L
+        const val PM_SSB_U = 0x02000000L
+        const val PM_SSB_L = 0x04000000L
+        const val PM_DIG_U = 0x08000000L
+        const val PM_DIG_L = 0x10000000L
+        const val PM_AM = 0x20000000L
+        const val PM_FM = 0x40000000L
+        const val PM_RX = 0x00200000L
+        const val PM_TX = 0x00400000L
+
+        fun modeName(bits: Long): String? = when {
+            bits and PM_CW_U != 0L -> "CW"
+            bits and PM_CW_L != 0L -> "CW-R"
+            bits and PM_SSB_U != 0L -> "USB"
+            bits and PM_SSB_L != 0L -> "LSB"
+            bits and PM_DIG_U != 0L -> "DATA-U"
+            bits and PM_DIG_L != 0L -> "DATA-L"
+            bits and PM_AM != 0L -> "AM"
+            bits and PM_FM != 0L -> "FM"
+            else -> null
+        }
+
+        /**
+         * The helper: PowerShell holds OmniRig's COM object (an out-of-process server, so the 64-bit PowerShell works
+         * with the 32-bit OmniRig) and answers the driver's lines. The first line says "OK" or "ERR <why>".
+         */
+        val SCRIPT = """
+${'$'}ErrorActionPreference = 'Stop'
+try { ${'$'}o = New-Object -ComObject OmniRig.OmniRigX } catch { [Console]::Out.WriteLine('ERR ' + ${'$'}_.Exception.Message); exit 1 }
+${'$'}r = if (${'$'}args[0] -eq '2') { ${'$'}o.Rig2 } else { ${'$'}o.Rig1 }
+[Console]::Out.WriteLine('OK ' + ${'$'}o.SoftwareVersion)
+while (${'$'}true) {
+  ${'$'}l = [Console]::In.ReadLine()
+  if (${'$'}l -eq ${'$'}null) { break }
+  ${'$'}p = ${'$'}l.Trim().Split(' ')
+  try {
+    switch (${'$'}p[0]) {
+      'poll' { [Console]::Out.WriteLine('S ' + [int]${'$'}r.Status + ' ' + ${'$'}r.Freq + ' ' + ${'$'}r.Mode + ' ' + ${'$'}r.Tx + ' ' + ${'$'}r.StatusStr) }
+      'freq' { ${'$'}r.Freq = [int]${'$'}p[1]; [Console]::Out.WriteLine('OK') }
+      'mode' { ${'$'}r.Mode = [int]${'$'}p[1]; [Console]::Out.WriteLine('OK') }
+      'tx' { if (${'$'}p[1] -eq '1') { ${'$'}r.Tx = 0x00400000 } else { ${'$'}r.Tx = 0x00200000 }; [Console]::Out.WriteLine('OK') }
+      default { [Console]::Out.WriteLine('?') }
+    }
+  } catch { [Console]::Out.WriteLine('ERR ' + ${'$'}_.Exception.Message) }
+}
+""".trimStart()
+    }
+}

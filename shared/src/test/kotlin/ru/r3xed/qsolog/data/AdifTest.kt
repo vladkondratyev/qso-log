@@ -118,4 +118,19 @@ class AdifTest {
         val csv = ByteArrayOutputStream().also { Csv.export(listOf(q), it) }.toByteArray()
         assertEquals(q.uid, Csv.import(csv.inputStream()).rows.single().uid)
     }
+
+    @Test
+    fun encodingChosenOnImport() {
+        val koi = java.nio.charset.Charset.forName("KOI8-R")
+        val name = "Иван"
+        val text = "<EOH>\n<CALL:6>R0DEMO<QSO_DATE:8>20261020<TIME_ON:4>1217<NAME:4>$name<QTH:6>Москва<EOR>\n"
+        val bytes = text.toByteArray(koi)
+        assertEquals(false, Adif.isUtf8(bytes))
+        assertEquals(name, Adif.import(bytes, koi).rows.single().name)
+        assertEquals(listOf(Triple("R0DEMO", name, "Москва")), Adif.preview(bytes, koi))
+        // Read as Windows-1251 the letters are wrong: that is what the preview shows the user.
+        assertEquals(false, Adif.import(bytes, Adif.WINDOWS_1251).rows.single().name == name)
+        assertEquals("UTF-8", Adif.ENCODINGS.first().first)
+        assertEquals(true, Adif.ENCODINGS.any { it.first == "CP866 (DOS)" })
+    }
 }

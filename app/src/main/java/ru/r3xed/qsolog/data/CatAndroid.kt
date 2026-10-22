@@ -20,6 +20,7 @@ import ru.r3xed.qsolog.cat.CatConfig
 import ru.r3xed.qsolog.cat.CatLink
 import ru.r3xed.qsolog.cat.CatLinkType
 import ru.r3xed.qsolog.cat.CatProtocol
+import ru.r3xed.qsolog.cat.IcomLanLink
 import ru.r3xed.qsolog.cat.StreamLink
 import ru.r3xed.qsolog.cat.tcpLink
 import ru.r3xed.qsolog.cw.CwConfig
@@ -74,14 +75,15 @@ class CatAndroid(private val context: Context) {
     private var permissionAsked = mutableSetOf<String>()
 
     /** Opens the link of [c]. Throws with a message for the user when it cannot. */
-    fun open(c: CatConfig): CatLink = when {
+    fun open(c: CatConfig, baud: Int = c.baud): CatLink = when {
+        c.viaIcomLan -> IcomLanLink(c.host, c.port, c.lanUser, c.lanPassword, computer = "QSO-LOG-" + Build.MODEL.take(8))
         c.protocol.network || c.link == CatLinkType.NETWORK -> tcpLink(c.host, c.port)
         c.link == CatLinkType.BLUETOOTH -> openBluetooth(c)
-        else -> openUsb(c)
+        else -> openUsb(c, baud)
     }
 
-    private fun openUsb(c: CatConfig): CatLink {
-        val (p, key) = openUsbPort(c.device, c.baud, twoStops = c.protocol == CatProtocol.YAESU_OLD)
+    private fun openUsb(c: CatConfig, baud: Int): CatLink {
+        val (p, key) = openUsbPort(c.device, baud, twoStops = c.protocol == CatProtocol.YAESU_OLD, rts = c.rtsOn)
         catUsb = key to p
         return object : CatLink {
             override fun write(b: ByteArray) = p.write(b, 1000)
@@ -98,7 +100,7 @@ class CatAndroid(private val context: Context) {
 
     /** Opens the USB serial port [device] (a [usbKey]; the first adapter when not found). Returns it and its key. */
     private fun openUsbPort(
-        device: String, baud: Int, twoStops: Boolean,
+        device: String, baud: Int, twoStops: Boolean, rts: Boolean = false,
         missing: () -> String = { tr("Трансивер не подключён по USB. Нужен кабель OTG (USB-C или micro-USB → USB трансивера)") },
     ): Pair<UsbSerialPort, String> {
         val drivers = usbDrivers()
@@ -123,8 +125,9 @@ class CatAndroid(private val context: Context) {
             p.open(conn)
             p.setParameters(baud, 8, if (twoStops) UsbSerialPort.STOPBITS_2 else UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
             // DTR and RTS may key the transmitter or send CW (the radio's "USB SEND / USB keying" settings): keep them low.
+            // RTS is on for radios that send only while it is (RTS/CTS flow control of the TS-590, TS-890, TS-990).
             runCatching { p.dtr = false }
-            runCatching { p.rts = false }
+            runCatching { p.rts = rts }
         } catch (e: Exception) {
             runCatching { p.close() }
             throw IOException(tr("Не удалось открыть USB-устройство") + ": " + (e.message ?: e.javaClass.simpleName))

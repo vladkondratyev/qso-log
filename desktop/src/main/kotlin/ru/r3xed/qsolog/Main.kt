@@ -152,6 +152,8 @@ fun main() {
                     val repeat = down && id in morseHeld
                     if (down) morseHeld.add(id) else morseHeld.remove(id)
                     if (ru.r3xed.qsolog.morse.MorseKeyBus.key(id, down, repeat)) return@Window true
+                    // The card in CW with the hand keyer on: the paddle keys key the radio.
+                    if (state.cwHandKey(id, down, repeat)) return@Window true
                 }
                 // The keys are the user's (Настройки → Дополнительные настройки → Клавиши); the defaults are those of KeyAction.
                 val mod = if (IS_MAC) e.isMetaPressed else e.isCtrlPressed
@@ -366,7 +368,8 @@ fun App(state: AppState, files: Exports) {
                     count = { log, onlyNew -> state.uploadCandidates(log, target.only, onlyNew).size },
                     problem = state::uploadProblem,
                     busy = state.uploading,
-                    lotwNote = tr("Связи подписывает и отправляет программа TQSL от ARRL с вашим сертификатом: QSO-LOG запускает её сама, с Station Location из настроек."),
+                    lotwNote = if (state.lotwCert != null) tr("Связи подписываются вашим сертификатом LoTW (%s) и сразу уходят в LoTW.", state.lotwCert!!.callsign)
+                    else tr("Связи подписывает и отправляет программа TQSL от ARRL с вашим сертификатом: QSO-LOG запускает её сама, с Station Location из настроек. Или загрузите в настройках файл сертификата .p12 — тогда TQSL не нужен."),
                     lotwAction = tr("Отправить"),
                     onOpenSettings = { state.closeUpload(); state.openSettings() },
                     onDismiss = state::closeUpload,
@@ -380,6 +383,7 @@ fun App(state: AppState, files: Exports) {
                 onExport = { format -> state.showTransfer = false; state.openExport(format, selectedOnly = false) },
                 onUpload = { state.showTransfer = false; state.openUpload(selectedOnly = false) },
                 onEqslInbox = { state.showTransfer = false; state.openEqslInbox() },
+                onLotwSync = { state.showTransfer = false; state.syncLotw() },
                 onSelect = { state.showTransfer = false; state.showSelect = true },
                 onImportAdif = { state.showTransfer = false; files.importAdif() },
                 onImportCsv = { state.showTransfer = false; files.importCsv() },
@@ -387,6 +391,8 @@ fun App(state: AppState, files: Exports) {
                 onDismiss = { state.showTransfer = false },
             )
             if (state.showSelect) ru.r3xed.qsolog.ui.SelectDialog(state.allQsos, onPick = state::selectIds, onDismiss = { state.showSelect = false })
+            if (!state.showWhatsNew) ru.r3xed.qsolog.ui.UpdateDialog(state)
+            state.adifImport?.let { (name, bytes) -> ru.r3xed.qsolog.ui.AdifImportDialog(name, bytes, onImport = { state.importAdif(bytes, it) }, onDismiss = { state.adifImport = null }) }
             // Not over the first-start setup: it waits until the log.
             if (state.showWhatsNew && state.pane != Pane.Welcome) ru.r3xed.qsolog.ui.WhatsNewDialog(APP_VERSION, desktop = true, onClose = state::closeWhatsNew)
             if (state.historyAsk) HistoryOnDialog(onConfirm = { state.changeHistoryOn(true) }, onDismiss = { state.historyAsk = false })
