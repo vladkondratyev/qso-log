@@ -135,7 +135,7 @@ With [CW](#cw-from-the-f1f8-keys) on and the card in CW, one more row appears ab
 **F1–F8** — the messages, **−** and **+** — the speed, **■** — stop sending.
 
 <p>
-<img src="docs/screenshots/84-cw-keypad-row.png" width="200" alt="The built-in keypad in a CW card: F1–F8, speed and Stop">
+<img src="docs/screenshots/84-cw-keypad-row.png" width="200" alt="The built-in keypad in a QSO card in CW: F1–F8, speed and Stop">
 </p>
 
 ## CAT — transceiver

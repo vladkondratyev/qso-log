@@ -136,9 +136,9 @@ internal val EN_2_7: Map<String, String> = mapOf(
     "QRZCQ: поиск через программы доступен только с премиум-подпиской QRZCQ" to "QRZCQ: lookups from programs need a QRZCQ premium membership",
     "QRZCQ не принял логин или пароль" to "QRZCQ did not accept the login or password",
     "QRZCQ не вернул ключ сессии" to "QRZCQ returned no session key",
-    "Ключ на внешней клавиатуре: в карточке CW клавиши (левый и правый Ctrl или [ и ]) работают прямым или ямбическим ключом, а под кнопками появляется лента переданных знаков; звук через динамик, скорость — PageUp и PageDown." to
-        "A key on an external keyboard: in a CW card the keys (left and right Ctrl, or [ and ]) work as a straight or iambic key, and a tape of the characters sent appears under the buttons; sound from the speaker, speed with PageUp and PageDown.",
-    "Своя клавиатура в карточке CW: над буквами ряд F1–F8, скорость − и + и «Стоп»." to "The app's keypad in a CW card: a row of F1–F8, speed − and + and Stop above the letters.",
+    "Ключ на внешней клавиатуре: в карточке QSO с видом CW клавиши (левый и правый Ctrl или [ и ]) работают прямым или ямбическим ключом, а под кнопками появляется лента переданных знаков; звук через динамик, скорость — PageUp и PageDown." to
+        "A key on an external keyboard: in a QSO card in CW the keys (left and right Ctrl, or [ and ]) work as a straight or iambic key, and a tape of the characters sent appears under the buttons; sound from the speaker, speed with PageUp and PageDown.",
+    "Своя клавиатура в карточке QSO с видом CW: над буквами ряд F1–F8, скорость − и + и «Стоп»." to "The app's keypad in a QSO card in CW: a row of F1–F8, speed − and + and Stop above the letters.",
     "Icom по сети (IC-705, IC-7610, IC-7760, IC-9700…): вход по имени и паролю пользователя трансивера, как в RS-BA1 и wfview, — и в локальной сети, и через VPN (NetBird, WireGuard)." to
         "Icom over the network (IC-705, IC-7610, IC-7760, IC-9700…): login with the radio's user name and password, as in RS-BA1 and wfview — on the local network and through a VPN (NetBird, WireGuard).",
     "LoTW без TQSL: загрузите сертификат .p12 — связи подписываются и уходят в LoTW по кнопке, а «Подтверждения LoTW» отмечают подтверждённые связи зелёным." to
