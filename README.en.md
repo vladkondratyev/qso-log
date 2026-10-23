@@ -208,8 +208,7 @@ or Wi-Fi connect directly, with no computer by the radio — by the same protoco
 ports 50001–50003). In the radio's menu: Network → **Network Control — ON**, **Network User1** — a name and password
 (Administrator rights), Control Port — 50001. In QSO-LOG: an ICOM model, connection "Network" → "Icom network (LAN,
 Wi-Fi)", the radio's address, port 50001 and the same name and password. It works on a home network, on the IC-705's
-own access point and through a VPN (NetBird, WireGuard, Tailscale): enter the radio's address in the tunnel and allow
-UDP 50001–50003 — no network discovery is needed. When the login fails the app says why: no answer, wrong name or
+own access point; no network discovery is needed. When the login fails the app says why: no answer, wrong name or
 password, the radio is busy with another program. "TCP adapter" remains for CI-V through ser2net or a Wi-Fi adapter.
 
 **Kenwood TS-590S/SG, TS-890S, TS-990S** (since 2.7.0) answer CAT only while the computer holds the RTS line on (RTS/CTS

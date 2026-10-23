@@ -72,7 +72,7 @@ class IcomLanLink(
             if (!ready.await(timeoutMs, TimeUnit.MILLISECONDS)) {
                 failure = failure ?: busyBy?.let { tr("Трансивер занят: к нему подключена программа на компьютере %s. Закройте её или подождите.", it) }
                     ?: when {
-                        !control.connected -> tr("Трансивер не отвечает по адресу %s, порт UDP %s. Проверьте IP, что в меню трансивера включено Network Control, и порт (Network → Control Port, обычно 50001). Через VPN (NetBird, WireGuard) укажите адрес трансивера в туннеле.", host, controlPort)
+                        !control.connected -> tr("Трансивер не отвечает по адресу %s, порт UDP %s. Проверьте IP, что в меню трансивера включено Network Control, и порт (Network → Control Port, обычно 50001).", host, controlPort)
                         !authenticated -> tr("Трансивер не ответил на вход. Проверьте имя и пароль Network User в меню трансивера.")
                         else -> tr("Трансивер не открыл поток CI-V. Перезагрузите трансивер или подождите пару минут и переподключитесь.")
                     }

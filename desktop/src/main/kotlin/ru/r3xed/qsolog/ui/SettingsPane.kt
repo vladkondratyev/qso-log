@@ -1060,7 +1060,7 @@ private fun CatSettings(vm: AppState) {
             if (c.icomLan) {
                 SettingField(tr("Имя пользователя (Network User)"), c.lanUser, { vm.changeCat(c.copy(lanUser = it.trim())) }, mono = true)
                 SecretField(tr("Пароль пользователя"), c.lanPassword) { vm.changeCat(c.copy(lanPassword = it)) }
-                Note(tr("Как в RS-BA1, wfview и SDR-Control: программа входит в трансивер по его сетевому протоколу (UDP, порты 50001–50003). В меню трансивера: Network → Network Control — ON; Network User1 — имя и пароль (права Administrator); Control Port — 50001. Адрес трансивера — в его меню (Network → IP Address), в том числе когда компьютер подключён к точке доступа самого трансивера. Через VPN (NetBird, WireGuard, Tailscale) укажите адрес трансивера в туннеле и разрешите UDP 50001–50003; автопоиск по сети не нужен."))
+                Note(tr("Как в RS-BA1, wfview и SDR-Control: программа входит в трансивер по его сетевому протоколу (UDP, порты 50001–50003). В меню трансивера: Network → Network Control — ON; Network User1 — имя и пароль (права Administrator); Control Port — 50001. Адрес трансивера — в его меню (Network → IP Address), в том числе когда компьютер подключён к точке доступа самого трансивера."))
                 Note(tr("Одновременно трансивер обслуживает одну программу: закройте RS-BA1, wfview или SDR-Control. Если подключение оборвалось, трансивер держит его ещё около минуты."))
             } else {
                 Note(tr("Трансивер за сетевым CAT-адаптером или сервером последовательного порта (ser2net, ESP32, Wi-Fi-адаптер): программа шлёт команды CI-V прямо в TCP-соединение."))
