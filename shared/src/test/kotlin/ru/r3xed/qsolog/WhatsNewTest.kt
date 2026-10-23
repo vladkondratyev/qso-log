@@ -15,13 +15,13 @@ class WhatsNewTest {
     }
 
     @Test
-    fun wsjtxCardOnBothScreenKeyOnPhone() {
-        // 2.7.1: the card from WSJT-X on both; the on-screen key and the keypad row only on the phone.
+    fun qrzComApiOnBoth() {
+        // 2.7.2: the same points on the phone and the computer.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Карточка QSO по двойному щелчку"))
-            assertTrue(WhatsNew.items(desktop = false).any { "Ключ на экране" in it } && WhatsNew.items(desktop = false).any { "F1–F8" in it })
-            assertTrue(WhatsNew.items(desktop = true).size == 1)
+            assertTrue(WhatsNew.items(desktop = true).first().startsWith("QRZ.com по API"))
+            assertTrue(WhatsNew.items(desktop = true).any { "одновременно" in it })
+            assertTrue(WhatsNew.items(desktop = false) == WhatsNew.items(desktop = true))
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

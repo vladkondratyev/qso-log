@@ -9,6 +9,7 @@ val HISTORY_FIELDS = setOf("STATE", "CNTY", "CQZ", "ITUZ", "DXCC", "CONT", HamQt
 enum class SearchSource(val key: String, val title: String) {
     QRZ_RU("qrzru", "QRZ.ru"),
     QRZ_RU_SITE("qrzru-site", "QRZ.ru (сайт)"),
+    QRZ_COM_XML("qrzcom-xml", "QRZ.com"),
     QRZ_COM("qrzcom", "QRZ.com"),
     HAMQTH("hamqth", "HamQTH"),
     HAMQTH_BOOK("hamqth-book", "HamQTH"),

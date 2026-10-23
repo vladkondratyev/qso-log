@@ -9,6 +9,9 @@ data class StationSettings(
     /** Login of the QRZ.ru site itself (e-mail): a fallback source when there is no XML API access, see [QrzSite]. */
     val qrzSiteEmail: String = "",
     val qrzSitePassword: String = "",
+    /** QRZ.com XML API account (callsign; the full record needs the XML subscription), asked before the site, see [QrzComXml]. */
+    val qrzComXmlLogin: String = "",
+    val qrzComXmlPassword: String = "",
     /** QRZ.com account (callsign or e-mail): the callsign page after logging in, see [QrzCom]. */
     val qrzComLogin: String = "",
     val qrzComPassword: String = "",

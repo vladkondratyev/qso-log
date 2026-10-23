@@ -8,10 +8,10 @@ internal val EN_2_7: Map<String, String> = mapOf(
     "Логин (позывной)" to "Login (callsign)",
     "Подтверждена в LoTW" to "Confirmed in LoTW",
     "4. HamQTH — справочник" to "4. HamQTH — callbook",
-    "Бесплатная учётная запись hamqth.com (регистрация на сайте). Имя, QTH, локатор и координаты станции — для зарубежных и российских позывных; спрашивается после QRZ.ru и QRZ.com, а также когда они нашли позывной без QTH или координат." to
-        "A free hamqth.com account (register on the site). Name, QTH, locator and coordinates of the station, for foreign and Russian callsigns; asked after QRZ.ru and QRZ.com, and when they found the callsign without a QTH or coordinates.",
-    "Справочник qrzcq.com. Поиск через программы QRZCQ даёт только премиум-участникам; спрашивается последним — когда остальные не нашли позывной, QTH или координаты." to
-        "The qrzcq.com callbook. QRZCQ gives lookups to programs only for premium members; asked last — when the others did not find the callsign, the QTH or the coordinates.",
+    "Бесплатная учётная запись hamqth.com (регистрация на сайте). Имя, QTH, локатор и координаты станции — для зарубежных и российских позывных; его данные идут после QRZ.ru и QRZ.com и дополняют их, если там нет QTH или координат." to
+        "A free hamqth.com account (register on the site). Name, QTH, locator and coordinates of the station, for foreign and Russian callsigns; its data go after QRZ.ru and QRZ.com and complete them when they lack the QTH or coordinates.",
+    "Справочник qrzcq.com. Поиск через программы QRZCQ даёт только премиум-участникам; его данные идут последними — когда остальные не нашли позывной, QTH или координаты." to
+        "The qrzcq.com callbook. QRZCQ gives lookups to programs only for premium members; its data go last — when the others did not find the callsign, the QTH or the coordinates.",
     "6. HamQTH — страна и область" to "6. HamQTH — country and region",
     "Автоматически проверять новую версию при запуске программы" to "Check for a new version when the app starts",
     "Обновить" to "Update",
@@ -163,4 +163,20 @@ internal val EN_2_7: Map<String, String> = mapOf(
         "On-screen key: \"·\" and \"—\" or \"KEY\" buttons on the app's keypad in a QSO card in CW (switched on in the CW settings).",
     "Ряд F1–F8 на своей клавиатуре: все клавиши одного размера, «Стоп» занимает две; скорость меняется в карточке." to
         "The F1–F8 row on the app's keypad: all keys of one size, Stop takes two; the speed is changed in the card.",
+    // 2.7.2
+    "Справочники спрашиваются одновременно: карточка заполняется быстрее, а данные по-прежнему берутся по порядку списка — сначала QRZ.ru, потом QRZ.com, HamQTH, QRZCQ." to
+        "The callbooks are asked at once: the card fills in faster, and the data still go in the order of the list — QRZ.ru first, then QRZ.com, HamQTH, QRZCQ.",
+    "3. QRZ.com — XML API" to "3. QRZ.com — XML API",
+    "4. Сайт QRZ.com" to "4. QRZ.com site",
+    "5. HamQTH — справочник" to "5. HamQTH — callbook",
+    "6. QRZCQ" to "6. QRZCQ",
+    "7. HamQTH — страна и область" to "7. HamQTH — country and region",
+    "Справочник QRZ.com через его интерфейс для программ (xmldata.qrz.com) — тот же логин и пароль, что на qrz.com. Полная запись — имя, QTH, локатор, координаты и зоны — с подпиской QRZ.com «XML Logbook Data»; без неё приходят только имя и страна, остальное дополнят следующие справочники. Его данные идут после QRZ.ru и перед сайтом QRZ.com." to
+        "The QRZ.com callbook through its interface for programs (xmldata.qrz.com) — the same username and password as on qrz.com. The full record — name, QTH, locator, coordinates and zones — comes with the QRZ.com \"XML Logbook Data\" subscription; without it only the name and the country come, the next callbooks add the rest. Its data go after QRZ.ru and before the QRZ.com site.",
+    ", подписка XML до %s" to ", XML subscription until %s",
+    ". Подписки XML нет: QRZ.com отдаёт только имя и страну, QTH и координаты возьмутся со следующих справочников" to
+        ". No XML subscription: QRZ.com gives only the name and the country, the QTH and coordinates will come from the next callbooks",
+    "QRZ.com не вернул ключ сессии" to "QRZ.com returned no session key",
+    "QRZ.com по API: имя, QTH, локатор и зоны через интерфейс для программ (с подпиской XML); спрашивается перед сайтом QRZ.com." to
+        "QRZ.com through its API: name, QTH, locator and zones through the interface for programs (with the XML subscription); asked before the QRZ.com site.",
 )

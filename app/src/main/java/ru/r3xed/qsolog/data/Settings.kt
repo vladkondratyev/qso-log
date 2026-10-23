@@ -30,6 +30,7 @@ class Settings(context: Context) {
         myQth = prefs.getString("my_qth", "") ?: "",
         qrzLogin = prefs.getString("qrz_login", "") ?: "",
         qrzSiteEmail = prefs.getString("qrz_site_email", "") ?: "",
+        qrzComXmlLogin = prefs.getString("qrzcom_xml_login", "") ?: "",
         qrzComLogin = prefs.getString("qrzcom_login", "") ?: "",
         hamqthLogin = prefs.getString("hamqth_login", "") ?: "",
         qrzcqLogin = prefs.getString("qrzcq_login", "") ?: "",
@@ -41,6 +42,7 @@ class Settings(context: Context) {
     fun loadSecrets(s: StationSettings) = s.copy(
         qrzPassword = secret.getString("qrz_password", "") ?: "",
         qrzSitePassword = secret.getString("qrz_site_password", "") ?: "",
+        qrzComXmlPassword = secret.getString("qrzcom_xml_password", "") ?: "",
         qrzComPassword = secret.getString("qrzcom_password", "") ?: "",
         hamqthPassword = secret.getString("hamqth_password", "") ?: "",
         qrzcqPassword = secret.getString("qrzcq_password", "") ?: "",
@@ -53,6 +55,7 @@ class Settings(context: Context) {
             .putString("my_qth", s.myQth.trim())
             .putString("qrz_login", s.qrzLogin.trim())
             .putString("qrz_site_email", s.qrzSiteEmail.trim())
+            .putString("qrzcom_xml_login", s.qrzComXmlLogin.trim())
             .putString("qrzcom_login", s.qrzComLogin.trim())
             .putString("hamqth_login", s.hamqthLogin.trim())
             .putString("qrzcq_login", s.qrzcqLogin.trim())
@@ -63,7 +66,7 @@ class Settings(context: Context) {
             .apply()
         secret.edit().putString("qrz_password", s.qrzPassword).putString("qrz_site_password", s.qrzSitePassword)
             .putString("qrzcom_password", s.qrzComPassword).putString("hamqth_password", s.hamqthPassword)
-            .putString("qrzcq_password", s.qrzcqPassword).apply()
+            .putString("qrzcq_password", s.qrzcqPassword).putString("qrzcom_xml_password", s.qrzComXmlPassword).apply()
     }
 
     /** The online logbooks' accounts: the e-mail and the TQSL location plain, the keys and the password encrypted. Slow — off the main thread. */

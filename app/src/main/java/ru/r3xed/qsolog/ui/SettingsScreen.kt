@@ -477,7 +477,13 @@ fun SettingsScreen(
                         }
                         ActionButton(tr("Проверить вход"), null, vm::testQrzSite)
                         Note(tr("Ограничения: страница сайта — не интерфейс для программ, после изменений на сайте поиск может перестать работать; каждый запрос добавляет абоненту «Просмотр»; правила сайта могут запрещать автоматические запросы. Если указана и учётная запись XML API, данные берутся через неё, а сайт — только когда XML API не ответил."))
-                        Section(tr("3. Сайт QRZ.com"))
+                        CallbookAccount(
+                            tr("3. QRZ.com — XML API"),
+                            tr("Справочник QRZ.com через его интерфейс для программ (xmldata.qrz.com) — тот же логин и пароль, что на qrz.com. Полная запись — имя, QTH, локатор, координаты и зоны — с подпиской QRZ.com «XML Logbook Data»; без неё приходят только имя и страна, остальное дополнят следующие справочники. Его данные идут после QRZ.ru и перед сайтом QRZ.com."),
+                            s.qrzComXmlLogin, s.qrzComXmlPassword, vm.callbookStatus["qrzcomxml"],
+                            { vm.updateSettings(s.copy(qrzComXmlLogin = it)) }, { vm.updateSettings(s.copy(qrzComXmlPassword = it)) }, { vm.testCallbook("qrzcomxml") },
+                        )
+                        Section(tr("4. Сайт QRZ.com"))
                         Note(tr("Для зарубежных позывных, которых нет на QRZ.ru. Программа входит на qrz.com с вашей учётной записью (подойдёт бесплатная) и читает страницу позывного (www.qrz.com/db/ПОЗЫВНОЙ): имя, город, страну, локатор, координаты и зоны."))
                         SettingField(tr("Логин QRZ.com (позывной или e-mail)"), s.qrzComLogin, { vm.updateSettings(s.copy(qrzComLogin = it.trim())) }, mono = true)
                         var showCom by remember { mutableStateOf(false) }
@@ -512,18 +518,18 @@ fun SettingsScreen(
                         ActionButton(tr("Проверить вход"), null, vm::testQrzCom)
                         Note(tr("Ограничения те же, что у сайта QRZ.ru: страница — не интерфейс для программ и может измениться; учётные записи с двухфакторным входом не поддерживаются."))
                         CallbookAccount(
-                            tr("4. HamQTH — справочник"),
-                            tr("Бесплатная учётная запись hamqth.com (регистрация на сайте). Имя, QTH, локатор и координаты станции — для зарубежных и российских позывных; спрашивается после QRZ.ru и QRZ.com, а также когда они нашли позывной без QTH или координат."),
+                            tr("5. HamQTH — справочник"),
+                            tr("Бесплатная учётная запись hamqth.com (регистрация на сайте). Имя, QTH, локатор и координаты станции — для зарубежных и российских позывных; его данные идут после QRZ.ru и QRZ.com и дополняют их, если там нет QTH или координат."),
                             s.hamqthLogin, s.hamqthPassword, vm.callbookStatus["hamqth"],
                             { vm.updateSettings(s.copy(hamqthLogin = it)) }, { vm.updateSettings(s.copy(hamqthPassword = it)) }, { vm.testCallbook("hamqth") },
                         )
                         CallbookAccount(
-                            tr("5. QRZCQ"),
-                            tr("Справочник qrzcq.com. Поиск через программы QRZCQ даёт только премиум-участникам; спрашивается последним — когда остальные не нашли позывной, QTH или координаты."),
+                            tr("6. QRZCQ"),
+                            tr("Справочник qrzcq.com. Поиск через программы QRZCQ даёт только премиум-участникам; его данные идут последними — когда остальные не нашли позывной, QTH или координаты."),
                             s.qrzcqLogin, s.qrzcqPassword, vm.callbookStatus["qrzcq"],
                             { vm.updateSettings(s.copy(qrzcqLogin = it)) }, { vm.updateSettings(s.copy(qrzcqPassword = it)) }, { vm.testCallbook("qrzcq") },
                         )
-                        Section(tr("6. HamQTH — страна и область"))
+                        Section(tr("7. HamQTH — страна и область"))
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                                 .toggleable(value = vm.hamqthEnabled, role = Role.Switch, onValueChange = vm::setHamqth)

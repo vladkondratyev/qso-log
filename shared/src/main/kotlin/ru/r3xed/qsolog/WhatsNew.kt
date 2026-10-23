@@ -9,11 +9,10 @@ import java.net.URLEncoder
 object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
-    /** Points of this release (2.7.1 on the phone and the computer). */
-    fun items(desktop: Boolean): List<String> = listOfNotNull(
-        tr("Карточка QSO по двойному щелчку в WSJT-X и JTDX: сразу видны QTH, карта и расстояние, а связь, записанная в WSJT-X, сохраняется вместе с этой карточкой (включается в настройках цифровых видов)."),
-        if (desktop) null else tr("Ключ на экране: кнопки «·» и «—» или «КЛЮЧ» на своей клавиатуре в карточке QSO с видом CW (включается в настройках CW)."),
-        if (desktop) null else tr("Ряд F1–F8 на своей клавиатуре: все клавиши одного размера, «Стоп» занимает две; скорость меняется в карточке."),
+    /** Points of this release (2.7.2 on the phone and the computer). */
+    fun items(desktop: Boolean): List<String> = listOf(
+        tr("QRZ.com по API: имя, QTH, локатор и зоны через интерфейс для программ (с подпиской XML); спрашивается перед сайтом QRZ.com."),
+        tr("Справочники спрашиваются одновременно: карточка заполняется быстрее, а данные по-прежнему берутся по порядку списка — сначала QRZ.ru, потом QRZ.com, HamQTH, QRZCQ."),
     )
 }
 

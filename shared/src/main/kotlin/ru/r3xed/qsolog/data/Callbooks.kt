@@ -1,6 +1,10 @@
 package ru.r3xed.qsolog.data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -184,6 +188,91 @@ class QrzCq(private val credentials: () -> Pair<String, String>) {
     }
 }
 
+/**
+ * QRZ.com's XML API (https://www.qrz.com/docs/xml/current_spec.html): a session key from the login, then one request
+ * per callsign. The full record (QTH, locator, coordinates, zones) is for subscribers of "XML Logbook Data"; without it
+ * QRZ.com gives the name and the country only, and the next callbooks — the QRZ.com site among them — fill in the rest.
+ */
+class QrzComXml(private val credentials: () -> Pair<String, String>) {
+    private val gate = Mutex()
+    private var key: String? = null
+
+    suspend fun lookup(call: String): QrzInfo? = gate.withLock {
+        val k = key ?: login().first
+        val r = query(k, call)
+        val e = r.error
+        if (e != null && (e.contains("Session", ignoreCase = true) || e.contains("Invalid", ignoreCase = true))) {
+            return@withLock answer(query(login().first, call), call)
+        }
+        answer(r, call)
+    }
+
+    fun reset() {
+        key = null
+    }
+
+    /** "Проверить вход": logs in; returns what the subscription gives, throws [QrzException] when refused. */
+    suspend fun check(): String = gate.withLock {
+        val sub = login().second
+        if (subscribed(sub)) tr(", подписка XML до %s", sub) else tr(". Подписки XML нет: QRZ.com отдаёт только имя и страну, QTH и координаты возьмутся со следующих справочников")
+    }
+
+    private fun answer(r: QrzCq.Response, call: String): QrzInfo? {
+        if (r.error?.startsWith("Not found", ignoreCase = true) == true) return null
+        r.error?.let { throw QrzException(0, "QRZ.com: $it") }
+        return toInfo(r.fields, call)
+    }
+
+    /** The session key and the subscription's end ("non-subscriber" without one). */
+    private suspend fun login(): Pair<String, String> {
+        val (user, password) = credentials()
+        if (user.isBlank() || password.isBlank()) throw QrzException(0, tr("Укажите логин и пароль QRZ.com"))
+        val (_, body) = http("$BASE?username=${enc(user.trim())}&password=${enc(password)}&agent=QSO-LOG", "GET")
+        val r = QrzCq.parse(body)
+        r.error?.let { e ->
+            throw QrzException(
+                403,
+                if (e.contains("password", ignoreCase = true) || e.contains("username", ignoreCase = true)) tr("QRZ.com не принял логин или пароль")
+                else "QRZ.com: $e",
+            )
+        }
+        val k = r.session["Key"] ?: throw QrzException(0, tr("QRZ.com не вернул ключ сессии"))
+        key = k
+        return k to r.session["SubExp"].orEmpty()
+    }
+
+    private suspend fun query(key: String, call: String): QrzCq.Response =
+        QrzCq.parse(http("$BASE?s=${enc(key)}&callsign=${enc(call.uppercase())}&agent=QSO-LOG", "GET").second)
+
+    companion object {
+        const val BASE = "https://xmldata.qrz.com/xml/current/"
+
+        private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+
+        fun subscribed(subExp: String) = subExp.isNotBlank() && !subExp.contains("non-subscriber", ignoreCase = true)
+
+        /** The <Callsign> fields as [QrzInfo]: first name and surname, town (addr2), state, grid, coordinates, zones. */
+        fun toInfo(c: Map<String, String>, call: String): QrzInfo? {
+            if (c.isEmpty()) return null
+            val grid = c["grid"].orEmpty()
+            val lat = c["lat"]?.toDoubleOrNull()
+            val lon = c["lon"]?.toDoubleOrNull()
+            fun zone(k: String) = c[k]?.takeIf { it != "0" }.orEmpty()
+            return QrzInfo(
+                call = c["call"]?.uppercase() ?: call.uppercase(),
+                name = c["fname"].orEmpty().ifBlank { c["nickname"].orEmpty() }, surname = c["name"].orEmpty(),
+                city = c["addr2"].orEmpty(),
+                country = c["country"].orEmpty().ifBlank { c["land"].orEmpty() },
+                locator = if (Geo.isLocator(grid)) grid.take(4).uppercase() + grid.drop(4).lowercase() else "",
+                lat = lat?.takeIf { lon != null && !(lat == 0.0 && lon == 0.0) },
+                lon = lon?.takeIf { lat != null && !(lat == 0.0 && lon == 0.0) },
+                region = c["state"].orEmpty(),
+                cqZone = zone("cqzone"), ituZone = zone("ituzone"),
+            )
+        }
+    }
+}
+
 /** A request to a callbook: the status and the body (of an error too). */
 private suspend fun http(url: String, method: String, body: String? = null, headers: Map<String, String> = emptyMap()): Pair<Int, String> =
     withContext(Dispatchers.IO) {
@@ -225,6 +314,36 @@ fun QrzInfo.fillFrom(more: QrzInfo): QrzInfo {
         cqZone = cqZone.ifBlank { more.cqZone },
         ituZone = ituZone.ifBlank { more.ituZone },
     )
+}
+
+/**
+ * Asks every callbook of [books] at once — the ones with an account set — and merges the answers in the order of
+ * [books], not in the order they arrive: the first one that knows the station is the card's, the next ones fill in
+ * only what it lacks (see [fillFrom]) until it is [complete]. An answer may name its own [QrzInfo.source]; otherwise
+ * it is the book's. Null: no book knows the callsign; an exception: none answered (the first problem in that order).
+ */
+suspend fun lookupAll(books: List<Pair<SearchSource, suspend () -> QrzInfo?>>): QrzInfo? = coroutineScope {
+    val answers = books.map { (_, ask) ->
+        async {
+            try {
+                Result.success(ask())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }.awaitAll()
+    var found: QrzInfo? = null
+    var notFound = false
+    var problem: Throwable? = null
+    answers.forEachIndexed { i, r ->
+        val info = r.getOrElse { e -> if (problem == null) problem = e; null }
+        if (r.isSuccess && info == null) notFound = true
+        if (info == null || found?.complete == true) return@forEachIndexed
+        found = found?.fillFrom(info) ?: info.copy(source = info.source.ifBlank { books[i].first.key })
+    }
+    found ?: if (notFound || books.isEmpty()) null else throw problem!!
 }
 
 /** Has what the card needs most: the QTH and where the station is. */

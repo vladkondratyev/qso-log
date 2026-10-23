@@ -1,6 +1,10 @@
 package ru.r3xed.qsolog.data
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -62,5 +66,54 @@ class CallbooksTest {
         val withPos = qrz.copy(lat = 54.5, lon = 36.3).fillFrom(hq)
         assertEquals(54.5, withPos.lat)
         assertEquals("", withPos.locator)
+    }
+
+    @Test
+    fun qrzComXmlAnswer() {
+        // As in QRZ.com's XML specification, with a made-up station.
+        val xml = """<?xml version="1.0" ?><QRZDatabase version="1.34"><Callsign><call>W1DEMO</call><fname>John</fname>
+            <name>Demo</name><addr2>Newington</addr2><state>CT</state><country>United States</country><lat>41.714775</lat>
+            <lon>-72.727260</lon><grid>FN31pr</grid><cqzone>5</cqzone><ituzone>8</ituzone></Callsign>
+            <Session><Key>2331uf894c4bd29f3923f3bacf02c532d7bd9</Key><Count>123</Count><SubExp>Wed Jan 1 12:34:03 2031</SubExp></Session></QRZDatabase>"""
+        val r = QrzCq.parse(xml)
+        val i = QrzComXml.toInfo(r.fields, "w1demo")!!
+        assertEquals("W1DEMO", i.call)
+        assertEquals("John Demo", i.fullName)
+        assertEquals("Newington", i.city)
+        assertEquals("FN31pr", i.locator)
+        assertEquals(41.714775, i.lat)
+        assertEquals("CT", i.region)
+        assertEquals("5", i.cqZone)
+        assertTrue(QrzComXml.subscribed(r.session["SubExp"].orEmpty()))
+        assertFalse(QrzComXml.subscribed("non-subscriber"))
+        // Without the subscription: the name and the country only.
+        val free = QrzComXml.toInfo(QrzCq.parse("<QRZDatabase><Callsign><call>W1DEMO</call><fname>John</fname><country>United States</country></Callsign></QRZDatabase>").fields, "W1DEMO")!!
+        assertEquals("", free.locator)
+        assertEquals(null, free.lat)
+        assertFalse(free.complete)
+    }
+
+    private fun info(call: String, city: String = "", locator: String = "", name: String = "") =
+        QrzInfo(call = call, name = name, surname = "", city = city, country = "", locator = locator, lat = null, lon = null)
+
+    @Test
+    fun parallelAnswersGoInTheBooksOrder() = runBlocking {
+        val slowFirst: suspend () -> QrzInfo? = { delay(300); info("R0DEMO", name = "Ivan") }
+        val fastSecond: suspend () -> QrzInfo? = { info("R0DEMO", city = "Moscow", locator = "KO85ts", name = "John") }
+        val started = System.currentTimeMillis()
+        val i = lookupAll(listOf(SearchSource.QRZ_RU to slowFirst, SearchSource.QRZ_COM_XML to fastSecond, SearchSource.QRZ_COM to { delay(300); info("R0DEMO", city = "Other") }))!!
+        // Asked at once: two slow books take one delay, not two.
+        assertTrue(System.currentTimeMillis() - started < 550)
+        assertEquals("Ivan", i.name) // the first book's, though it answered last
+        assertEquals("Moscow", i.city) // filled in by the next one
+        assertEquals("qrzru", i.source)
+    }
+
+    @Test
+    fun failedAndUnknownBooks() = runBlocking {
+        val broken: suspend () -> QrzInfo? = { throw QrzException(0, "down") }
+        assertEquals("Kyiv", lookupAll(listOf(SearchSource.QRZ_RU to broken, SearchSource.HAMQTH_BOOK to { info("UR0DEMO", city = "Kyiv") }))!!.city)
+        assertNull(lookupAll(listOf(SearchSource.QRZ_RU to broken, SearchSource.QRZCQ to { null })))
+        assertEquals("down", assertFailsWith<QrzException> { lookupAll(listOf(SearchSource.QRZ_RU to broken)) }.message)
     }
 }

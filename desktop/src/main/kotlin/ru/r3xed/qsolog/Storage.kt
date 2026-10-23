@@ -381,6 +381,7 @@ class Settings {
     private var cachedComPassword: String? = null
     private var cachedHamqthPassword: String? = null
     private var cachedQrzcqPassword: String? = null
+    private var cachedComXmlPassword: String? = null
 
     /** Everything except the password, which may wait on a keychain prompt; read it with [password]. */
     fun load() = StationSettings(
@@ -391,6 +392,8 @@ class Settings {
         qrzPassword = cachedPassword.orEmpty(),
         qrzSiteEmail = get("qrz_site_email"),
         qrzSitePassword = cachedSitePassword.orEmpty(),
+        qrzComXmlLogin = get("qrzcom_xml_login"),
+        qrzComXmlPassword = cachedComXmlPassword.orEmpty(),
         qrzComLogin = get("qrzcom_login"),
         qrzComPassword = cachedComPassword.orEmpty(),
         hamqthLogin = get("hamqth_login"),
@@ -405,6 +408,7 @@ class Settings {
     fun sitePassword(): String = cachedSitePassword ?: loadPassword(SITE_ACCOUNT, "qrz_site_password").also { cachedSitePassword = it }
     fun comPassword(): String = cachedComPassword ?: loadPassword(COM_ACCOUNT, "qrzcom_password").also { cachedComPassword = it }
     fun hamqthPassword(): String = cachedHamqthPassword ?: loadPassword(HAMQTH_ACCOUNT, "hamqth_password").also { cachedHamqthPassword = it }
+    fun comXmlPassword(): String = cachedComXmlPassword ?: loadPassword(COM_XML_ACCOUNT, "qrzcom_xml_password").also { cachedComXmlPassword = it }
     fun qrzcqPassword(): String = cachedQrzcqPassword ?: loadPassword(QRZCQ_ACCOUNT, "qrzcq_password").also { cachedQrzcqPassword = it }
 
     fun save(s: StationSettings) {
@@ -415,6 +419,7 @@ class Settings {
         for (key in AdifLabels.MINE.keys) props.setProperty("station_$key", s.station[key].orEmpty().trim())
         props.setProperty("qrz_site_email", s.qrzSiteEmail.trim())
         props.setProperty("qrzcom_login", s.qrzComLogin.trim())
+        props.setProperty("qrzcom_xml_login", s.qrzComXmlLogin.trim())
         props.setProperty("hamqth_login", s.hamqthLogin.trim())
         props.setProperty("qrzcq_login", s.qrzcqLogin.trim())
         put("qrz_login", s.qrzLogin.trim())
@@ -429,6 +434,10 @@ class Settings {
         if (cachedQrzcqPassword != null && s.qrzcqPassword != cachedQrzcqPassword) {
             cachedQrzcqPassword = s.qrzcqPassword
             savePassword(s.qrzcqPassword, QRZCQ_ACCOUNT, "qrzcq_password")
+        }
+        if (cachedComXmlPassword != null && s.qrzComXmlPassword != cachedComXmlPassword) {
+            cachedComXmlPassword = s.qrzComXmlPassword
+            savePassword(s.qrzComXmlPassword, COM_XML_ACCOUNT, "qrzcom_xml_password")
         }
         if (cachedComPassword != null && s.qrzComPassword != cachedComPassword) {
             cachedComPassword = s.qrzComPassword
@@ -602,5 +611,6 @@ class Settings {
         const val COM_ACCOUNT = "www.qrz.com"
         const val HAMQTH_ACCOUNT = "www.hamqth.com"
         const val QRZCQ_ACCOUNT = "www.qrzcq.com"
+        const val COM_XML_ACCOUNT = "xmldata.qrz.com"
     }
 }

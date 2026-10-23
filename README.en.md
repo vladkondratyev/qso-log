@@ -557,7 +557,7 @@ What you can do:
 
 ## Station data
 
-The app looks for the other station's name, city and position in six places, in this order. All of them are set up
+The app looks for the other station's name, city and position in seven places. All of them are set up
 in Settings → "Callbooks and online logs" → "Station data sources".
 
 1. **QRZ.ru XML API.** The main way, meant by QRZ.ru for logging programs. QRZ.ru issues a separate API login:
@@ -566,15 +566,21 @@ in Settings → "Callbooks and online logs" → "Station data sources".
    The API gives no RDA district, so for a Russian callsign the app also reads it from the public callsign page.
 2. **QRZ.ru site account.** A fallback without API access: your qrz.ru e-mail and password; the app reads the
    callsign page. It breaks if the site changes its layout.
-3. **QRZ.com site.** For callsigns QRZ.ru doesn't know. Your QRZ.com login (callsign or e-mail) and password; a free
+3. **QRZ.com XML API** (since 2.7.2). The QRZ.com callbook through its interface for programs (xmldata.qrz.com),
+   with the same username and password as on qrz.com. The full record — name, city, locator, position, CQ/ITU zones —
+   comes with the QRZ.com "XML Logbook Data" subscription; without it only the name and the country come and the next
+   callbooks, the QRZ.com site for one, add the rest. "Check login" shows until when the subscription runs.
+4. **QRZ.com site.** For callsigns QRZ.ru doesn't know. Your QRZ.com login (callsign or e-mail) and password; a free
    account is enough. Gives name, address, country, locator, position and CQ/ITU zones. Two-factor login is not supported.
-4. **HamQTH callbook** (since 2.7.0) — a free hamqth.com account: name, QTH, locator and position.
-5. **QRZCQ** (since 2.7.0) — the qrzcq.com callbook; it answers programs only for premium members.
+5. **HamQTH callbook** (since 2.7.0) — a free hamqth.com account: name, QTH, locator and position.
+6. **QRZCQ** (since 2.7.0) — the qrzcq.com callbook; it answers programs only for premium members.
 
-The callbooks are asked in turn. When QRZ.ru finds the callsign but without a QTH or position, the missing part is
-looked up further down the list — QRZ.com, HamQTH, QRZCQ — while the name and whatever was found stay from the first answer.
+Since 2.7.2 every callbook with an account is asked at once, so the card fills in as fast as the slowest of them, not
+the sum. The answers are used strictly in the order of the list, whoever answers first: the data come from the first
+callbook in the list that knows the callsign, and a missing QTH or position is added from the next ones (QRZ.com,
+HamQTH, QRZCQ). The QRZ.ru site is the same database as its API: it is asked only when the API is not set or failed.
 
-6. **HamQTH by prefix.** No account needed, but only country, region and CQ/ITU zones. The distance is then to the centre of the
+7. **HamQTH by prefix.** Asked together with the rest, used when no callbook knows the callsign. No account needed, but only country, region and CQ/ITU zones. The distance is then to the centre of the
    region and marked "≈". Can be switched off.
 
 Without internet the QSO is saved anyway; fill in the data later with ⟳.

@@ -206,6 +206,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         qrzPassword = s.qrzPassword.ifEmpty { p.qrzPassword },
         qrzSitePassword = s.qrzSitePassword.ifEmpty { p.qrzSitePassword },
         qrzComPassword = s.qrzComPassword.ifEmpty { p.qrzComPassword },
+        qrzComXmlPassword = s.qrzComXmlPassword.ifEmpty { p.qrzComXmlPassword },
         hamqthPassword = s.hamqthPassword.ifEmpty { p.hamqthPassword },
         qrzcqPassword = s.qrzcqPassword.ifEmpty { p.qrzcqPassword },
     )
@@ -218,51 +219,48 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val qrz = QrzClient { settings.qrzLogin to settings.qrzPassword }
     private val qrzSite = QrzSite { settings.qrzSiteEmail to settings.qrzSitePassword }
     private val qrzCom = QrzCom { settings.qrzComLogin to settings.qrzComPassword }
+    private val qrzComXml = ru.r3xed.qsolog.data.QrzComXml { settings.qrzComXmlLogin to settings.qrzComXmlPassword }
     private val hamqthBook = ru.r3xed.qsolog.data.HamQthBook { settings.hamqthLogin to settings.hamqthPassword }
     private val qrzCq = ru.r3xed.qsolog.data.QrzCq { settings.qrzcqLogin to settings.qrzcqPassword }
 
     /** Some callsign account is set: the QRZ.ru XML API (preferred), the QRZ.ru site's e-mail login, QRZ.com, HamQTH or QRZCQ. */
-    val hasQrzAccount get() = settings.qrzLogin.isNotBlank() || settings.qrzSiteEmail.isNotBlank() || settings.qrzComLogin.isNotBlank() ||
+    val hasQrzAccount get() = settings.qrzLogin.isNotBlank() || settings.qrzSiteEmail.isNotBlank() || settings.qrzComLogin.isNotBlank() || settings.qrzComXmlLogin.isNotBlank() ||
         settings.hamqthLogin.isNotBlank() || settings.qrzcqLogin.isNotBlank()
 
     /**
-     * Station data for a callsign: through the QRZ.ru XML API when its account is set (it wins when several are set),
-     * otherwise — or when the API fails — from the QRZ.ru site's callsign page with the e-mail login, then QRZ.com,
-     * HamQTH and QRZCQ (also when QRZ.ru does not know the callsign: foreign stations). An answer without the QTH or
-     * the station's position is completed from the next callbooks in this order. Null: known to none of them.
+     * Station data for a callsign, from every callbook with an account at once: QRZ.ru (the XML API, or the site's
+     * callsign page when the API is not set or failed), QRZ.com's XML API, the QRZ.com site, HamQTH and QRZCQ. The
+     * answers go in this order: the first is the card's, an answer without the QTH or the station's position is completed
+     * from the next ones. Null: known to none of them.
      */
     private suspend fun qrzLookup(call: String, stillWanted: () -> Boolean = { true }): QrzInfo? {
         // Callbooks know R0DEMO, not R0DEMO/P or DL/R0DEMO; the card keeps the callsign as typed.
         val home = Callsign.home(call)
         if (!secretsReady) { secrets.await(); applySecrets() }
-        var problem: Exception? = null
-        // Some source answered that it does not know the callsign.
-        var notFound = false
-        suspend fun ask(source: suspend () -> QrzInfo?): QrzInfo? = try {
-            source().also { if (it == null) notFound = true }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (problem == null) problem = e
-            null
+        // Every callbook with an account is asked at once; the answers are used in this order, whichever comes first.
+        val books = buildList<Pair<SearchSource, suspend () -> QrzInfo?>> {
+            if (settings.qrzLogin.isNotBlank() || settings.qrzSiteEmail.isNotBlank()) add(SearchSource.QRZ_RU to {
+                // The XML API gives no RDA district: for a Russian station it is read from the callsign page of the site.
+                // The site is the same database as the API: asked only when the API is not set or failed.
+                val api = if (settings.qrzLogin.isBlank()) null else runCatching { qrz.lookup(home, stillWanted)?.let { qrzSite.withRda(it) } }
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                when {
+                    api != null && api.isSuccess -> api.getOrNull()
+                    settings.qrzSiteEmail.isNotBlank() -> try {
+                        qrzSite.lookup(home)?.copy(source = SearchSource.QRZ_RU_SITE.key)
+                    } catch (e: QrzException) {
+                        throw api?.exceptionOrNull() ?: e
+                    }
+                    else -> throw api!!.exceptionOrNull()!!
+                }
+            })
+            if (settings.qrzComXmlLogin.isNotBlank()) add(SearchSource.QRZ_COM_XML to { qrzComXml.lookup(home) })
+            if (settings.qrzComLogin.isNotBlank()) add(SearchSource.QRZ_COM to { qrzCom.lookup(home) })
+            if (settings.hamqthLogin.isNotBlank()) add(SearchSource.HAMQTH_BOOK to { hamqthBook.lookup(home) })
+            if (settings.qrzcqLogin.isNotBlank()) add(SearchSource.QRZCQ to { qrzCq.lookup(home) })
         }
-        // The first answer is the card's; what it lacks (the QTH, the position) the next callbooks fill in.
-        var found: QrzInfo? = null
-        suspend fun next(from: SearchSource, source: suspend () -> QrzInfo?) {
-            if (found?.complete == true) return
-            val info = ask(source) ?: return
-            found = found?.fillFrom(info) ?: info.copy(source = from.key)
-        }
-        // The XML API gives no RDA district: for a Russian station it is read from the callsign page of the site.
-        if (settings.qrzLogin.isNotBlank()) next(SearchSource.QRZ_RU) { qrz.lookup(home, stillWanted)?.let { qrzSite.withRda(it) } }
-        // The QRZ.ru site is the same database as its XML API: asked only when the API is not set or failed.
-        if (settings.qrzSiteEmail.isNotBlank() && !notFound && found == null) next(SearchSource.QRZ_RU_SITE) { qrzSite.lookup(home) }
-        if (settings.qrzComLogin.isNotBlank()) next(SearchSource.QRZ_COM) { qrzCom.lookup(home) }
-        if (settings.hamqthLogin.isNotBlank()) next(SearchSource.HAMQTH_BOOK) { hamqthBook.lookup(home) }
-        if (settings.qrzcqLogin.isNotBlank()) next(SearchSource.QRZCQ) { qrzCq.lookup(home) }
-        found?.let { return it }
-        if (notFound) return null
-        throw problem ?: QrzException(403, tr("Укажите учётную запись QRZ.ru в настройках"))
+        if (books.isEmpty()) throw QrzException(403, tr("Укажите учётную запись QRZ.ru в настройках"))
+        return ru.r3xed.qsolog.data.lookupAll(books)
     }
 
     /** Region and RDA (QRZ.ru site), region and zones (QRZ.com) into ADIF STATE / CNTY / CQZ / ITUZ unless the card has them. */
@@ -1143,7 +1141,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (form.call == call) rememberSearch(requireNew = false)
     }
 
-    private suspend fun lookupOnce(call: String) {
+    /** HamQTH's prefix answer for a callsign, asked beside the callbooks: ready when none of them knows the station. */
+    private var dxccAhead: Pair<String, kotlinx.coroutines.Deferred<ru.r3xed.qsolog.data.DxccInfo?>>? = null
+
+    private suspend fun lookupOnce(call: String) = kotlinx.coroutines.coroutineScope {
+        dxccAhead = if (!hamqthEnabled || cardFromLog) null else call to async(Dispatchers.IO) {
+            try {
+                HamQth.dxcc(call)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+        }
+        try {
+            lookupFromBooks(call)
+        } finally {
+            dxccAhead?.second?.cancel()
+            dxccAhead = null
+        }
+    }
+
+    private suspend fun lookupFromBooks(call: String) {
         lookup = Lookup.Loading
         if (!hasQrzAccount) {
             lookup = historyFallback(call, problem = null) ?: hamqthFallback(call, qrzProblem = null)
@@ -1188,8 +1207,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** HamQTH prefix search into the card; null when switched off, unknown or unreachable. */
     private suspend fun hamqthFallback(call: String, qrzProblem: String?): Lookup? {
         if (!hamqthEnabled || cardFromLog) return null
+        val ahead = dxccAhead?.takeIf { it.first == call }?.second
         val d = try {
-            withContext(Dispatchers.IO) { HamQth.dxcc(call) } ?: return null
+            (if (ahead != null) ahead.await() else withContext(Dispatchers.IO) { HamQth.dxcc(call) }) ?: return null
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -2951,6 +2971,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val comChanged = s.qrzComLogin != settings.qrzComLogin || s.qrzComPassword != settings.qrzComPassword
         val hamqthChanged = s.hamqthLogin != settings.hamqthLogin || s.hamqthPassword != settings.hamqthPassword
         val qrzcqChanged = s.qrzcqLogin != settings.qrzcqLogin || s.qrzcqPassword != settings.qrzcqPassword
+        val comXmlChanged = s.qrzComXmlLogin != settings.qrzComXmlLogin || s.qrzComXmlPassword != settings.qrzComXmlPassword
         settings = s
         prefs.save(s)
         if (credentialsChanged) {
@@ -2967,6 +2988,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             hamqthBook.reset()
             callbookStatus = callbookStatus - "hamqth"
         }
+        if (comXmlChanged) {
+            qrzComXml.reset()
+            callbookStatus = callbookStatus - "qrzcomxml"
+        }
         if (qrzcqChanged) {
             qrzCq.reset()
             callbookStatus = callbookStatus - "qrzcq"
@@ -2978,15 +3003,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** "Проверить вход" of HamQTH ("hamqth") and QRZCQ ("qrzcq"): logged in or not, and what was said. */
+    /** "Проверить вход" of HamQTH ("hamqth"), QRZCQ ("qrzcq") and QRZ.com's XML API ("qrzcomxml"): logged in or not, and what was said. */
     var callbookStatus by mutableStateOf<Map<String, Pair<Boolean?, String>>>(emptyMap()); private set
 
     fun testCallbook(which: String) {
         viewModelScope.launch {
             callbookStatus = callbookStatus + (which to (null to tr("Проверяю…")))
             val result: Pair<Boolean?, String> = try {
-                if (which == "hamqth") { hamqthBook.reset(); hamqthBook.check() } else { qrzCq.reset(); qrzCq.check() }
-                true to tr("Вход выполнен")
+                val note = when (which) {
+                    "hamqth" -> { hamqthBook.reset(); hamqthBook.check(); "" }
+                    "qrzcomxml" -> { qrzComXml.reset(); qrzComXml.check() }
+                    else -> { qrzCq.reset(); qrzCq.check(); "" }
+                }
+                true to tr("Вход выполнен") + note
             } catch (e: QrzException) {
                 false to (e.message ?: "")
             } catch (e: kotlinx.coroutines.CancellationException) {
