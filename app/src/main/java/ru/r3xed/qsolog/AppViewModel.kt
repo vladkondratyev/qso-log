@@ -92,6 +92,7 @@ import ru.r3xed.qsolog.data.freqMhz
 import ru.r3xed.qsolog.data.normalizeFreq
 import ru.r3xed.qsolog.data.defaultRst
 import ru.r3xed.qsolog.data.withDistance
+import ru.r3xed.qsolog.digi.withCard
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -2127,6 +2128,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (c == old) return
         digiConfig = c
         prefs.digi = c
+        if (c.copy(openCard = old.openCard) == old) return
         // Typing a port or a group: listen again once the typing pauses.
         digiRestartJob?.cancel()
         digiRestartJob = viewModelScope.launch {
@@ -2153,6 +2155,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             { st -> viewModelScope.launch { if (digiListener === l) digiStatus = st } },
             { qsos, from -> viewModelScope.launch { if (digiListener === l) logDigi(qsos, from) } },
             onDial = { m -> viewModelScope.launch { if (digiListener === l) onDigiDial(m) } },
+            onDx = { m -> viewModelScope.launch { if (digiListener === l) onDigiDx(m) } },
         )
         digiListener = l
         l.start()
@@ -2177,26 +2180,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun logDigi(qsos: List<Qso>, from: String) {
         val s = settings
+        // The card opened for this station ([onDigiDx]) goes into the record: what the callbooks found, the user's note.
+        if (digiCardOpen) stopCardRecording()
+        val card = form.takeIf { f -> digiCardOpen && qsos.any { it.call.equals(f.call, ignoreCase = true) } }
         val added = digiLock.withLock {
             withContext(Dispatchers.IO) {
                 qsos.mapNotNull { q0 ->
-                    val q = q0.copy(
-                        myCall = q0.myCall.ifBlank { s.myCall.trim().uppercase() },
-                        myLocator = q0.myLocator.ifBlank { s.myLocator.trim() },
-                        power = q0.power.ifBlank { s.power.trim() },
-                        adif = s.station + q0.adif,
-                        pendingLookup = hasQrzAccount,
+                    val mine = card != null && q0.call.equals(card.call, ignoreCase = true)
+                    val q1 = if (mine) q0.withCard(card!!) else q0
+                    val q = q1.copy(
+                        myCall = q1.myCall.ifBlank { s.myCall.trim().uppercase() },
+                        myLocator = q1.myLocator.ifBlank { s.myLocator.trim() },
+                        power = q1.power.ifBlank { s.power.trim() },
+                        adif = s.station + q1.adif,
+                        pendingLookup = hasQrzAccount && !(mine && card!!.infoFromQrz),
                     ).withDistance(s.myPosition)
                     if (db.exists(q)) null else q.copy(id = db.save(q))
                 }
             }
+        }
+        if (card != null && digiCardOpen && form.call == card.call) {
+            // Saved with the contact: closing must not delete the voice note.
+            form = form.copy(audio = "")
+            digiCardSession = -1
+            closeEditor()
         }
         if (added.isEmpty()) return
         reload()
         // The log shows the new contact on top, as after saving a card (a new day's group would start above the view).
         newSavedTick++
         say(if (added.size == 1) tr("Связь с %s из %s записана", added[0].call, from) else tr("Из %s записано связей: %s", from, added.size))
-        if (hasQrzAccount) added.forEach { q ->
+        if (hasQrzAccount) added.filter { it.pendingLookup }.forEach { q ->
             refreshing = refreshing + q.id
             try { fillFromQrz(q) } finally { refreshing = refreshing - q.id }
             reload()
@@ -2303,6 +2317,41 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Where [rig] comes from: "TRX" for CAT, the program's name for WSJT-X / JTDX. */
     val rigSource: String get() = if (catRig != null) "TRX" else digiRigFrom.substringBefore(' ').ifBlank { "UDP" }
+
+    /** The new card opened for the program's DX Call: its [editSession], or -1. */
+    private var digiCardSession = -1
+    /** The program's last DX Call: Status comes every second, the card follows only a change. */
+    private var digiDx = ""
+
+    private val digiCardOpen: Boolean
+        get() = digiCardSession == editSession && screen == Screen.Edit && form.isNew
+
+    /**
+     * "Открывать карточку QSO при выборе корреспондента": a double click on a callsign in WSJT-X or JTDX opens the new
+     * card for it, another station replaces the callsign, a cleared DX Call closes the card if nothing was typed in it.
+     * A card being filled by hand, an opened contact or another screen is left alone: the contact is logged as before.
+     */
+    private fun onDigiDx(m: ru.r3xed.qsolog.digi.Wsjtx.Message.Status) {
+        val dx = m.dxCall.trim().uppercase()
+        if (dx == digiDx) return
+        digiDx = dx
+        if (!digiConfig.openCard) return
+        if (dx.isEmpty()) {
+            if (digiCardOpen && form.comment.isBlank() && form.audio.isBlank() && cardRecordingSince == null) {
+                digiCardSession = -1
+                closeEditor()
+            }
+            return
+        }
+        if (!digiCardOpen) {
+            val free = screen == Screen.Log || (screen == Screen.Edit && form.isNew && form.call.isEmpty() && !hasUnsavedChanges)
+            if (!free) return
+            if (screen != Screen.Edit) newQso()
+            digiCardSession = editSession
+        }
+        setCall(dx)
+        m.mode.uppercase().takeIf { it in MODES && it != form.mode }?.let { form = withMode(form, it) }
+    }
 
     private fun onDigiDial(m: ru.r3xed.qsolog.digi.Wsjtx.Message.Status) {
         digiRig = RigState(freqHz = m.dialHz, radioMode = m.mode.ifBlank { null })
@@ -2499,13 +2548,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val CW_KEYS = "cw_keys_"
 
-    private fun openCwHand(): ru.r3xed.qsolog.cw.CwHand? {
+    /** The kind of key [cwHand] was opened for: the external keyboard's and the screen's may differ. */
+    private var cwHandMode = ru.r3xed.qsolog.cw.CwKeyMode.OFF
+
+    private fun openCwHand(mode: ru.r3xed.qsolog.cw.CwKeyMode): ru.r3xed.qsolog.cw.CwHand? {
+        cwHand?.let { if (cwHandMode == mode) return it }
         closeCwHand(keepTape = true)
         val c = cwConfig
-        if (c.keyMode == ru.r3xed.qsolog.cw.CwKeyMode.OFF) return null
+        if (mode == ru.r3xed.qsolog.cw.CwKeyMode.OFF) return null
         val k = keyer ?: return null
+        cwHandMode = mode
         return ru.r3xed.qsolog.cw.CwHand(
-            c.keyMode.keyType, c.wpm,
+            mode.keyType, c.wpm,
             keyDown = { down -> keyer?.hand(down) ?: false },
             // cwdaemon cannot be keyed by hand: the keyed letters go to it as text (to the daemon only, the speaker already beeped).
             onText = { t -> ((k as? ru.r3xed.qsolog.cw.MirroredSender)?.main ?: k).send(t) },
@@ -2569,9 +2623,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         else if (id in k.dot) 1 else if (id in k.dah) 2 else -1
         if (role < 0) return false
         if (repeat) return true
-        val h = cwHand ?: openCwHand() ?: return false
+        val h = openCwHand(c.keyMode) ?: return false
         h.press(role, down)
         return true
+    }
+
+    /** A paddle or the straight key on the app's keypad ([CwConfig.screenKey]): [role] 0 straight, 1 dot, 2 dash. */
+    fun cwScreenKey(role: Int, down: Boolean) {
+        val mode = cwConfig.screenKey
+        if (!cwActive || mode == ru.r3xed.qsolog.cw.CwKeyMode.OFF) return
+        openCwHand(mode)?.press(role, down)
     }
 
     /** The card is in CW and the key line is on: F1–F8 send the messages. */
@@ -2603,9 +2664,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     val cwSending: Boolean get() = cwState is CwState.Sending
 
-    /** The telegraph row of the app's keypad (F1–F8, speed, Stop), while the card is in CW and the key line is on. */
+    /** The telegraph rows of the app's keypad (F1–F8, Stop, the on-screen key), while the card is in CW and the key line is on. */
     internal fun cwKeypadKeys(): ru.r3xed.qsolog.ui.CwKeys? = if (!cwActive) null else ru.r3xed.qsolog.ui.CwKeys(
-        labels = cwConfig.messages, sending = cwSending, onSend = ::sendCw, onSpeed = ::changeCwSpeed, onStop = ::stopCw,
+        labels = cwConfig.messages, sending = cwSending, onSend = ::sendCw, onStop = ::stopCw,
+        screenKey = cwConfig.screenKey, onKey = ::cwScreenKey,
     )
 
     fun changeCwSpeed(delta: Int) {

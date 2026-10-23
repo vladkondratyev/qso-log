@@ -132,10 +132,14 @@ the keypad becomes a trackpad: slide sideways to move the cursor between the let
 an iPhone; the next key inserts there. The hold time (0.2–1.5 s) is set in "QSO entry" too.
 
 With [CW](#cw-from-the-f1f8-keys) on and the card in CW, one more row appears above the digits (since 2.7.0):
-**F1–F8** — the messages, **−** and **+** — the speed, **■** — stop sending.
+**F1–F8** — the messages and **■** — stop sending; Stop takes two places, so all keys of the row are of one size, and
+the speed is changed in the card (− 26 WPM +). **On-screen key** (since 2.7.1): choose "Straight key" or "Iambic A/B"
+under "On-screen key" in the CW settings, and key buttons appear under the F1–F8 row — **·** and **—** or one **KEY**.
+The key is closed while the finger is on the button; on the iambic key both buttons can be held at once. As with an
+external key, a tape of the characters sent appears under the message buttons.
 
 <p>
-<img src="docs/screenshots/84-cw-keypad-row.png" width="200" alt="The built-in keypad in a QSO card in CW: F1–F8, speed and Stop">
+<img src="docs/screenshots/84-cw-keypad-row.png" width="200" alt="The built-in keypad in a QSO card in CW: F1–F8 and Stop, the on-screen key under them">
 </p>
 
 ## CAT — transceiver
@@ -292,6 +296,12 @@ Settings → "Equipment and programs" → **“Digital modes — WSJT-X, JTDX, M
   transceiver, the app takes the frequency and mode from their messages on the same UDP port: the card and the log
   show "JTDX 14 074.000 · FT8", and a new card follows it. Only JTDX can tune the transceiver then; to tune it from
   QSO-LOG too, connect both programs to Hamlib rigctld (see [CAT](#cat--transceiver)).
+- **The card on a double click** (since 2.7.1). The switch "Open the QSO card when a station is picked": a double click
+  on a callsign in WSJT-X or JTDX opens the new QSO card at once — name and QTH, map, distance, "Worked before". Another
+  station picked — the callsign in the card changes. When OK is pressed in WSJT-X's "Log QSO" window, the time, reports
+  and locator are added to this card and it is saved with what you typed meanwhile (a note, a name). If the contact was
+  not logged and the callsign was cleared in WSJT-X, the card closes. A card you are filling in yourself is left alone;
+  on the computer the QSO-LOG window does not take the keyboard from WSJT-X.
 
 <p>
 <img src="docs/screenshots/72-wsjtx.png" width="200" alt="QSOs from WSJT-X on the phone">

@@ -1019,6 +1019,8 @@ private fun DigiSettings(vm: AppViewModel) {
             }
         }
     }
+    SwitchLine(tr("Открывать карточку QSO при выборе корреспондента"), c.openCard) { vm.changeDigi(c.copy(openCard = it)) }
+    if (c.openCard) Note(tr("Двойной щелчок по позывному в WSJT-X или JTDX сразу открывает карточку нового QSO: QTH, карта, расстояние, «уже работали». Когда в WSJT-X нажимают OK в окне «Log QSO», карточка заполняется и сохраняется; если связь не записали и позывной в WSJT-X стёрли, карточка закрывается. Карточку, которую вы заполняете сами, программа не трогает."))
     SettingField(tr("Порт UDP"), c.port.toString(), { v -> v.filter(Char::isDigit).take(5).toIntOrNull()?.takeIf { it in 1..65535 }?.let { vm.changeDigi(c.copy(port = it)) } }, mono = true)
     SettingField(tr("Групповой адрес (multicast), если нужен"), c.group, { vm.changeDigi(c.copy(group = it.trim())) }, mono = true)
     Note(tr("WSJT-X, JTDX или MSHV на компьютере в той же сети Wi-Fi: в Settings → Reporting → UDP Server укажите адрес телефона и порт %s. Связь попадает в журнал, когда вы нажимаете OK в окне «Log QSO».", c.port))

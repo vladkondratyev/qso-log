@@ -52,10 +52,13 @@ data class CwConfig(
     val keyMode: CwKeyMode = CwKeyMode.OFF,
     /** The device's speaker beeps along with what is sent (self-monitoring), when the radio's own sidetone is not heard. */
     val sidetone: Boolean = true,
+    /** The key on the app's own keypad (the phone): a straight key or paddles under F1–F8; OFF — none. */
+    val screenKey: CwKeyMode = CwKeyMode.OFF,
 ) {
     fun toMap(): Map<String, String> = mapOf(
         "cw_enabled" to enabled.toString(), "cw_via" to via.name, "cw_daemon" to daemon, "cw_device" to device, "cw_line" to line.name, "cw_invert" to invert.toString(),
         "cw_ptt" to ptt.toString(), "cw_wpm" to wpm.toString(), "cw_key_mode" to keyMode.name, "cw_sidetone" to sidetone.toString(),
+        "cw_screen_key" to screenKey.name,
     ) + messages.mapIndexed { i, m -> "cw_msg${i + 1}" to m }
 
     companion object {
@@ -81,6 +84,7 @@ data class CwConfig(
                 messages = DEFAULT_MESSAGES.indices.map { i -> m["cw_msg${i + 1}"] ?: DEFAULT_MESSAGES[i] },
                 keyMode = m["cw_key_mode"]?.let { v -> CwKeyMode.entries.firstOrNull { it.name == v } } ?: d.keyMode,
                 sidetone = m["cw_sidetone"]?.toBooleanStrictOrNull() ?: d.sidetone,
+                screenKey = m["cw_screen_key"]?.let { v -> CwKeyMode.entries.firstOrNull { it.name == v } } ?: d.screenKey,
             )
         }
 

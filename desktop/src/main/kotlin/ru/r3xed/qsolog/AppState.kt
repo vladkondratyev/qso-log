@@ -80,6 +80,7 @@ import ru.r3xed.qsolog.data.freqMhz
 import ru.r3xed.qsolog.data.normalizeFreq
 import ru.r3xed.qsolog.data.defaultRst
 import ru.r3xed.qsolog.data.withDistance
+import ru.r3xed.qsolog.digi.withCard
 import ru.r3xed.qsolog.ui.MapCamera
 import java.io.File
 import java.net.HttpURLConnection
@@ -2259,6 +2260,42 @@ class AppState {
     /** Where [rig] comes from: "TRX" for CAT, the program's name for WSJT-X / JTDX. */
     val rigSource: String get() = if (catRig != null) "TRX" else digiRigFrom.substringBefore(' ').ifBlank { "UDP" }
 
+    /** The new card opened for the program's DX Call: its [editSession], or -1. */
+    private var digiCardSession = -1
+    /** The program's last DX Call: Status comes every second, the card follows only a change. */
+    private var digiDx = ""
+
+    private val digiCardOpen: Boolean
+        get() = digiCardSession == editSession && pane == Pane.Edit && form.isNew
+
+    /**
+     * "Открывать карточку QSO при выборе корреспондента": a double click on a callsign in WSJT-X or JTDX opens the new
+     * card for it, another station replaces the callsign, a cleared DX Call closes the card if nothing was typed in it.
+     * A card being filled by hand, an opened contact or another pane is left alone: the contact is logged as before.
+     * The window is not brought forward: the keyboard stays with WSJT-X.
+     */
+    private fun onDigiDx(m: ru.r3xed.qsolog.digi.Wsjtx.Message.Status) {
+        val dx = m.dxCall.trim().uppercase()
+        if (dx == digiDx) return
+        digiDx = dx
+        if (!digiConfig.openCard) return
+        if (dx.isEmpty()) {
+            if (digiCardOpen && form.comment.isBlank() && form.audio.isBlank() && cardRecordingSince == null) {
+                digiCardSession = -1
+                closeEditor()
+            }
+            return
+        }
+        if (!digiCardOpen) {
+            val free = pane == Pane.Empty || pane == Pane.Map || (pane == Pane.Edit && form.isNew && form.call.isEmpty() && !hasUnsavedChanges)
+            if (!free) return
+            if (pane != Pane.Edit) newQso()
+            digiCardSession = editSession
+        }
+        setCall(dx)
+        m.mode.uppercase().takeIf { it in MODES && it != form.mode }?.let { form = withMode(form, it) }
+    }
+
     private fun onDigiDial(m: ru.r3xed.qsolog.digi.Wsjtx.Message.Status) {
         digiRig = RigState(freqHz = m.dialHz, radioMode = m.mode.ifBlank { null })
         digiRigFrom = m.id
@@ -2865,6 +2902,7 @@ class AppState {
         if (c == old) return
         digiConfig = c
         prefs.digi = c
+        if (c.copy(openCard = old.openCard) == old) return
         // Typing a port or a group: listen again once the typing pauses.
         digiRestartJob?.cancel()
         digiRestartJob = scope.launch {
@@ -2885,6 +2923,7 @@ class AppState {
             { st -> scope.launch { if (digiListener === l) digiStatus = st } },
             { qsos, from -> scope.launch { if (digiListener === l) logDigi(qsos, from) } },
             onDial = { m -> scope.launch { if (digiListener === l) onDigiDial(m) } },
+            onDx = { m -> scope.launch { if (digiListener === l) onDigiDx(m) } },
         )
         digiListener = l
         l.start()
@@ -2901,26 +2940,37 @@ class AppState {
      */
     private suspend fun logDigi(qsos: List<Qso>, from: String) {
         val s = settings
+        // The card opened for this station ([onDigiDx]) goes into the record: what the callbooks found, the user's note.
+        if (digiCardOpen) stopCardRecording()
+        val card = form.takeIf { f -> digiCardOpen && qsos.any { it.call.equals(f.call, ignoreCase = true) } }
         val added = digiLock.withLock {
             withContext(Dispatchers.IO) {
                 qsos.mapNotNull { q0 ->
-                    val q = q0.copy(
-                        myCall = q0.myCall.ifBlank { s.myCall.trim().uppercase() },
-                        myLocator = q0.myLocator.ifBlank { s.myLocator.trim() },
-                        power = q0.power.ifBlank { s.power.trim() },
-                        adif = s.station + q0.adif,
-                        pendingLookup = hasQrzAccount,
+                    val mine = card != null && q0.call.equals(card.call, ignoreCase = true)
+                    val q1 = if (mine) q0.withCard(card!!) else q0
+                    val q = q1.copy(
+                        myCall = q1.myCall.ifBlank { s.myCall.trim().uppercase() },
+                        myLocator = q1.myLocator.ifBlank { s.myLocator.trim() },
+                        power = q1.power.ifBlank { s.power.trim() },
+                        adif = s.station + q1.adif,
+                        pendingLookup = hasQrzAccount && !(mine && card!!.infoFromQrz),
                     ).withDistance(s.myPosition)
                     if (db.exists(q)) null else q.copy(id = db.save(q))
                 }
             }
+        }
+        if (card != null && digiCardOpen && form.call == card.call) {
+            // Saved with the contact: closing must not delete the voice note.
+            form = form.copy(audio = "")
+            digiCardSession = -1
+            closeEditor()
         }
         if (added.isEmpty()) return
         reload()
         // The log shows the new contact on top, as after saving a card (a new day's group would start above the view).
         newSavedTick++
         say(if (added.size == 1) tr("Связь с %s из %s записана", added[0].call, from) else tr("Из %s записано связей: %s", from, added.size))
-        if (hasQrzAccount) added.forEach { q ->
+        if (hasQrzAccount) added.filter { it.pendingLookup }.forEach { q ->
             refreshing = refreshing + q.id
             try { fillFromQrz(q) } finally { refreshing = refreshing - q.id }
             reload()

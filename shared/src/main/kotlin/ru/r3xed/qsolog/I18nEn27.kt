@@ -150,4 +150,17 @@ internal val EN_2_7: Map<String, String> = mapOf(
     "Kenwood TS-590S, TS-890S, TS-990S работают (линия RTS), программа сама подбирает скорость порта." to "Kenwood TS-590S, TS-890S, TS-990S work (the RTS line), the app finds the port speed itself.",
     "Импорт ADIF с выбором кодировки (UTF-8, Windows-1251, KOI8-R, CP866) и просмотром первых записей; проверка новой версии при запуске; время связей из JTDX больше не сдвигается на часовой пояс." to
         "ADIF import with a choice of encoding (UTF-8, Windows-1251, KOI8-R, CP866) and a preview of the first records; a check for a new version at start; QSO times from JTDX no longer shift by the time zone.",
+    // 2.7.1
+    "Открывать карточку QSO при выборе корреспондента" to "Open the QSO card when a station is picked",
+    "Двойной щелчок по позывному в WSJT-X или JTDX сразу открывает карточку нового QSO: QTH, карта, расстояние, «уже работали». Когда в WSJT-X нажимают OK в окне «Log QSO», карточка заполняется и сохраняется; если связь не записали и позывной в WSJT-X стёрли, карточка закрывается. Карточку, которую вы заполняете сами, программа не трогает." to
+        "A double click on a callsign in WSJT-X or JTDX opens the new QSO card at once: QTH, map, distance, \"Worked before\". When OK is pressed in WSJT-X's \"Log QSO\" window, the card is filled in and saved; if the contact was not logged and the callsign was cleared in WSJT-X, the card closes. A card you are filling in yourself is left alone.",
+    "Ключ на экране" to "On-screen key",
+    "Кнопки ключа появляются на своей клавиатуре в карточке QSO с видом CW, под рядом F1–F8: «·» и «—» для ямбического ключа или одна кнопка «КЛЮЧ». Ключ замкнут, пока палец на кнопке; на ямбическом можно нажать обе кнопки сразу." to
+        "Key buttons appear on the app's keypad in a QSO card in CW, under the F1–F8 row: \"·\" and \"—\" for the iambic key or one \"KEY\" button. The key is closed while the finger is on the button; on the iambic key both buttons can be pressed at once.",
+    "Карточка QSO по двойному щелчку в WSJT-X и JTDX: сразу видны QTH, карта и расстояние, а связь, записанная в WSJT-X, сохраняется вместе с этой карточкой (включается в настройках цифровых видов)." to
+        "The QSO card on a double click in WSJT-X and JTDX: QTH, map and distance are seen at once, and the contact logged in WSJT-X is saved with this card (switched on in the digital modes settings).",
+    "Ключ на экране: кнопки «·» и «—» или «КЛЮЧ» на своей клавиатуре в карточке QSO с видом CW (включается в настройках CW)." to
+        "On-screen key: \"·\" and \"—\" or \"KEY\" buttons on the app's keypad in a QSO card in CW (switched on in the CW settings).",
+    "Ряд F1–F8 на своей клавиатуре: все клавиши одного размера, «Стоп» занимает две; скорость меняется в карточке." to
+        "The F1–F8 row on the app's keypad: all keys of one size, Stop takes two; the speed is changed in the card.",
 )

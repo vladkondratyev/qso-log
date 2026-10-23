@@ -17,8 +17,13 @@ data class DigiConfig(
     val port: Int = Wsjtx.DEFAULT_PORT,
     /** A multicast group (224.0.0.1, 239.255.0.1) the program sends to, so several programs can listen; empty — unicast. */
     val group: String = "",
+    /** A double click on a callsign in the program (its DX Call) opens the new card for that station. */
+    val openCard: Boolean = false,
 ) {
-    fun toMap(): Map<String, String> = mapOf("wsjtx_enabled" to enabled.toString(), "wsjtx_port" to port.toString(), "wsjtx_group" to group)
+    fun toMap(): Map<String, String> = mapOf(
+        "wsjtx_enabled" to enabled.toString(), "wsjtx_port" to port.toString(), "wsjtx_group" to group,
+        "wsjtx_open_card" to openCard.toString(),
+    )
 
     val multicast: Boolean get() = group.isNotBlank()
 
@@ -29,6 +34,7 @@ data class DigiConfig(
                 enabled = m["wsjtx_enabled"]?.toBooleanStrictOrNull() ?: d.enabled,
                 port = m["wsjtx_port"]?.toIntOrNull()?.takeIf { it in 1..65535 } ?: d.port,
                 group = m["wsjtx_group"]?.trim() ?: d.group,
+                openCard = m["wsjtx_open_card"]?.toBooleanStrictOrNull() ?: d.openCard,
             )
         }
 
@@ -55,6 +61,8 @@ class DigiListener(
     private val retryMs: Long = 5000,
     /** The program's dial frequency and mode (its Status message): the radio's state when the app has no CAT of its own. */
     private val onDial: (Wsjtx.Message.Status) -> Unit = {},
+    /** Every Status message: who the program is working now ([Wsjtx.Message.Status.dxCall], empty when no one). */
+    private val onDx: (Wsjtx.Message.Status) -> Unit = {},
 ) {
     @Volatile private var running = false
     @Volatile private var socket: DatagramSocket? = null
@@ -121,6 +129,7 @@ class DigiListener(
                     }
                     if (m is Wsjtx.Message.Logged) onLogged(m.qsos, m.id)
                     if (m is Wsjtx.Message.Status && m.dialHz > 0) onDial(m)
+                    if (m is Wsjtx.Message.Status) onDx(m)
                 }
                 s.close()
             } catch (e: Exception) {

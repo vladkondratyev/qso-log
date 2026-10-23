@@ -25,8 +25,6 @@ import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -164,15 +162,17 @@ internal fun keyHeight(compact: Boolean) = if (compact) 35.dp else 50.dp
 internal fun keypadButtonHeight(compact: Boolean) = if (compact) 40.dp else 54.dp
 
 /**
- * The telegraph row of the keypad (CW on, the card in CW): the messages F1–F8 ([labels], an empty one is off), the
- * speed down and up, and Stop while a message goes out ([sending]).
+ * The telegraph rows of the keypad (CW on, the card in CW): the messages F1–F8 ([labels], an empty one is off) and Stop
+ * while a message goes out ([sending]); with the on-screen key ([screenKey]) a row of paddles, or one straight key,
+ * under them — [onKey] gets the role (0 straight, 1 dot, 2 dash) pressed and released.
  */
 internal class CwKeys(
     val labels: List<String>,
     val sending: Boolean,
     val onSend: (Int) -> Unit,
-    val onSpeed: (Int) -> Unit,
     val onStop: () -> Unit,
+    val screenKey: ru.r3xed.qsolog.cw.CwKeyMode = ru.r3xed.qsolog.cw.CwKeyMode.OFF,
+    val onKey: (Int, Boolean) -> Unit = { _, _ -> },
 )
 
 /**
@@ -203,6 +203,8 @@ internal fun Keypad(
     var trackpad by remember { mutableStateOf(false) }
     // Where ⌫ is: holding it repeats deleting, so it never turns into the trackpad.
     var backBounds by remember { mutableStateOf(Rect.Zero) }
+    // Where the on-screen key is: a finger resting on a paddle keys, it never turns into the trackpad or a swipe.
+    var paddleBounds by remember { mutableStateOf(Rect.Zero) }
     val rows = listOf("1234567890", "QWERTYUIOP", "ASDFGHJKL/", "ZXCVBNM-.")
     val h = keyHeight(compact)
     val gestures = Modifier.pointerInput(holdMs) {
@@ -212,6 +214,10 @@ internal fun Keypad(
         awaitEachGesture {
             // Watched before the keys see it: a swipe or the trackpad takes the touch away from them (no key is typed).
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            if (paddleBounds.contains(down.position)) {
+                do { val e = awaitPointerEvent(PointerEventPass.Initial) } while (e.changes.any { it.pressed })
+                return@awaitEachGesture
+            }
             var mode = 0 // 0 — not decided, 1 — swiped, 2 — trackpad
             var still = !backBounds.contains(down.position)
             var anchor = down.position.x
@@ -270,8 +276,8 @@ internal fun Keypad(
     Column(gestures.graphicsLayer { alpha = if (trackpad) 0.45f else 1f }, verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp)) {
         if (cw != null) Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)) {
             @Composable
-            fun key(label: String?, description: String, enabled: Boolean = true, accent: Boolean = false, onClick: () -> Unit, icon: @Composable () -> Unit = {}) = Box(
-                Modifier.weight(1f).height(h).clip(RoundedCornerShape(if (compact) 6.dp else 8.dp))
+            fun key(label: String?, description: String, enabled: Boolean = true, accent: Boolean = false, width: Float = 1f, onClick: () -> Unit, icon: @Composable () -> Unit = {}) = Box(
+                Modifier.weight(width).height(h).clip(RoundedCornerShape(if (compact) 6.dp else 8.dp))
                     .background(if (accent) c.errorContainer else c.secondaryContainer)
                     .graphicsLayer { alpha = if (enabled) 1f else 0.35f }
                     .semantics { contentDescription = description; role = Role.Button }
@@ -284,15 +290,17 @@ internal fun Keypad(
             cw.labels.take(8).forEachIndexed { i, m ->
                 key("F${i + 1}", tr("Передать сообщение %s: %s", i + 1, m), enabled = m.isNotBlank(), onClick = { cw.onSend(i) })
             }
-            key(null, tr("Медленнее"), onClick = { cw.onSpeed(-2) }) {
-                Icon(Icons.Filled.Remove, null, Modifier.size(if (compact) 18.dp else 22.dp), tint = c.onSecondaryContainer)
-            }
-            key(null, tr("Быстрее"), onClick = { cw.onSpeed(2) }) {
-                Icon(Icons.Filled.Add, null, Modifier.size(if (compact) 18.dp else 22.dp), tint = c.onSecondaryContainer)
-            }
-            key(null, tr("Остановить передачу"), accent = cw.sending, onClick = cw.onStop) {
+            // Stop takes two places: the row has ten keys of one size, as the digits under it.
+            key(null, tr("Остановить передачу"), accent = cw.sending, width = 2f, onClick = cw.onStop) {
                 Icon(Icons.Filled.Stop, null, Modifier.size(if (compact) 20.dp else 24.dp), tint = if (cw.sending) c.onErrorContainer else c.onSecondaryContainer)
             }
+        }
+        if (cw != null && cw.screenKey != ru.r3xed.qsolog.cw.CwKeyMode.OFF) Row(
+            Modifier.onGloballyPositioned { r -> paddleBounds = r.parentLayoutCoordinates?.localBoundingBoxOf(r, clipBounds = false) ?: Rect.Zero },
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp),
+        ) {
+            val roles = if (cw.screenKey == ru.r3xed.qsolog.cw.CwKeyMode.STRAIGHT) listOf(0 to tr("КЛЮЧ")) else listOf(1 to "·", 2 to "—")
+            roles.forEach { (r, label) -> Paddle(label, r, compact, h, cw.onKey) { tap() } }
         }
         rows.forEachIndexed { i, keys ->
             Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)) {
@@ -340,6 +348,47 @@ internal fun Keypad(
                 }
             }
         }
+    }
+}
+
+/** A key of the on-screen telegraph key: closed while the finger is on it; the paddles take one finger each. */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.Paddle(
+    label: String, role: Int, compact: Boolean, h: androidx.compose.ui.unit.Dp, onKey: (Int, Boolean) -> Unit, tap: () -> Unit,
+) {
+    val c = MaterialTheme.colorScheme
+    val key by rememberUpdatedState(onKey)
+    var down by remember { mutableStateOf(false) }
+    Box(
+        Modifier.weight(1f).height(h).clip(RoundedCornerShape(if (compact) 6.dp else 8.dp))
+            .background(if (down) c.primary else c.tertiaryContainer)
+            .semantics { contentDescription = if (role == 0) tr("Ключ") else if (role == 1) tr("Точка") else tr("Тире"); this.role = Role.Button }
+            .pointerInput(role) {
+                awaitEachGesture {
+                    val first = awaitFirstDown(requireUnconsumed = false)
+                    first.consume()
+                    down = true
+                    tap()
+                    key(role, true)
+                    try {
+                        while (true) {
+                            val e = awaitPointerEvent()
+                            val ch = e.changes.firstOrNull { it.id == first.id } ?: break
+                            ch.consume()
+                            if (!ch.pressed) break
+                        }
+                    } finally {
+                        down = false
+                        key(role, false)
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = when (role) { 0 -> if (compact) 14.sp else 16.sp; 1 -> if (compact) 34.sp else 42.sp; else -> if (compact) 22.sp else 26.sp },
+            color = if (down) c.onPrimary else c.onTertiaryContainer, maxLines = 1,
+        )
     }
 }
 

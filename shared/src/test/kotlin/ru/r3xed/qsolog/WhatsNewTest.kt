@@ -15,15 +15,13 @@ class WhatsNewTest {
     }
 
     @Test
-    fun keyboardCwIcomLanLotwOnBoth() {
-        // 2.7.0: the key on an external keyboard first; the keypad row only on the phone, OmniRig only on the computer.
+    fun wsjtxCardOnBothScreenKeyOnPhone() {
+        // 2.7.1: the card from WSJT-X on both; the on-screen key and the keypad row only on the phone.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Ключ на внешней клавиатуре"))
-            assertTrue(WhatsNew.items(desktop = true).any { "Icom" in it } && WhatsNew.items(desktop = true).any { "LoTW" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "F1–F8" in it })
-            assertTrue(WhatsNew.items(desktop = true).any { "OmniRig" in it })
-            assertTrue(WhatsNew.items(desktop = false).none { "OmniRig" in it })
+            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Карточка QSO по двойному щелчку"))
+            assertTrue(WhatsNew.items(desktop = false).any { "Ключ на экране" in it } && WhatsNew.items(desktop = false).any { "F1–F8" in it })
+            assertTrue(WhatsNew.items(desktop = true).size == 1)
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

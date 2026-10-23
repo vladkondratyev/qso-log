@@ -204,6 +204,22 @@ fun CwSettings(vm: AppViewModel) {
         }
         TextButton(onClick = vm::resetCwKeys) { Text(tr("Клавиши по умолчанию")) }
     }
+    Section(tr("Ключ на экране"))
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ru.r3xed.qsolog.cw.CwKeyMode.entries.forEach { m ->
+            val on = m == c.screenKey
+            Box(
+                Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp))
+                    .background(if (on) MaterialTheme.colorScheme.primary else LocalExtra.current.field)
+                    .selectable(on, role = Role.RadioButton) { vm.changeCw(c.copy(screenKey = m)) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(m.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, lineHeight = 15.sp, maxLines = 2,
+                    color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+    Note(tr("Кнопки ключа появляются на своей клавиатуре в карточке QSO с видом CW, под рядом F1–F8: «·» и «—» для ямбического ключа или одна кнопка «КЛЮЧ». Ключ замкнут, пока палец на кнопке; на ямбическом можно нажать обе кнопки сразу."))
     SwitchLine(tr("Звук самоконтроля через динамик"), c.sidetone) { vm.changeCw(c.copy(sidetone = it)) }
     Note(tr("Ключ можно не носить с собой: пока карточка QSO в виде CW, клавиши внешней клавиатуры работают ключом. «Прямой ключ» — ключ замкнут, пока клавиша нажата. «Ямбический A/B» — электронный ключ: по умолчанию левый Ctrl или [ — точка, правый Ctrl или ] — тире (так шлют и USB-адаптеры манипуляторов), прямой ключ — любой Ctrl; в режиме B ключ дописывает знак, начатый при сжатых манипуляторах. Клавиши можно переназначить: «Назначить» и нажмите нужную клавишу. Скорость — та же, что у сообщений. Когда в карточке начинают работать ключом, под кнопками сообщений появляется лента переданных знаков. Звук через динамик телефона или компьютера — когда не слышно самоконтроля трансивера; cwdaemon принимает только текст: ему уходят готовые буквы."))
     Section(tr("Сообщения"))
