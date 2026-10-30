@@ -139,7 +139,7 @@ fun main() {
         val state = remember { AppState() }
         val windowState = rememberWindowState(width = 1024.dp, height = 700.dp, position = WindowPosition(Alignment.Center))
         Window(
-            onCloseRequest = { state.flushSettings(); state.stopServer(); state.stopCat(); state.stopDigi(); state.closeCw(); state.stopStartApps(); exitApplication() },
+            onCloseRequest = { state.flushSettings(); state.stopServer(); state.stopCat(); state.stopDigi(); state.stopDxCluster(); state.closeCw(); state.stopStartApps(); exitApplication() },
             title = "QSO-LOG",
             icon = painterResource("icon.png"),
             state = windowState,
@@ -258,6 +258,7 @@ fun main() {
                     Separator()
                     Item(tr("Дашборд"), shortcut = menuShortcut(KeyAction.DASHBOARD), onClick = state::dashboardOrDelete)
                     Item(tr("Карта QSO"), shortcut = menuShortcut(KeyAction.MAP), onClick = state::openMap)
+                    Item(tr("DX-кластер"), onClick = state::openDxCluster)
                     Item(tr("История поиска"), shortcut = menuShortcut(KeyAction.HISTORY), onClick = state::openHistory)
                     Item(tr("Справка и калькуляторы"), onClick = state::openReference)
                     Item(tr("Горячие клавиши") + KeyMap.label(KeyAction.KEYS_HELP, IS_MAC).ifEmpty { null }?.let { " ($it)" }.orEmpty(), onClick = { state.showKeys = true })
@@ -326,6 +327,7 @@ fun App(state: AppState, files: Exports) {
                         Pane.Dashboard -> DashboardPane(state)
                         Pane.History -> HistoryPane(state)
                         Pane.Contests -> ContestsPane(state)
+                        Pane.DxCluster -> ru.r3xed.qsolog.ui.DxClusterPane(state)
                         Pane.Settings -> SettingsPane(state, files.exportCsv, files.importCsv, files.exportAdif, files.importAdif, files.importContest)
                         Pane.Map -> MapPane(state)
                         Pane.Welcome -> WelcomePane(state)

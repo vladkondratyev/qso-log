@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.7.3 | [QSO-LOG-2.7.3.apk](../../releases/tag/v2.7.3) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.7.3 | [QSO-LOG-2.7.3-macos-arm64.dmg](../../releases/tag/desktop-v2.7.3) |
-| macOS 11 or newer, Intel | 2.7.3 | [QSO-LOG-2.7.3-macos-x64.dmg](../../releases/tag/desktop-v2.7.3) |
-| Windows 10 and 11, 64-bit | 2.7.3 | [QSO-LOG-2.7.3-windows-x64.zip](../../releases/tag/desktop-v2.7.3) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.7.3 | [QSO-LOG-2.7.3-linux-amd64.deb](../../releases/tag/desktop-v2.7.3) |
+| Android 8.0 or newer | 2.8.0 | [QSO-LOG-2.8.0.apk](../../releases/tag/v2.8.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.8.0 | [QSO-LOG-2.8.0-macos-arm64.dmg](../../releases/tag/desktop-v2.8.0) |
+| macOS 11 or newer, Intel | 2.8.0 | [QSO-LOG-2.8.0-macos-x64.dmg](../../releases/tag/desktop-v2.8.0) |
+| Windows 10 and 11, 64-bit | 2.8.0 | [QSO-LOG-2.8.0-windows-x64.zip](../../releases/tag/desktop-v2.8.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.8.0 | [QSO-LOG-2.8.0-linux-amd64.deb](../../releases/tag/desktop-v2.8.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -49,8 +49,10 @@ is switched in Settings and changes at once.
 - [CAT — transceiver](#cat--transceiver)
 - [CW from the F1–F8 keys](#cw-from-the-f1f8-keys)
 - [Digital modes — WSJT-X, JTDX, MSHV](#digital-modes--wsjt-x-jtdx-mshv)
+- [DX cluster](#dx-cluster)
 - [Contest mode](#contest-mode)
 - [Keyboard only](#keyboard-only)
+- [My stations](#my-stations)
 - [Log](#log)
 - [Dashboard](#dashboard)
 - [Search history](#search-history)
@@ -308,6 +310,31 @@ Settings → "Equipment and programs" → **“Digital modes — WSJT-X, JTDX, M
 <img src="docs/screenshots/desktop-25-wsjtx.png" width="440" alt="QSOs from WSJT-X on the computer">
 </p>
 
+## DX cluster
+
+Since 2.8.0. ⋮ menu → **"DX cluster"** (on the computer also the "File" menu). The cluster is a network of servers where
+hams report stations on the air. The app logs in to a server with your callsign (no password) and shows the spots,
+newest first: frequency and mode, callsign, country, distance, comment, who spotted it and how long ago. The connection
+stays while the cluster screen is open and for a few minutes after, so that after a QSO with a station from the list
+you come back without reconnecting.
+
+Every spot is checked against the log:
+
+- **new country** (yellow) — no QSO with this DXCC entity yet;
+- **new on 17m** — the country is worked, but not on this band;
+- **new mode** — not in this mode: CW, phone or data;
+- **✓ in log** (pale) — this callsign is already worked on this band.
+
+On top are chips of the bands that have spots, of the modes (CW, SSB, DIGI) and "New only". **A tap on a spot** opens
+the usual "New QSO" card with the callsign, frequency, band and mode, and with CAT connected tunes the radio ("Radio:
+14023.5 CW"). A long press opens only the card. After the card is saved or closed the app comes back to the list.
+
+At the bottom are **"Post a spot"** (the callsign, the frequency — from the radio when connected — and a comment go to
+the cluster) and **"Command"**: what the server sent and a line for commands (`sh/dx 50`, `set/filter` and others).
+The gear on top holds the cluster settings: a server from the list (DB0SUE, GB7DXC, NC7J, Reverse Beacon Network) or
+your own `address:port`, the login callsign (yours by default), whether to tune the radio and how long to keep spots.
+The same settings are in "Callbooks and online logs" → "DX cluster".
+
 ## Contest mode
 
 Contests need speed, so there is a separate mode. Switch it on in the ⋮ menu (below "Reference and calculators") — **CONTEST MODE**
@@ -482,6 +509,26 @@ on in the keyboard settings.
 <img src="docs/screenshots/56-keyboard-keys.png" width="200" alt="Key list on the phone">
 <img src="docs/screenshots/desktop-18-keys.png" width="440" alt="Key list on the computer">
 </p>
+
+## My stations
+
+Since 2.8.0. Home, portable, club — each station has its own callsign, QTH locator, town, power and station fields
+(OPERATOR, MY_RIG and others). Settings → **"My stations"** → "Add a station": the new one takes the callsign and fields
+of the station in use and goes into use at once — fill in its fields below and give it a name ("Home", "Portable").
+A tap on a station in the list puts it into use; "Delete station" is at the bottom, its QSOs stay in the log.
+
+The station in use goes into every new QSO. Its callsign is under the logo; with several stations an arrow ▾ follows:
+a tap opens the list to switch and "Set up stations…". With two or more callsigns among the stations a **"Station: all"**
+chip appears under the sorting — the log with only the QSOs made under the chosen callsign, with their count.
+
+**Locator from the location** (Android only). Under the QTH locator field is "Take the locator from the location".
+The first time Android asks for the permission. The locator comes from the phone's location at start, when the station
+is chosen and when a QSO card opens (at most every 10 minutes), and is shown next to the callsign under the logo:
+"UA3DEMO/P · KO96bh ▾". A card opened before the coordinates came gets the new locator too.
+
+Online logbooks with several callsigns: LoTW gets only the QSOs of the callsign in the `.p12` certificate (each place
+with its own locator), eQSL — of the eQSL account's callsign, Club Log and QRZ.com — of the station in use. The other
+QSOs are skipped and the app says how many.
 
 ## Log
 
@@ -780,21 +827,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.7.3-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.7.3), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.8.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.8.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.7.3-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.7.3), unpack the
+Download `QSO-LOG-2.8.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.8.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.7.3-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.7.3) and install it:
+Download `QSO-LOG-2.8.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.8.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.7.3-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.8.0-linux-amd64.deb
 ```
 
 ## Where the data is kept

@@ -131,6 +131,26 @@ data class OnlineConfig(
 /** Result of one upload: how many went, how many the service already had, and what failed (null = all fine). */
 data class UploadResult(val sent: List<Qso>, val duplicates: Int, val error: String?)
 
+/** Uploads with several callsigns of one's own ("Мои станции"). */
+object UploadCalls {
+    /**
+     * An account belongs to one callsign: only the contacts made under [call] (or with no callsign of one's own recorded)
+     * go to it; the second value is how many were left out. A blank [call] takes everything.
+     */
+    fun forAccount(list: List<Qso>, call: String): Pair<List<Qso>, Int> {
+        val c = call.trim().uppercase()
+        if (c.isEmpty()) return list to 0
+        val (ok, other) = list.partition { it.myCall.isBlank() || it.myCall.trim().equals(c, ignoreCase = true) }
+        return ok to other.size
+    }
+
+    /** LoTW signs a location at a time: the contacts by the locator they were made from ([fallback] when none), one result. */
+    suspend fun byLocator(list: List<Qso>, fallback: String, send: suspend (String, List<Qso>) -> UploadResult): UploadResult {
+        val parts = list.groupBy { it.myLocator.ifBlank { fallback } }.map { (loc, part) -> send(loc, part) }
+        return UploadResult(parts.flatMap { it.sent }, parts.sumOf { it.duplicates }, parts.mapNotNull { it.error }.firstOrNull())
+    }
+}
+
 object OnlineLogs {
     private val UPLOAD_FIELDS = OnlineLog.FIELDS
 

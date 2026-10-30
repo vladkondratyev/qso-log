@@ -231,6 +231,18 @@ class Settings(context: Context) {
     var digi: ru.r3xed.qsolog.digi.DigiConfig
         get() = ru.r3xed.qsolog.digi.DigiConfig.fromMap(ru.r3xed.qsolog.digi.DigiConfig.KEYS.associateWith { prefs.getString(it, null) })
         set(v) = prefs.edit().apply { v.toMap().forEach { (k, x) -> putString(k, x) } }.apply()
+    /** "Мои станции" (see ru.r3xed.qsolog.data.MyStations.encode) and the one in work. */
+    var stations: String
+        get() = prefs.getString("my_stations", "") ?: ""
+        set(v) = prefs.edit().putString("my_stations", v).apply()
+    var activeStation: String
+        get() = prefs.getString("my_station_active", "") ?: ""
+        set(v) = prefs.edit().putString("my_station_active", v).apply()
+
+    /** The DX cluster: node, login, tuning the radio from a spot (see ru.r3xed.qsolog.data.DxClusterConfig). */
+    var dxCluster: ru.r3xed.qsolog.data.DxClusterConfig
+        get() = ru.r3xed.qsolog.data.DxClusterConfig.fromMap(ru.r3xed.qsolog.data.DxClusterConfig.KEYS.associateWith { prefs.getString(it, null) })
+        set(v) = prefs.edit().apply { v.toMap().forEach { (k, x) -> putString(k, x) } }.apply()
     var lastPower: String
         get() = prefs.getString("last_power", "") ?: ""
         set(v) = prefs.edit().putString("last_power", v).apply()

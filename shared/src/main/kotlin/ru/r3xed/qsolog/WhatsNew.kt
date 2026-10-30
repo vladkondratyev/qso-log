@@ -9,10 +9,11 @@ import java.net.URLEncoder
 object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
-    /** Points of this release (2.7.3; the compact log only on the computer). */
-    fun items(desktop: Boolean): List<String> = listOfNotNull(
-        tr("Данные из прошлой связи: если со станцией уже работали, имя, QTH и локатор берутся из журнала, а не из справочников (Настройки → Данные о корреспонденте)."),
-        tr("Компактный журнал: Esc на экране «Готов к записи» — строки связей в две линии, на экране помещается вдвое больше; Esc ещё раз — как было.").takeIf { desktop },
+    /** Points of this release (2.8.0; the locator from the location only on the phone). */
+    fun items(desktop: Boolean): List<String> = listOf(
+        tr("DX-кластер (меню ⋮): споты с отметками по журналу — новая страна, новый диапазон, новый вид; нажатие на спот открывает карточку QSO и перестраивает трансивер."),
+        if (desktop) tr("Мои станции: дом, выезд, клуб — у каждой свой позывной, локатор и мощность; переключение — нажатием на позывной под логотипом, фильтр журнала «Станция».")
+        else tr("Мои станции: дом, выезд, клуб — у каждой свой позывной, локатор и мощность; переключение — нажатием на позывной под логотипом, фильтр журнала «Станция», локатор по геолокации."),
     )
 }
 

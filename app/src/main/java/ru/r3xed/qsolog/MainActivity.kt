@@ -266,6 +266,8 @@ class MainActivity : ComponentActivity() {
                         else tr("Без доступа к микрофону голосовые заметки недоступны. Разрешить можно в настройках Android")
                     )
                 }
+                // "Определять локатор по геолокации": where the station is, once the app is on the screen.
+                LaunchedEffect(Unit) { vm.refreshLocation() }
                 LaunchedEffect(Unit) {
                     vm.messages.collect { m ->
                         val r = snackbar.showSnackbar(
@@ -305,6 +307,7 @@ class MainActivity : ComponentActivity() {
                             Screen.Dashboard -> DashboardScreen(vm)
                             Screen.History -> HistoryScreen(vm)
                             Screen.Contests -> ContestsScreen(vm)
+                            Screen.DxCluster -> ru.r3xed.qsolog.ui.DxClusterScreen(vm)
                             Screen.Settings -> SettingsScreen(
                                 vm,
                                 onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },

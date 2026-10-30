@@ -87,6 +87,21 @@ fun main(args: Array<String>) {
 
             val log = { state.allQsos }
             shot("01-log")
+            // "Мои станции": a portable station besides the home one; the picker under the logo and the "Станция" chip.
+            val home = state.activeStationId
+            state.addStation()
+            state.renameStation("Выезд")
+            state.updateSettings(state.settings.copy(myCall = "UA3DEMO/P", myLocator = "KO95ab", myQth = "Сергиев Посад"))
+            state.switchStation(home)
+            shot("35-stations", 800)
+            state.changeStationFilter("UA3DEMO")
+            shot("36-station-filter", 800)
+            state.changeStationFilter(null)
+            state.pane = Pane.Settings
+            shot("37-stations-settings", 1200)
+            state.pane = Pane.Empty
+            state.deleteStation(state.stations.first { it.id != home }.id)
+
             // Esc on «Готов к записи»: the log in two-line rows.
             state.toggleCompactLog()
             shot("33-compact-log", 800)
@@ -179,6 +194,16 @@ fun main(args: Array<String>) {
             state.openHistoryEntry(state.historyEntries.first { it.call == "VK2DEMO" })
             shot("21-history-entry", 6000)
             state.pane = Pane.Empty
+
+            // DX cluster: a made-up node on this machine sends demo spots.
+            val node = fakeCluster()
+            state.changeDxConfig(state.dxConfig.copy(server = "127.0.0.1:${node.localPort}", login = "UA3DEMO"))
+            state.openDxCluster()
+            shot("34-dx-cluster", 4000)
+            state.pane = Pane.Empty
+            state.stopDxCluster()
+            node.close()
+            state.changeDxConfig(ru.r3xed.qsolog.data.DxClusterConfig())
 
             state.pane = Pane.Settings
             shot("08-settings")
@@ -296,6 +321,36 @@ private fun fakeWsjtxLogged(port: Int, call: String, grid: String, hz: Long, mod
 @Volatile private var rigMode: String? = null
 /** The made-up transceiver transmits: the panel shows power, SWR and ALC. */
 @Volatile private var rigTx = false
+
+/** A DX cluster node for the shot: the login prompt, then a few spots of made-up stations, a minute or more old. */
+private fun fakeCluster(): java.net.ServerSocket {
+    val server = java.net.ServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())
+    Thread {
+        val c = runCatching { server.accept() }.getOrNull() ?: return@Thread
+        c.use {
+            val w = it.getOutputStream()
+            val r = it.getInputStream().bufferedReader()
+            fun say(t: String) { w.write(t.toByteArray(Charsets.ISO_8859_1)); w.flush() }
+            say("login: ")
+            r.readLine()
+            say("UA3DEMO de DB0DEMO dxspider >\r\n")
+            val fmt = java.time.format.DateTimeFormatter.ofPattern("HHmm")
+            fun t(minAgo: Long) = fmt.format(java.time.LocalTime.now(java.time.ZoneOffset.UTC).minusMinutes(minAgo))
+            listOf(
+                Triple(28495.0, "PY2DEMO", "OK1DEMO" to 9L),
+                Triple(7012.0, "DL1DEMO", "OK1DEMO" to 8L),
+                Triple(18100.0, "JA1DEMO", "EA4DEMO" to 6L),
+                Triple(21295.0, "ZS1DEMO", "DL1DEMO" to 3L),
+                Triple(14023.5, "VK9DEMO", "UA4DEMO" to 1L),
+            ).forEach { (khz, call, by) ->
+                val comment = when (call) { "VK9DEMO" -> "UP 2"; "JA1DEMO" -> "FT8 -12 dB"; else -> "" }
+                say("DX de ${by.first}:".padEnd(16) + String.format(java.util.Locale.ROOT, "%9.1f", khz) + "  " + call.padEnd(13) + comment.padEnd(30) + t(by.second) + "Z\r\n")
+            }
+            runCatching { while (r.readLine() != null) Unit }
+        }
+    }.apply { isDaemon = true; start() }
+    return server
+}
 
 private fun fakeRigctld(): java.net.ServerSocket {
     val server = runCatching { java.net.ServerSocket(4532, 5, java.net.InetAddress.getLoopbackAddress()) }.getOrElse { java.net.ServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress()) }

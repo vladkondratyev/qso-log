@@ -155,15 +155,30 @@ fun SettingsScreen(
             when (vm.settingsPage) {
                 SettingsPage.MAIN -> {
                     // Each block opens on its own; the header sums up what is set. A first start opens what must be filled.
-                    SettingsBlock(tr("Моя станция"), listOfNotNull(s.myCall.ifBlank { null }, s.myLocator.ifBlank { null }, s.power.ifBlank { null }?.let { tr("%s Вт", it) }, s.station["MY_RIG"]?.ifBlank { null }).joinToString(" · ").ifBlank { tr("не заполнено") }, open = s.myCall.isBlank() || s.myLocator.isBlank()) {
+                    val many = vm.stations.size > 1
+                    SettingsBlock(
+                        if (many) tr("Мои станции") else tr("Моя станция"),
+                        (if (many) tr("станций: %s", vm.stations.size) + " · " + tr("в работе: ") else "") +
+                            listOfNotNull(s.myCall.ifBlank { null }, s.myLocator.ifBlank { null }, s.power.ifBlank { null }?.let { tr("%s Вт", it) }, s.station["MY_RIG"]?.ifBlank { null }).joinToString(" · ").ifBlank { tr("не заполнено") },
+                        open = s.myCall.isBlank() || s.myLocator.isBlank() || vm.settingsStations,
+                    ) {
+                        // Several stations: the list on top, the fields below are the one in work.
+                        StationList(vm.stations, vm.activeStationId, vm::switchStation, vm::addStation)
+                        if (many) SettingField(tr("Название станции (Дом, Выезд, Клуб)"), vm.activeStation.title, vm::renameStation)
                         SettingField(tr("Мой позывной"), s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
-                        val locOk = s.myLocator.isBlank() || Geo.isLocator(s.myLocator)
-                        SettingField(
-                            tr("QTH-локатор (например KO84ab)"), s.myLocator, { vm.updateSettings(s.copy(myLocator = it.trim())) },
-                            mono = true, error = if (locOk) null else tr("Локатор: 2 буквы, 2 цифры, 2 буквы"),
-                        )
+                        val auto = vm.activeStation.autoLocator
+                        if (auto) {
+                            AutoLocatorLine(s.myLocator, vm.locatorFixAt) { vm.refreshLocation(force = true) }
+                        } else {
+                            val locOk = s.myLocator.isBlank() || Geo.isLocator(s.myLocator)
+                            SettingField(
+                                tr("QTH-локатор (например KO84ab)"), s.myLocator, { vm.updateSettings(s.copy(myLocator = it.trim())) },
+                                mono = true, error = if (locOk) null else tr("Локатор: 2 буквы, 2 цифры, 2 буквы"),
+                            )
+                        }
+                        AutoLocatorSwitch(auto, vm::changeAutoLocator)
                         SettingField(tr("Город / адрес QTH"), s.myQth, { vm.updateSettings(s.copy(myQth = it)) })
-                        ActionButton(tr("Определить локатор"), Icons.Filled.MyLocation, vm::findMyLocator)
+                        if (!auto) ActionButton(tr("Определить локатор"), Icons.Filled.MyLocation, vm::findMyLocator)
                         Note(tr("Расстояние и азимут считаются от QTH-локатора. Если вы сменили город, нажмите «Определить локатор»: кнопка возьмёт координаты из вашей карточки на QRZ.ru, а если их там нет, найдёт по городу."))
                         // Station defaults: copied into each new contact, where they stay as that record's own values.
                         Text(tr("Для новых записей"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
@@ -172,6 +187,7 @@ fun SettingsScreen(
                             SettingField(tr(label), s.station[key].orEmpty(), { vm.updateSettings(s.copy(station = s.station + (key to it))) })
                         }
                         Note(tr("Эти значения попадают в каждую новую связь и хранятся в ней. Если позже их поменять, старые записи не изменятся."))
+                        if (many) StationDelete(vm.activeStation) { vm.deleteStation(vm.activeStationId) }
                     }
 
                     SettingsBlock(
@@ -553,6 +569,10 @@ fun SettingsScreen(
                         Note(
                             tr("Если учётной записи QRZ.ru нет, позывного там нет или QRZ.ru не отвечает, программа спросит бесплатный справочник HamQTH.com. Он по префиксу даёт страну, область, зоны CQ и ITU и центр области — расстояние тогда примерное, со знаком ≈. Имени и точного QTH там нет. Учётная запись не нужна."),
                         )
+                    }
+
+                    SettingsBlock(tr("DX-кластер"), dxSummary(vm.dxConfig, s.myCall), open = vm.settingsReturn == ru.r3xed.qsolog.Screen.DxCluster) {
+                        DxClusterSettings(vm.dxConfig, s.myCall, vm::changeDxConfig)
                     }
 
                     SettingsBlock(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com"), onlineSummary(vm.online, s.myCall, lotwReady = true)) {

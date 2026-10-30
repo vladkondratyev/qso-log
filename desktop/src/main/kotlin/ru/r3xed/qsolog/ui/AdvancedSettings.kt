@@ -84,7 +84,7 @@ import ru.r3xed.qsolog.tr
 import androidx.compose.ui.text.style.TextAlign
 
 @Composable
-private fun SwitchLine(text: String, on: Boolean, strong: Boolean = false, onChange: (Boolean) -> Unit) {
+internal fun SwitchLine(text: String, on: Boolean, strong: Boolean = false, onChange: (Boolean) -> Unit) {
     val x = LocalExtra.current
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))

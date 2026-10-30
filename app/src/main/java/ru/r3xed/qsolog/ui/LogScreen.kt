@@ -70,6 +70,8 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import ru.r3xed.qsolog.data.ContestMode
@@ -161,7 +163,7 @@ fun LogScreen(
                             // The contest from the book: its name, the tour and the time left, ticking.
                             vm.activeContest?.let { ContestPhaseText(it, x.muted, prefix = it.title, short = true) }
                         } else {
-                            OneLineText((if (me.isNotBlank()) "$me · " else "") + tr("записей: %s", vm.total), maxSize = 16.sp, minSize = 11.sp, color = x.muted)
+                            StationLine(vm, x.muted)
                         }
                     }
                 }
@@ -182,6 +184,11 @@ fun LogScreen(
                             text = { MenuText(tr("Карта QSO"), KeyMap.label(KeyAction.MAP, false), vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.Map, null) },
                             onClick = { menu = false; vm.openMap() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(tr("DX-кластер"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.Filled.CellTower, null) },
+                            onClick = { menu = false; vm.openDxCluster() },
                         )
                         HistoryMenuItem(vm) { menu = false; vm.openHistory() }
                         HorizontalDivider()
@@ -296,7 +303,12 @@ fun LogScreen(
                 }
             }
 
-            if (vm.qsos.isEmpty()) {
+            if (vm.qsos.isEmpty() && vm.stationFilter != null && vm.query.isBlank()) {
+                // The "Станция" filter left nothing: the chips stay, so the filter can be changed back.
+                SortBar(vm)
+                Text(tr("Связей с позывным %s в журнале нет.", vm.stationFilter.orEmpty()), style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.padding(24.dp))
+                Spacer(Modifier.weight(1f))
+            } else if (vm.qsos.isEmpty()) {
                 Box(Modifier.weight(1f)) { EmptyLog(vm) }
             } else {
                 SortBar(vm)
@@ -442,6 +454,77 @@ private fun groupAndSort(list: List<Qso>, by: SortBy, desc: Boolean): List<Group
     }
 }
 
+/**
+ * Under the logo: the callsign in work (with the locator when it comes from the location) and the count. With several
+ * stations a tap opens the list to switch.
+ */
+@Composable
+private fun StationLine(vm: AppViewModel, color: androidx.compose.ui.graphics.Color) {
+    val s = vm.settings
+    val many = vm.stations.size > 1
+    val loc = s.myLocator.takeIf { vm.activeStation.autoLocator && it.isNotBlank() }
+    val who = listOfNotNull(s.myCall.ifBlank { null }, loc).joinToString(" · ")
+    val count = if (vm.stationFilter != null && vm.query.isBlank()) tr("записей: %s из %s", vm.qsos.size, vm.total) else tr("записей: %s", vm.total)
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(if (many) Modifier.clickable(onClickLabel = tr("Выбрать станцию")) { open = true } else Modifier) {
+            OneLineText((if (who.isNotBlank()) who + (if (many) " ▾" else "") + " · " else "") + count, maxSize = 16.sp, minSize = 11.sp, color = color)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            vm.stations.forEach { st ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(st.call.ifBlank { "—" }, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            val d = ru.r3xed.qsolog.data.MyStations.describe(st, tr("локатор по геолокации"))
+                            if (d.isNotBlank()) Text(d, fontSize = 14.sp, color = LocalExtra.current.muted)
+                        }
+                    },
+                    leadingIcon = { if (st.id == vm.activeStationId) Icon(Icons.Filled.Check, tr("В работе")) else Spacer(Modifier.size(24.dp)) },
+                    onClick = { open = false; vm.switchStation(st.id) },
+                )
+            }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text(tr("Настроить станции…"), fontSize = 17.sp) },
+                leadingIcon = { Icon(Icons.Filled.Settings, null) },
+                onClick = { open = false; vm.openSettings(stations = true) },
+            )
+        }
+    }
+}
+
+/** "Станция": with two or more callsigns of one's own, the log shows the contacts of one of them or all. */
+@Composable
+private fun StationFilterChip(vm: AppViewModel) {
+    val x = LocalExtra.current
+    var open by remember { mutableStateOf(false) }
+    val selected = vm.stationFilter != null
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    Box {
+        Row(
+            Modifier.height(44.dp).clip(RoundedCornerShape(22.dp))
+                .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
+                .clickable(onClickLabel = tr("Фильтр по своему позывному")) { open = true }
+                .padding(start = 14.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(tr("Станция: %s", vm.stationFilter ?: tr("все")), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1, softWrap = false)
+            Icon(Icons.Filled.ArrowDropDown, null, Modifier.size(20.dp), tint = fg)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            val counts = remember(vm.allQsos) { vm.allQsos.groupingBy { it.myCall.uppercase() }.eachCount() }
+            DropdownMenuItem(text = { Text(tr("Все станции") + "  " + vm.allQsos.size, fontSize = 17.sp) }, onClick = { open = false; vm.changeStationFilter(null) })
+            vm.stationCalls.forEach { c ->
+                DropdownMenuItem(
+                    text = { Text(c + "  " + (counts[c] ?: 0), fontFamily = Mono, fontSize = 17.sp, fontWeight = if (c == vm.stationFilter) FontWeight.Bold else null) },
+                    onClick = { open = false; vm.changeStationFilter(c) },
+                )
+            }
+        }
+    }
+}
+
 /** Four compact sort chips sized to their labels; with a large system font the row scrolls sideways instead of cutting words. */
 @Composable
 private fun SortBar(vm: AppViewModel) {
@@ -473,6 +556,10 @@ private fun SortBar(vm: AppViewModel) {
                 }
             }
         }
+    }
+    // Two or more callsigns of one's own: the second row, so the filter is never off the edge of the screen.
+    if (vm.stationCalls.size > 1) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) { StationFilterChip(vm) }
     }
 }
 

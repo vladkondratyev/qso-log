@@ -354,6 +354,14 @@ class Settings {
     private var lanPassword: String = loadPassword(account = ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD, key = ru.r3xed.qsolog.cat.CatConfig.LAN_PASSWORD)
 
     /** Contacts from WSJT-X, JTDX, MSHV over UDP (see ru.r3xed.qsolog.digi). */
+    /** The DX cluster: node, login, tuning the radio from a spot (see ru.r3xed.qsolog.data.DxClusterConfig). */
+    var dxCluster: ru.r3xed.qsolog.data.DxClusterConfig
+        get() = ru.r3xed.qsolog.data.DxClusterConfig.fromMap(ru.r3xed.qsolog.data.DxClusterConfig.KEYS.associateWith { props.getProperty(it) })
+        set(v) {
+            v.toMap().forEach { (k, x) -> props.setProperty(k, x) }
+            file.outputStream().use { props.store(it, "QSO Log") }
+        }
+
     var digi: ru.r3xed.qsolog.digi.DigiConfig
         get() = ru.r3xed.qsolog.digi.DigiConfig.fromMap(ru.r3xed.qsolog.digi.DigiConfig.KEYS.associateWith { props.getProperty(it) })
         set(v) {
@@ -525,6 +533,14 @@ class Settings {
     var autoUpdateCheck: Boolean
         get() = get("auto_update_check", "true").toBoolean()
         set(v) = put("auto_update_check", v.toString())
+
+    /** "Мои станции" (see ru.r3xed.qsolog.data.MyStations.encode) and the one in work. */
+    var stations: String
+        get() = get("my_stations", "")
+        set(v) = put("my_stations", v)
+    var activeStation: String
+        get() = get("my_station_active", "")
+        set(v) = put("my_station_active", v)
 
     /** The version whose "Доступна версия" window was closed: it is not offered again at start. */
     var updateDismissed: String

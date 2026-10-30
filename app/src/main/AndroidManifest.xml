@@ -6,6 +6,9 @@
     <!-- WSJT-X sending to a multicast group over Wi-Fi -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- "Определять локатор по геолокации" in "Мои станции": asked only when the switch is turned on. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- CAT: the transceiver over USB (OTG) or Bluetooth. Neither is required to install the app. -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

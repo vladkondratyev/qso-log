@@ -53,6 +53,13 @@ import ru.r3xed.qsolog.data.HistoryFilter
 import ru.r3xed.qsolog.data.HistorySort
 import ru.r3xed.qsolog.data.HistoryView
 import ru.r3xed.qsolog.data.HISTORY_FIELDS
+import ru.r3xed.qsolog.data.MyStation
+import ru.r3xed.qsolog.data.MyStations
+import ru.r3xed.qsolog.data.DxCluster
+import ru.r3xed.qsolog.data.DxClusterClient
+import ru.r3xed.qsolog.data.DxClusterConfig
+import ru.r3xed.qsolog.data.DxSpot
+import ru.r3xed.qsolog.data.DxStatus
 import ru.r3xed.qsolog.data.MODES
 import ru.r3xed.qsolog.data.QrzInfo
 import ru.r3xed.qsolog.data.Csv
@@ -102,6 +109,8 @@ enum class Pane {
     History,
     /** The contest book: contests with their time and tours; in the ⋮ menu while contest mode is on. */
     Contests,
+    /** Spots from the DX cluster, marked against the log. */
+    DxCluster,
 }
 
 /** The contest card's message when the received number is missing; the card then puts the cursor in that field. */
@@ -174,6 +183,70 @@ class AppState {
     val voice = VoiceNotes()
 
     var settings by mutableStateOf(prefs.load()); private set
+
+    // ---------- my stations ----------
+
+    /** "Мои станции": the one in work is also in [settings]; there is always one, made from the settings at first. */
+    var stations by mutableStateOf(MyStations.decode(prefs.stations).ifEmpty { listOf(MyStations.of(settings, "1")) }); private set
+    var activeStationId by mutableStateOf(prefs.activeStation.takeIf { id -> stations.any { it.id == id } } ?: stations.first().id); private set
+    val activeStation: MyStation get() = stations.firstOrNull { it.id == activeStationId } ?: stations.first()
+
+    /** Callsigns of the stations: two or more bring the "Станция" filter to the log. */
+    val stationCalls: List<String> get() = MyStations.calls(stations)
+
+    /** The log shows only the contacts made under this callsign of mine; null — all of them. */
+    var stationFilter by mutableStateOf<String?>(null); private set
+
+    fun changeStationFilter(call: String?) {
+        stationFilter = call
+        reload()
+    }
+
+    private fun saveStations(list: List<MyStation>) {
+        stations = list
+        prefs.stations = MyStations.encode(list)
+    }
+
+    /** What was typed into "Моя станция" belongs to the station in work. */
+    private fun syncActiveStation(s: StationSettings) {
+        val a = activeStation
+        val now = MyStations.of(s, a.id, a.title, a.autoLocator)
+        if (now != a) saveStations(stations.map { if (it.id == a.id) now else it })
+    }
+
+    /** Another station in work: its callsign, locator, power and station fields go into every new contact. */
+    fun switchStation(id: String) {
+        if (id == activeStationId) return
+        val st = stations.firstOrNull { it.id == id } ?: return
+        activeStationId = id
+        prefs.activeStation = id
+        updateSettings(MyStations.apply(settings, st))
+        onStationSwitched(st)
+    }
+
+    /** "Добавить станцию": the callsign, power and station fields of the one in work, a new name; it goes to work. */
+    fun addStation() {
+        val a = activeStation
+        val id = java.util.UUID.randomUUID().toString()
+        saveStations(stations + a.copy(id = id, title = tr("Станция %s", stations.size + 1), locator = "", qth = "", autoLocator = false))
+        switchStation(id)
+    }
+
+    fun deleteStation(id: String) {
+        if (stations.size < 2) return
+        if (id == activeStationId) switchStation(stations.first { it.id != id }.id)
+        saveStations(stations.filter { it.id != id })
+        if (stationFilter != null && stationFilter !in stationCalls) changeStationFilter(null)
+    }
+
+    fun renameStation(title: String) {
+        val a = activeStation
+        saveStations(stations.map { if (it.id == a.id) it.copy(title = title) else it })
+    }
+
+    /** The phone takes the locator from its location; the computer has no such switch. */
+    private fun onStationSwitched(@Suppress("UNUSED_PARAMETER") st: MyStation) {}
+
     private val qrz = QrzClient { settings.qrzLogin to settings.qrzPassword }
     private val qrzSite = QrzSite { settings.qrzSiteEmail to settings.qrzSitePassword }
     private val qrzCom = QrzCom { settings.qrzComLogin to settings.qrzComPassword }
@@ -393,7 +466,7 @@ class AppState {
     }
 
     /** Where "Назад" in the settings returns: the empty pane, or the card that sent the user there. */
-    private var settingsReturn = Pane.Empty
+    var settingsReturn = Pane.Empty; private set
 
     /** Leaves the first-start setup (done or "Настроить позже"); it is not shown again. */
     fun finishWelcome() {
@@ -402,7 +475,11 @@ class AppState {
         pane = Pane.Empty
     }
 
-    fun openSettings(from: Pane = Pane.Empty, page: SettingsPage = SettingsPage.MAIN) {
+    /** The settings were opened from the station picker: "Мои станции" is shown open. */
+    var settingsStations by mutableStateOf(false); private set
+
+    fun openSettings(from: Pane = Pane.Empty, page: SettingsPage = SettingsPage.MAIN, stations: Boolean = false) {
+        settingsStations = stations
         // A fresh visit starts at the top.
         scope.launch { settingsScroll.scrollTo(0) }
         settingsPage = page
@@ -538,7 +615,9 @@ class AppState {
                 all to if (query.isBlank()) all else db.all(query)
             }
             allQsos = all
-            qsos = list
+            // "Станция": only the contacts made under that callsign of mine.
+            val mine = stationFilter?.takeIf { stationCalls.size > 1 }
+            qsos = if (mine == null) list else list.filter { it.myCall.equals(mine, ignoreCase = true) }
             total = all.size
         }
     }
@@ -2149,6 +2228,7 @@ class AppState {
         val qrzcqChanged = s.qrzcqLogin != settings.qrzcqLogin || s.qrzcqPassword != settings.qrzcqPassword
         val comXmlChanged = s.qrzComXmlLogin != settings.qrzComXmlLogin || s.qrzComXmlPassword != settings.qrzComXmlPassword
         settings = s
+        syncActiveStation(s)
         // Written a moment after typing stops, so the keychain is not touched on every keystroke.
         saveSettingsJob?.cancel()
         saveSettingsJob = scope.launch {
@@ -2392,6 +2472,120 @@ class AppState {
 
     /** The transceiver panel (a click on the TRX line, or its key) is open. */
     var showRigPanel by mutableStateOf(false)
+
+    // ---------- DX cluster ----------
+
+    var dxConfig by mutableStateOf(prefs.dxCluster); private set
+    var dxStatus by mutableStateOf<DxStatus>(DxStatus.Off); private set
+    /** Spots, newest first; the same station on the same frequency is one spot. */
+    var dxSpots by mutableStateOf<List<DxSpot>>(emptyList()); private set
+    /** What the node said besides spots (greeting, answers to commands): the last lines, for the command window. */
+    var dxLines by mutableStateOf<List<String>>(emptyList()); private set
+    /** The list's filters, kept while the app runs: a band (null — all), the mode groups (empty — all), new only. */
+    var dxBand by mutableStateOf<String?>(null)
+    var dxGroups by mutableStateOf<Set<String>>(emptySet())
+    var dxOnlyNew by mutableStateOf(false)
+    private var dxClient: DxClusterClient? = null
+    private var dxStopJob: Job? = null
+    private var dxReconnectJob: Job? = null
+
+    fun changeDxConfig(c: DxClusterConfig) {
+        if (c == dxConfig) return
+        val reconnect = dxClient != null && (c.server != dxConfig.server || c.login != dxConfig.login)
+        dxConfig = c
+        prefs.dxCluster = c
+        // Typed address: connected once the typing pauses, not on every letter.
+        if (reconnect) {
+            dxReconnectJob?.cancel()
+            dxReconnectJob = scope.launch {
+                delay(1500)
+                stopDx()
+                dxSpots = emptyList()
+                startDx()
+            }
+        }
+    }
+
+    fun openDxCluster() {
+        pane = Pane.DxCluster
+    }
+
+    fun closeDxCluster() {
+        pane = Pane.Empty
+    }
+
+    /** The list is on the screen: connected (again, if the connection had been let go). */
+    fun dxShown() {
+        dxStopJob?.cancel()
+        startDx()
+    }
+
+    /** The list has left the screen (a card from a spot, the settings, the log): the connection lingers. */
+    fun dxHidden() {
+        lingerDx()
+    }
+
+    private fun startDx() {
+        if (dxClient != null) return
+        val login = dxConfig.login.ifBlank { settings.myCall }.trim().uppercase()
+        if (login.isBlank()) {
+            dxStatus = DxStatus.Failed(tr("Укажите свой позывной в настройках: с ним входят в кластер"))
+            return
+        }
+        dxClient = DxClusterClient(
+            dxConfig, login,
+            onStatus = { st -> scope.launch { if (dxClient != null || st == DxStatus.Off) dxStatus = st } },
+            onSpot = { s -> scope.launch { dxSpots = DxCluster.merge(dxSpots, s, keepMs = dxConfig.keepMinutes * 60_000L) } },
+            onLine = { l -> scope.launch { dxLines = (dxLines + l).takeLast(200) } },
+        ).also { it.start() }
+    }
+
+    private fun stopDx() {
+        dxClient?.let { c -> dxClient = null; c.stop() }
+        dxStatus = DxStatus.Off
+    }
+
+    /** Away from the list the connection stays a few minutes: a contact from a spot and back finds it still going. */
+    private fun lingerDx() {
+        dxStopJob?.cancel()
+        dxStopJob = scope.launch {
+            delay(5 * 60_000L)
+            if (pane != Pane.DxCluster) stopDx()
+        }
+    }
+
+    /** A command to the node (sh/dx, set/filter…); false when not connected. */
+    fun dxSend(line: String): Boolean {
+        if (line.isBlank()) return false
+        dxLines = (dxLines + "> " + line.trim()).takeLast(200)
+        return dxClient?.send(line) ?: false
+    }
+
+    /** "Свой спот": DX <kHz> <call> <comment>. */
+    fun dxSpot(call: String, khz: String, comment: String): Boolean {
+        val k = khz.replace(',', '.').trim().toDoubleOrNull()?.let { if (it < 1000) it * 1000 else it } ?: return false
+        val c = call.trim().uppercase()
+        if (c.length < 3) return false
+        return dxSend("DX " + String.format(java.util.Locale.ROOT, "%.1f", k) + " " + c + " " + comment.trim())
+    }
+
+    /**
+     * A tap on a spot: the new card for that station, its frequency, band and mode, and (with [tune] and CAT) the radio
+     * there too. Closing or saving the card comes back to the list.
+     */
+    fun workSpot(s: DxSpot, tune: Boolean = true) {
+        newQso()
+        editReturn = Pane.DxCluster
+        val mhz = String.format(java.util.Locale.ROOT, "%.4f", s.khz / 1000).trimEnd('0').trimEnd('.')
+        setFreq(mhz)
+        s.mode.takeIf { it in MODES && it != form.mode }?.let { form = withMode(form, it) }
+        setCall(s.call)
+        if (tune && dxConfig.tune && rigControllable) {
+            rigTune(s.hz)
+            CatModes.toRadio(s.mode, s.hz)?.let(::rigSend)
+            say(tr("Трансивер: %s %s", String.format(java.util.Locale.ROOT, "%.1f", s.khz), s.mode))
+        }
+    }
 
     /** The radio takes commands: CAT is on and the radio answers. */
     val rigControllable: Boolean get() = catRig != null
@@ -2706,8 +2900,17 @@ class AppState {
         uploadProblem(log)?.let { say(it); return }
         val c = online
         val call = settings.myCall.trim()
-        val list = uploadCandidates(log, target.only, onlyNew)
-        if (list.isEmpty()) { say(tr("Новых связей для %s нет", log.title)); return }
+        // The account is one callsign's: the LoTW certificate's, the eQSL login, otherwise the station in work.
+        val account = when (log) {
+            ru.r3xed.qsolog.data.OnlineLog.LOTW -> lotwCert?.callsign ?: call
+            ru.r3xed.qsolog.data.OnlineLog.EQSL -> c.eqslUser
+            else -> call
+        }
+        val (list, otherCall) = ru.r3xed.qsolog.data.UploadCalls.forAccount(uploadCandidates(log, target.only, onlyNew), account)
+        if (list.isEmpty()) {
+            say(if (otherCall > 0) tr("%s: связи сделаны другим позывным (%s), а учётная запись — %s", log.title, otherCall, account.uppercase()) else tr("Новых связей для %s нет", log.title))
+            return
+        }
         uploading = log
         scope.launch {
             val r = when (log) {
@@ -2715,7 +2918,9 @@ class AppState {
                 ru.r3xed.qsolog.data.OnlineLog.CLUBLOG -> ru.r3xed.qsolog.data.OnlineLogs.uploadClubLog(c.clublogEmail, c.clublogPassword, call, c.clublogAppKey, list, USER_AGENT)
                 ru.r3xed.qsolog.data.OnlineLog.EQSL -> ru.r3xed.qsolog.data.OnlineLogs.uploadEqsl(c.eqslUser, c.eqslPassword, c.eqslNickname, list, USER_AGENT)
                 ru.r3xed.qsolog.data.OnlineLog.LOTW -> lotwCert?.let { cert ->
-                    ru.r3xed.qsolog.data.Lotw.send(cert, ru.r3xed.qsolog.data.Lotw.Station(settings.myLocator, c.lotwCqz, c.lotwItuz), list, USER_AGENT)
+                    ru.r3xed.qsolog.data.UploadCalls.byLocator(list, settings.myLocator) { loc, part ->
+                        ru.r3xed.qsolog.data.Lotw.send(cert, ru.r3xed.qsolog.data.Lotw.Station(loc, c.lotwCqz, c.lotwItuz), part, USER_AGENT)
+                    }
                 } ?: uploadLotw(list)
             }
             if (mark) withContext(Dispatchers.IO) { r.sent.forEach { db.save(log.mark(it)) } }
@@ -2727,6 +2932,7 @@ class AppState {
                 append(tr("%s: отправлено %s", log.title, r.sent.size))
                 if (r.duplicates > 0) append(tr(", уже были там: %s", r.duplicates))
                 if (mark && r.sent.isNotEmpty()) append(tr(", отметка поставлена"))
+                if (otherCall > 0) append(tr(", пропущено связей другого позывного: %s", otherCall))
                 r.error?.let { append(". ").append(it) }
             })
         }
@@ -3006,6 +3212,9 @@ class AppState {
         digiListener = l
         l.start()
     }
+
+    /** The app closes: the cluster connection goes too. */
+    fun stopDxCluster() = stopDx()
 
     fun stopDigi() {
         digiListener?.stop()

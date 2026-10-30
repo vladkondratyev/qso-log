@@ -15,13 +15,13 @@ class WhatsNewTest {
     }
 
     @Test
-    fun infoFromLogOnBothCompactLogOnComputer() {
-        // 2.7.3: the data from the previous QSO everywhere, the compact log only on the computer.
+    fun clusterAndStationsOnBothGeolocationOnPhone() {
+        // 2.8.0: the DX cluster and "Мои станции" everywhere, the locator from the location only on the phone.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = false).single().startsWith("Данные из прошлой связи"))
-            assertTrue(WhatsNew.items(desktop = true).size == 2)
-            assertTrue(WhatsNew.items(desktop = true).any { "Компактный журнал" in it })
+            assertTrue(WhatsNew.items(desktop = true).first().startsWith("DX-кластер"))
+            assertTrue(WhatsNew.items(desktop = false).any { "геолокации" in it })
+            assertTrue(WhatsNew.items(desktop = true).none { "геолокации" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }
