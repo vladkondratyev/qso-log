@@ -248,7 +248,11 @@ class DxClusterClient(
             try {
                 Socket().use { s ->
                     socket = s
-                    s.connect(InetSocketAddress(config.host, config.port), 10_000)
+                    // The screenshot generator puts a made-up node in place of the configured one (qsolog.dxcluster.connect).
+                    val stand = System.getProperty("qsolog.dxcluster.connect")
+                    val addr = if (stand != null) InetSocketAddress(stand.substringBeforeLast(':'), stand.substringAfterLast(':').toInt())
+                    else InetSocketAddress(config.host, config.port)
+                    s.connect(addr, 10_000)
                     s.soTimeout = 0
                     out = s.getOutputStream()
                     session(s.getInputStream(), name)

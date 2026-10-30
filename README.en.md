@@ -23,7 +23,7 @@ without touching the screen at all.
 The app is free and open source. The interface is in Russian and English.
 
 <p align="center">
-<img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG on a computer and a phone: the transceiver panel over CAT, CW from the F1–F8 keys, FT8 and FT4 QSOs from WSJT-X and JTDX">
+<img src="docs/screenshots/00-platforms.png" width="820" alt="QSO-LOG on a computer and a phone: the DX cluster, several stations of your own with the locator from the location, CAT and CW from F1–F8, QSOs from WSJT-X and JTDX, callbooks, online logbooks, export, contests, the dashboard">
 </p>
 
 ## Download
@@ -335,6 +335,12 @@ The gear on top holds the cluster settings: a server from the list (DB0SUE, GB7D
 your own `address:port`, the login callsign (yours by default), whether to tune the radio and how long to keep spots.
 The same settings are in "Callbooks and online logs" → "DX cluster".
 
+<p>
+<img src="docs/screenshots/85-dx-cluster.png" width="200" alt="DX cluster: spots marked against the log">
+<img src="docs/screenshots/86-dx-settings.png" width="200" alt="Cluster settings">
+<img src="docs/screenshots/desktop-34-dx-cluster.png" width="440" alt="DX cluster on the computer">
+</p>
+
 ## Contest mode
 
 Contests need speed, so there is a separate mode. Switch it on in the ⋮ menu (below "Reference and calculators") — **CONTEST MODE**
@@ -530,6 +536,12 @@ Online logbooks with several callsigns: LoTW gets only the QSOs of the callsign 
 with its own locator), eQSL — of the eQSL account's callsign, Club Log and QRZ.com — of the station in use. The other
 QSOs are skipped and the app says how many.
 
+<p>
+<img src="docs/screenshots/87-station-picker.png" width="200" alt="Choosing the station under the logo and the Station filter">
+<img src="docs/screenshots/88-stations.png" width="200" alt="My stations: the locator from the location">
+<img src="docs/screenshots/desktop-35-stations.png" width="440" alt="Two stations on the computer">
+</p>
+
 ## Log
 
 QSOs are grouped by day, newest first. A row shows callsign, time, frequency, mode, RST, distance, name and city.
@@ -638,6 +650,8 @@ zones come from the latest QSO with it that has them, and the callbooks are not 
 and with your earlier corrections. The callsign must match exactly: UA3DEMO and UA3DEMO/P are different stations. When
 the callsign was not worked, the callbooks are searched as usual. The card says "From the log: QSO of 25.09.2026", and
 "From callbooks" asks them: their answer replaces the log's data, and what they do not know stays from the log.
+
+<img src="docs/screenshots/89-card-from-log.png" width="200" alt="The card filled from the previous QSO">
 
 ## Voice notes
 
@@ -807,6 +821,8 @@ All `*DEMO` callsigns in the screenshots are made up.
 The desktop version does everything the Android one does, CAT included (a COM port or Hamlib rigctld). Since 2.0.0
 the phone and the computer share version numbers. The window has two parts: the log on the left, the card,
 map, dashboard, history or settings on the right. Every key is in [Keyboard only](#keyboard-only); F1 shows them in the app.
+Since 2.7.3 Esc on the "Ready to log" screen switches to the compact log: QSOs in two lines, twice as many on the screen;
+Esc again brings the usual rows back.
 
 <p>
 <img src="docs/screenshots/desktop-en-01-log.png" width="440" alt="Log on the computer">

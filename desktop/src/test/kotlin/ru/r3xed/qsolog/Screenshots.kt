@@ -197,7 +197,8 @@ fun main(args: Array<String>) {
 
             // DX cluster: a made-up node on this machine sends demo spots.
             val node = fakeCluster()
-            state.changeDxConfig(state.dxConfig.copy(server = "127.0.0.1:${node.localPort}", login = "UA3DEMO"))
+            System.setProperty("qsolog.dxcluster.connect", "127.0.0.1:${node.localPort}")
+            state.changeDxConfig(state.dxConfig.copy(login = "UA3DEMO"))
             state.openDxCluster()
             shot("34-dx-cluster", 4000)
             state.pane = Pane.Empty
