@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.7.0 | [QSO-LOG-2.7.0.apk](../../releases/tag/v2.7.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.7.0 | [QSO-LOG-2.7.0-macos-arm64.dmg](../../releases/tag/desktop-v2.7.0) |
-| macOS 11 or newer, Intel | 2.7.0 | [QSO-LOG-2.7.0-macos-x64.dmg](../../releases/tag/desktop-v2.7.0) |
-| Windows 10 and 11, 64-bit | 2.7.0 | [QSO-LOG-2.7.0-windows-x64.zip](../../releases/tag/desktop-v2.7.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.7.0 | [QSO-LOG-2.7.0-linux-amd64.deb](../../releases/tag/desktop-v2.7.0) |
+| Android 8.0 or newer | 2.7.3 | [QSO-LOG-2.7.3.apk](../../releases/tag/v2.7.3) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.7.3 | [QSO-LOG-2.7.3-macos-arm64.dmg](../../releases/tag/desktop-v2.7.3) |
+| macOS 11 or newer, Intel | 2.7.3 | [QSO-LOG-2.7.3-macos-x64.dmg](../../releases/tag/desktop-v2.7.3) |
+| Windows 10 and 11, 64-bit | 2.7.3 | [QSO-LOG-2.7.3-windows-x64.zip](../../releases/tag/desktop-v2.7.3) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.7.3 | [QSO-LOG-2.7.3-linux-amd64.deb](../../releases/tag/desktop-v2.7.3) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -415,7 +415,7 @@ Keys by screen. On macOS use ⌘ instead of Ctrl.
 | Enter | open the row |
 | Space · Ctrl+A | select the row · select all (for export) |
 | Delete · Ctrl+D | delete the row or the selected ones: a dialog asks, Enter deletes (undo is offered after) |
-| Esc | clear the selection |
+| Esc | clear the selection; on the computer with nothing selected — the compact two-line log, again — the usual rows (since 2.7.3) |
 
 **QSO card**
 
@@ -584,6 +584,13 @@ HamQTH, QRZCQ). The QRZ.ru site is the same database as its API: it is asked onl
    region and marked "≈". Can be switched off.
 
 Without internet the QSO is saved anyway; fill in the data later with ⟳.
+
+**Data from the previous QSO** (since 2.7.3). The switch "Take the data from the previous QSO" at the top of
+"Station data sources", off by default. When the station was worked before, the name, QTH, country, locator, region and
+zones come from the latest QSO with it that has them, and the callbooks are not asked: the card fills at once, offline
+and with your earlier corrections. The callsign must match exactly: UA3DEMO and UA3DEMO/P are different stations. When
+the callsign was not worked, the callbooks are searched as usual. The card says "From the log: QSO of 25.09.2026", and
+"From callbooks" asks them: their answer replaces the log's data, and what they do not know stays from the log.
 
 ## Voice notes
 
@@ -773,21 +780,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.7.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.7.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.7.3-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.7.3), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.7.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.7.0), unpack the
+Download `QSO-LOG-2.7.3-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.7.3), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.7.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.7.0) and install it:
+Download `QSO-LOG-2.7.3-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.7.3) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.7.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.7.3-linux-amd64.deb
 ```
 
 ## Where the data is kept

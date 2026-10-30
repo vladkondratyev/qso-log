@@ -198,6 +198,9 @@ fun main() {
                     state.pane == Pane.Settings -> { state.closeSettings(); true }
                     state.pane == Pane.History -> { state.closeHistory(); true }
                     state.pane != Pane.Empty -> { state.pane = Pane.Empty; true }
+                    // On «Готов к записи» Esc switches the log between the usual rows and the compact two-line ones;
+                    // with a search typed it is the field's and clears the search.
+                    state.query.isEmpty() -> { state.toggleCompactLog(); true }
                     else -> false
                 } else false
             },
@@ -429,7 +432,7 @@ private fun EmptyPane(state: AppState) {
 @Composable
 private fun KeysDialog(cwMessages: List<String>?, onClose: () -> Unit) {
     // The sections in two columns of a wide dialog; it scrolls in a small window.
-    val sections = KeyHints.sections(IS_MAC, cwMessages)
+    val sections = KeyHints.sections(IS_MAC, cwMessages, desktop = true)
     AlertDialog(
         onDismissRequest = onClose,
         modifier = Modifier.widthIn(max = 1180.dp).fillMaxWidth(0.94f),

@@ -179,4 +179,15 @@ internal val EN_2_7: Map<String, String> = mapOf(
     "QRZ.com не вернул ключ сессии" to "QRZ.com returned no session key",
     "QRZ.com по API: имя, QTH, локатор и зоны через интерфейс для программ (с подпиской XML); спрашивается перед сайтом QRZ.com." to
         "QRZ.com through its API: name, QTH, locator and zones through the interface for programs (with the XML subscription); asked before the QRZ.com site.",
+    "Брать данные из прошлой связи" to "Take the data from the previous QSO",
+    "Если со станцией уже была связь, имя, QTH, страна, локатор, область и зоны берутся из последней такой связи, где они заполнены, и справочники не спрашиваются: карточка заполняется сразу, без интернета и с вашими прежними исправлениями. Позывной должен совпасть полностью: UA3DEMO и UA3DEMO/P — разные станции. Если связей с позывным не было, поиск идёт по справочникам ниже, как обычно. Свежие данные из справочников — кнопка «Из справочников» в карточке; то, чего справочники не знают, останется из журнала." to
+        "When the station was worked before, the name, QTH, country, locator, region and zones come from the latest such QSO that has them, and the callbooks are not asked: the card fills at once, offline and with your earlier corrections. The callsign must match exactly: UA3DEMO and UA3DEMO/P are different stations. When the callsign was not worked, the callbooks below are searched as usual. For fresh callbook data press «From callbooks» in the card; what the callbooks do not know stays from the log.",
+    "сначала журнал" to "log first",
+    "Из журнала: связь %s" to "From the log: QSO of %s",
+    "Из справочников" to "From callbooks",
+    "снять отметки · компактный журнал" to "clear the marks · compact log",
+    "Данные из прошлой связи: если со станцией уже работали, имя, QTH и локатор берутся из журнала, а не из справочников (Настройки → Данные о корреспонденте)." to
+        "Data from the previous QSO: when the station was worked before, the name, QTH and locator come from the log, not from the callbooks (Settings → Station data sources).",
+    "Компактный журнал: Esc на экране «Готов к записи» — строки связей в две линии, на экране помещается вдвое больше; Esc ещё раз — как было." to
+        "Compact log: Esc on the «Ready to log» screen shows the QSOs in two-line rows, twice as many on the screen; Esc again brings the usual rows back.",
 )

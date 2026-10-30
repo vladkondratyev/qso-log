@@ -317,6 +317,22 @@ class AppState {
         prefs.hamqthEnabled = on
     }
 
+    /** The log in two-line rows: more contacts on the screen. Esc on «Готов к записи» switches it. */
+    var compactLog by mutableStateOf(prefs.compactLog); private set
+
+    fun toggleCompactLog() {
+        compactLog = !compactLog
+        prefs.compactLog = compactLog
+    }
+
+    /** "Брать данные из прошлой связи": a station worked before fills the card from the log, the callbooks are not asked. */
+    var infoFromLog by mutableStateOf(prefs.infoFromLog); private set
+
+    fun changeInfoFromLog(on: Boolean) {
+        infoFromLog = on
+        prefs.infoFromLog = on
+    }
+
     var themeMode by mutableStateOf(runCatching { ThemeMode.valueOf(prefs.theme.uppercase()) }.getOrDefault(ThemeMode.SYSTEM)); private set
 
     fun setTheme(mode: ThemeMode) {
@@ -1093,6 +1109,8 @@ class AppState {
         }
         loadHistory(call)
         lookupJob?.cancel()
+        // A station worked before: its earlier contact fills the card at once, no callbook is asked.
+        if (call.length >= 3 && fillFromLog(call)) return
         // Searching starts from the 4th character: shorter prefixes only waste the QRZ.ru request limit.
         if (call.length < MIN_LOOKUP_LENGTH) {
             lookup = Lookup.Idle
@@ -1106,18 +1124,47 @@ class AppState {
 
     fun retryLookup() {
         lookupJob?.cancel()
-        lookupJob = scope.launch { runLookup(form.call) }
+        lookupJob = scope.launch { runLookup(form.call, books = true) }
     }
 
     /**
      * QRZ.ru first (full data: name, QTH, locator). Without an account, when it does not know the callsign or fails,
      * HamQTH's free prefix search fills country, region, zones and an approximate position, if switched on.
      */
-    private suspend fun runLookup(call: String) {
+    private suspend fun runLookup(call: String, books: Boolean = false) {
+        // "Брать данные из прошлой связи": the log answers for a station worked before; "Из справочников" asks the books.
+        if (!books && fillFromLog(call)) return
         lookupOnce(call)
         keepPinnedLocator(call)
         // Whatever was found goes to the search history: a cache to look at and to fill a card offline, never a contact.
         if (form.call == call) rememberSearch(requireNew = false)
+    }
+
+    /** The latest earlier contact with exactly this callsign that has a name, QTH or locator; null when there is none. */
+    private fun previousContact(call: String): Qso? = allQsos
+        .filter { it.call == call && it.id != form.id && (it.name.isNotBlank() || it.qth.isNotBlank() || it.locator.isNotBlank()) }
+        .maxByOrNull { it.timeUtc }
+
+    /**
+     * "Брать данные из прошлой связи": fills the card from [previousContact] and says so in [lookup]. False when the
+     * option is off, the station was not worked before, or the card holds what was typed by hand.
+     */
+    private fun fillFromLog(call: String): Boolean {
+        if (!infoFromLog) return false
+        val last = previousContact(call) ?: return false
+        val f = form
+        if (f.call != call || !(f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && locatorFree(f)))) return false
+        form = f.copy(
+            name = last.name, qth = last.qth, country = last.country, locator = last.locator,
+            lat = last.lat, lon = last.lon, infoFromQrz = true,
+            // Region, zones, QSL via… of that contact (and the "≈ region" mark if it was approximate).
+            adif = f.adif - HISTORY_FIELDS + last.adif.filterKeys { it in AdifLabels.THEM || it == HamQth.POSITION_FIELD },
+        )
+        // A later "Из справочников" merges the answer over these values instead of replacing them.
+        cardFromLog = true
+        keepPinnedLocator(call)
+        lookup = Lookup.FromLog(last)
+        return true
     }
 
     /** HamQTH's prefix answer for a callsign, asked beside the callbooks: ready when none of them knows the station. */

@@ -6,12 +6,13 @@ import ru.r3xed.qsolog.keys.KeyMap
 /**
  * Every key of the app in one place, by screen: the F1 list on the computer and on a phone with an external keyboard
  * shows exactly this. The keys of [KeyAction]s are the user's (see [KeyMap]); arrows, Tab and the like are fixed.
- * [mac]: ⌘ instead of Ctrl+. [cwMessages]: the telegraph messages, shown when the key line is on.
+ * [mac]: ⌘ instead of Ctrl+. [cwMessages]: the telegraph messages, shown when the key line is on. [desktop]: the
+ * computer's log, where Esc also switches the compact rows.
  */
 object KeyHints {
     class Section(val title: String, val keys: List<Pair<String, String>>)
 
-    fun sections(mac: Boolean, cwMessages: List<String>? = null): List<Section> {
+    fun sections(mac: Boolean, cwMessages: List<String>? = null, desktop: Boolean = false): List<Section> {
         val m = if (mac) "⌘" else "Ctrl+"
         fun k(a: KeyAction, what: String = a.title): Pair<String, String>? = KeyMap.label(a, mac).ifEmpty { null }?.let { it to what }
         return listOfNotNull(
@@ -25,7 +26,7 @@ object KeyHints {
                 "Enter" to tr("открыть запись"),
                 (tr("Пробел") + " · ${m}A") to tr("отметить запись · отметить все"),
                 k(KeyAction.LOG_DELETE),
-                "Esc" to tr("снять отметки"),
+                "Esc" to if (desktop) tr("снять отметки · компактный журнал") else tr("снять отметки"),
                 k(KeyAction.HISTORY), k(KeyAction.DASHBOARD), k(KeyAction.MAP), k(KeyAction.SETTINGS), k(KeyAction.EXPORT_ADIF),
             )),
             Section(tr("Карточка связи"), listOfNotNull(

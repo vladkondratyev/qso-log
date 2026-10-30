@@ -118,6 +118,10 @@ class Settings(context: Context) {
     var hamqthEnabled: Boolean
         get() = prefs.getBoolean("hamqth_enabled", true)
         set(v) = prefs.edit().putBoolean("hamqth_enabled", v).apply()
+    /** A station worked before fills the card from its latest contact in the log instead of the callbooks. */
+    var infoFromLog: Boolean
+        get() = prefs.getBoolean("info_from_log", false)
+        set(v) = prefs.edit().putBoolean("info_from_log", v).apply()
     /** Last ЕРМАК / Cabrillo export: format name, CONTEST code, CATEGORY-OPERATOR. */
     /** ADIF export encoding: UTF-8 (most programs and sites) or Windows-1251 (LogHX, UR5EQF). */
     /** Stations looked up but not logged are kept in the search history (off until switched on). */

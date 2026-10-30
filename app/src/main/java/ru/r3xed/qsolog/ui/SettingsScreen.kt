@@ -405,9 +405,20 @@ fun SettingsScreen(
                                 else -> tr("указан")
                             },
                             "HamQTH: " + if (vm.hamqthEnabled) tr("вкл") else tr("выкл"),
-                        ).joinToString(" · "),
+                        ).joinToString(" · ", prefix = if (vm.infoFromLog) tr("сначала журнал") + " · " else ""),
                         open = s.qrzLogin.isBlank() && s.qrzSiteEmail.isBlank() && s.qrzComLogin.isBlank(),
                     ) {
+                        // Before every callbook: a station worked before is taken from the log, offline and with past corrections.
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
+                                .toggleable(value = vm.infoFromLog, role = Role.Switch, onValueChange = vm::changeInfoFromLog)
+                                .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(tr("Брать данные из прошлой связи"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
+                            Switch(checked = vm.infoFromLog, onCheckedChange = null)
+                        }
+                        Note(tr("Если со станцией уже была связь, имя, QTH, страна, локатор, область и зоны берутся из последней такой связи, где они заполнены, и справочники не спрашиваются: карточка заполняется сразу, без интернета и с вашими прежними исправлениями. Позывной должен совпасть полностью: UA3DEMO и UA3DEMO/P — разные станции. Если связей с позывным не было, поиск идёт по справочникам ниже, как обычно. Свежие данные из справочников — кнопка «Из справочников» в карточке; то, чего справочники не знают, останется из журнала."))
                         Note(tr("Данные корреспондента ищутся по порядку: 1) XML API QRZ.ru — основной и правильный способ; 2) сайт QRZ.ru по вашим e-mail и паролю — запасной, если XML API не указан или не ответил; 3) сайт QRZ.com — если QRZ.ru не знает позывного (зарубежные станции) или не ответил; 4) HamQTH — только страна и область, если остальные ничего не дали."))
                         Section(tr("1. QRZ.ru — XML API (основной)"))
                         SettingField(tr("Логин"), s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)

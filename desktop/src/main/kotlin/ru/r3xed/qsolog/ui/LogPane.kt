@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -328,7 +330,7 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                     Modifier.fillMaxSize().padding(end = 8.dp),
                     state = listState,
                     contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (state.compactLog) 4.dp else 8.dp),
                 ) {
                     groups.forEach { g ->
                         if (g.title != null) stickyHeader(key = "h" + g.key) { GroupHeader(g.title, g.items.size) }
@@ -513,6 +515,7 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
     val open = !selecting && (state.pane == Pane.Edit || state.pane == Pane.Contest) && state.form.id == qso.id
     val highlighted = picked || open || qso.id == state.logCursor
     val window = LocalWindowInfo.current
+    val compact = state.compactLog
     Row(
         Modifier.fillMaxWidth()
             .background(
@@ -535,7 +538,7 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
                 onLongClickLabel = tr("Выбрать запись"),
                 onLongClick = { state.toggleSelected(qso.id) },
             )
-            .padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
+            .padding(start = 14.dp, top = if (compact) 4.dp else 10.dp, bottom = if (compact) 4.dp else 10.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (selecting) {
@@ -547,7 +550,7 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
             )
             Spacer(Modifier.width(10.dp))
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (compact) CompactRowBody(qso, state, showDate) else Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (ContestMode.isContest(qso.adif)) {
@@ -602,6 +605,47 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
         }
         // Deleting is only possible from the card ("Удалить" there), never from the list.
         Spacer(Modifier.width(10.dp))
+    }
+}
+
+/**
+ * The compact row (Esc on «Готов к записи»): callsign, frequency, mode, RST and time on the first line, who and how far
+ * on the second, in smaller type. The marks stay; the voice and contest icons give way to the text.
+ */
+@Composable
+private fun RowScope.CompactRowBody(qso: Qso, state: AppState, showDate: Boolean) {
+    val x = LocalExtra.current
+    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, modifier = Modifier.widthIn(min = 116.dp))
+            val meta = listOfNotNull(
+                qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null },
+                qso.mode.ifBlank { null },
+                if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent}/${qso.rstRcvd}" else null,
+                if (ContestMode.isContest(qso.adif)) "№ ${qso.adif[ContestMode.SENT].orEmpty()}/${qso.adif[ContestMode.RCVD].orEmpty().ifBlank { "—" }}" else null,
+            ).joinToString(" · ")
+            Text(meta, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
+            if (qso.pendingLookup && !state.selecting) {
+                if (qso.id in state.refreshing) CircularProgressIndicator(Modifier.padding(horizontal = 6.dp).size(18.dp), strokeWidth = 2.dp)
+                else Tip(tr("Обновить данные с QRZ.ru")) {
+                    Icon(Icons.Filled.Refresh, tr("Обновить данные с QRZ.ru"), Modifier.padding(horizontal = 4.dp).size(20.dp).clickable { state.refreshLookup(qso) }, tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+            ConfirmedMark(qso.adif)
+            ExportDots(qso.adif)
+            val t = utc(qso.timeUtc)
+            Text(
+                (if (showDate) SHORT_DATE.format(t) + " " else "") + TIME_FMT.format(t),
+                fontFamily = Mono, fontSize = 13.sp, color = x.muted, maxLines = 1, modifier = Modifier.padding(start = 6.dp, end = 8.dp),
+            )
+        }
+        val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ").ifBlank { qso.country }
+            .ifBlank { if (qso.pendingLookup) tr("Данные QRZ.ru не получены") else "" }
+        val km = qso.distanceKm?.let { (if (qso.approxPosition) "≈ " else "") + formatKm(it) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(who, fontSize = 13.sp, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (km != null) Text(km, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = x.muted, maxLines = 1, modifier = Modifier.padding(start = 8.dp, end = 8.dp))
+        }
     }
 }
 

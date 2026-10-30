@@ -535,6 +535,16 @@ class Settings {
         get() = get("hamqth_enabled", "true") == "true"
         set(v) = put("hamqth_enabled", v.toString())
 
+    /** The log shows two-line rows (Esc on «Готов к записи» switches). */
+    var compactLog: Boolean
+        get() = get("compact_log", "false") == "true"
+        set(v) = put("compact_log", v.toString())
+
+    /** A station worked before fills the card from its latest contact in the log instead of the callbooks. */
+    var infoFromLog: Boolean
+        get() = get("info_from_log", "false") == "true"
+        set(v) = put("info_from_log", v.toString())
+
     /** Last ЕРМАК / Cabrillo export: format name, CONTEST code, CATEGORY-OPERATOR. */
     /** ADIF export encoding: UTF-8 (most programs and sites) or Windows-1251 (LogHX, UR5EQF). */
     /** Stations looked up but not logged are kept in the search history (off until switched on). */

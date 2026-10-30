@@ -586,6 +586,14 @@ private fun StationCard(vm: AppState) {
                     }
                 }
             }
+            // "Брать данные из прошлой связи": the date of that contact, and the callbooks on request.
+            is Lookup.FromLog -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    tr("Из журнала: связь %s", DATE_FMT.format(utc(lookup.qso.timeUtc))),
+                    fontSize = 16.sp, color = ink.copy(alpha = 0.8f), modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = vm::retryLookup) { Text(tr("Из справочников")) }
+            }
             is Lookup.Approx -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(tr("≈ Страна и область по позывному (HamQTH)"), fontSize = 16.sp, color = ink.copy(alpha = 0.8f))
                 Row(verticalAlignment = Alignment.CenterVertically) {

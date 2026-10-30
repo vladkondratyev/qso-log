@@ -15,13 +15,13 @@ class WhatsNewTest {
     }
 
     @Test
-    fun qrzComApiOnBoth() {
-        // 2.7.2: the same points on the phone and the computer.
+    fun infoFromLogOnBothCompactLogOnComputer() {
+        // 2.7.3: the data from the previous QSO everywhere, the compact log only on the computer.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = true).first().startsWith("QRZ.com по API"))
-            assertTrue(WhatsNew.items(desktop = true).any { "одновременно" in it })
-            assertTrue(WhatsNew.items(desktop = false) == WhatsNew.items(desktop = true))
+            assertTrue(WhatsNew.items(desktop = false).single().startsWith("Данные из прошлой связи"))
+            assertTrue(WhatsNew.items(desktop = true).size == 2)
+            assertTrue(WhatsNew.items(desktop = true).any { "Компактный журнал" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

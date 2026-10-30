@@ -87,6 +87,10 @@ fun main(args: Array<String>) {
 
             val log = { state.allQsos }
             shot("01-log")
+            // Esc on «Готов к записи»: the log in two-line rows.
+            state.toggleCompactLog()
+            shot("33-compact-log", 800)
+            state.toggleCompactLog()
 
             // CAT: a made-up transceiver behind rigctld on this machine, 14.195 MHz USB, S8 — the new card follows it.
             val rig = fakeRigctld()

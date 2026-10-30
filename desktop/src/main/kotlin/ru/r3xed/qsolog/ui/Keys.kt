@@ -97,7 +97,7 @@ fun menuShortcut(a: KeyAction): KeyShortcut? {
 /** The keys by screen, then the callsign commands: on the first tab of the reference (F1 shows them in a dialog). */
 @Composable
 fun KeysList(cwMessages: List<String>? = null) {
-    KeyHints.sections(IS_MAC, cwMessages).forEach { sec ->
+    KeyHints.sections(IS_MAC, cwMessages, desktop = true).forEach { sec ->
         Text(sec.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
         sec.keys.forEach { (k, what) ->
             Row {

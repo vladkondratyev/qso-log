@@ -9,10 +9,10 @@ import java.net.URLEncoder
 object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
-    /** Points of this release (2.7.2 on the phone and the computer). */
-    fun items(desktop: Boolean): List<String> = listOf(
-        tr("QRZ.com по API: имя, QTH, локатор и зоны через интерфейс для программ (с подпиской XML); спрашивается перед сайтом QRZ.com."),
-        tr("Справочники спрашиваются одновременно: карточка заполняется быстрее, а данные по-прежнему берутся по порядку списка — сначала QRZ.ru, потом QRZ.com, HamQTH, QRZCQ."),
+    /** Points of this release (2.7.3; the compact log only on the computer). */
+    fun items(desktop: Boolean): List<String> = listOfNotNull(
+        tr("Данные из прошлой связи: если со станцией уже работали, имя, QTH и локатор берутся из журнала, а не из справочников (Настройки → Данные о корреспонденте)."),
+        tr("Компактный журнал: Esc на экране «Готов к записи» — строки связей в две линии, на экране помещается вдвое больше; Esc ещё раз — как было.").takeIf { desktop },
     )
 }
 

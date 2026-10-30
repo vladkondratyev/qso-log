@@ -78,6 +78,8 @@ sealed interface Lookup {
     data class Failed(val message: String, val noAccount: Boolean = false) : Lookup
     /** No answer online ([problem]): the card was filled from the search history, as the station was found before. */
     data class FromHistory(val entry: ru.r3xed.qsolog.data.SearchEntry, val problem: String? = null) : Lookup
+    /** "Брать данные из прошлой связи": the card was filled from the earlier contact [qso]; no callbook was asked. */
+    data class FromLog(val qso: ru.r3xed.qsolog.data.Qso) : Lookup
 }
 
 val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
