@@ -19,9 +19,9 @@ class WhatsNewTest {
         // 2.9.1: the computer gets the menus, ⌘K and the status bar; the phone the bottom bar.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Меню"))
-            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Нижняя панель"))
-            assertTrue(WhatsNew.items(desktop = false).any { "Дипломы" in it })
+            assertTrue("«Вид»" in WhatsNew.items(desktop = true).first())
+            assertTrue("«Статистика»" in WhatsNew.items(desktop = false).first())
+            assertTrue(WhatsNew.items(desktop = false).any { "QTH" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

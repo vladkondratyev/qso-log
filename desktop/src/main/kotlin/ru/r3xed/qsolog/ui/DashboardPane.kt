@@ -147,11 +147,9 @@ fun DashboardPane(vm: AppState) {
         }
         // Conditions on the bands: solar flux, sunspots, A and K (hamqsl.com), asked at most once an hour.
         androidx.compose.runtime.LaunchedEffect(Unit) { vm.refreshSolar() }
-        vm.solar?.let { s ->
-            Text(
-                tr("Прохождение: %s", s.short) + (s.updated.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
-                style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted, modifier = Modifier.padding(horizontal = 16.dp),
-            )
+        // A click opens "Прохождение": the conditions seen from the station's QTH.
+        androidx.compose.material3.OutlinedButton(onClick = vm::openPropagation, modifier = Modifier.padding(horizontal = 16.dp)) {
+            Text(tr("Прохождение") + (vm.solar?.let { s -> listOf("K" to s.kIndex.trim(), "SFI" to s.flux.trim()).filter { it.second.isNotBlank() }.joinToString("") { " · ${it.first} ${it.second}" } } ?: "") + " ›", maxLines = 1)
         }
 
         // --- the parameters: one row, above every chart ---

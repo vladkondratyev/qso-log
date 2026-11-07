@@ -149,6 +149,12 @@ private fun unwrapped(points: List<LatLon>): List<LatLon> {
 /** [home]: my own station, drawn larger as a target. */
 class MapMarker(val pos: LatLon, val label: String, val color: Color, val onClick: (() -> Unit)? = null, val home: Boolean = false)
 
+/** A shaded cell of a world grid (absorption, aurora): its centre, its size in degrees and colour. */
+class MapRect(val center: LatLon, val dLon: Double, val dLat: Double, val color: Color)
+
+/** A straight line between two points (who heard me), in a colour. */
+class MapSegment(val a: LatLon, val b: LatLon, val color: Color)
+
 /** Zoom level and centre in world pixels, kept by the caller to return to the same view. */
 data class MapCamera(val zoom: Int, val cx: Double, val cy: Double)
 
@@ -195,6 +201,9 @@ fun MarkerMap(
     onTapMap: ((LatLon) -> Unit)? = null,
     /** A shaded area (the night side of the grey line), drawn under the markers. */
     shade: List<LatLon>? = null,
+    /** Grid cells and lines of the condition layers, drawn under the markers. */
+    rects: List<MapRect> = emptyList(),
+    segments: List<MapSegment> = emptyList(),
 ) {
     val density = LocalDensity.current.density
     val tile = 256f * density // tile edge in pixels; scaled so map text stays readable on HiDPI screens
@@ -344,6 +353,17 @@ fun MarkerMap(
                     area.close()
                     drawPath(area, Color(0x55101820))
                 }
+            }
+
+            rects.forEach { r ->
+                val tl = screen(LatLon(r.center.lat + r.dLat / 2, r.center.lon - r.dLon / 2))
+                val br = screen(LatLon(r.center.lat - r.dLat / 2, r.center.lon + r.dLon / 2))
+                drawRect(r.color, topLeft = tl, size = androidx.compose.ui.geometry.Size(br.x - tl.x, br.y - tl.y))
+            }
+            segments.forEach { s ->
+                val a = screen(s.a); val b = screen(s.b)
+                drawLine(s.color, a, b, strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                drawCircle(s.color, radius = 4.dp.toPx(), center = b)
             }
 
             if (path != null) {

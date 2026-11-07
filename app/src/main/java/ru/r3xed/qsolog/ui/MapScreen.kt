@@ -10,6 +10,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,6 +41,7 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import ru.r3xed.qsolog.AppViewModel
+import ru.r3xed.qsolog.MAP_LAYER_SOURCE
 import ru.r3xed.qsolog.Screen
 import ru.r3xed.qsolog.data.Qso
 
@@ -72,16 +74,21 @@ fun MapScreen(vm: AppViewModel) {
             }
         }
         // Layers: DX cluster spots (by the country's centre) and the grey line (the day/night border, now).
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Conditions as layers too: MUF of the ionosondes, D-RAP absorption, the aurora, who heard my callsign.
+        androidx.compose.runtime.LaunchedEffect(vm.mapLayers) { if (vm.mapLayers.isNotEmpty()) vm.refreshPropagation(vm.mapLayers.map { MAP_LAYER_SOURCE.getValue(it) }.toSet()) }
+        Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.FilterChip(selected = vm.mapSpots, onClick = { vm.changeMapSpots(!vm.mapSpots) }, label = { Text(tr("Споты кластера") + if (vm.mapSpots) " · ${vm.dxSpots.size}" else "") })
             androidx.compose.material3.FilterChip(selected = vm.mapGreyLine, onClick = { vm.changeMapGreyLine(!vm.mapGreyLine) }, label = { Text(tr("Серая зона")) })
+            listOf("heard" to tr("Меня слышат"), "muf" to "MUF", "drap" to tr("Поглощение"), "aurora" to tr("Сияние")).forEach { (k, t) ->
+                androidx.compose.material3.FilterChip(selected = k in vm.mapLayers, onClick = { vm.toggleMapLayer(k) }, label = { Text(t) })
+            }
         }
         if (vm.mapSpots && vm.dxSpots.isEmpty()) Text(
             tr("Спотов пока нет: откройте вкладку «Кластер» — споты приходят, пока он на связи."),
             style = MaterialTheme.typography.bodyMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp),
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (stations.isEmpty() && !(vm.mapSpots && vm.dxSpots.isNotEmpty())) {
+            if (stations.isEmpty() && !(vm.mapSpots && vm.dxSpots.isNotEmpty()) && vm.mapLayers.isEmpty()) {
                 Text(
                     tr("В логе пока нет связей с известным QTH. Точки появятся, когда QRZ.ru вернёт координаты абонента или вы впишете его локатор."),
                     style = MaterialTheme.typography.bodyLarge, color = x.muted,
@@ -130,8 +137,47 @@ private fun StationsMap(vm: AppViewModel, stations: List<Station>) {
     val tick = tickState.longValue
     val spots = if (vm.mapSpots) vm.dxSpots else emptyList()
     val grey = vm.mapGreyLine
+    val layers = vm.mapLayers
+    val prop = vm.prop
+    val me = vm.settings.myPosition
     AndroidView(factory = { map }, modifier = Modifier.fillMaxSize().clipToBounds(), update = { v ->
         v.overlays.clear()
+        // Grid layers (D-RAP absorption, aurora) and the paths to whoever heard my callsign, drawn in one overlay.
+        val cells = buildList {
+            if ("drap" in layers) prop.drap.filter { it.value >= 3 }.forEach { add(Triple(it, 4.0 to 2.0, android.graphics.Color.argb((40 + it.value * 5).toInt().coerceAtMost(200), 220, 40, 30))) }
+            if ("aurora" in layers) prop.aurora.forEach { add(Triple(it, 3.0 to 2.0, android.graphics.Color.argb((30 + it.value * 2).toInt().coerceAtMost(200), 30, 200, 90))) }
+        }
+        val heard = if ("heard" in layers && me != null) prop.heardMe.mapNotNull { r -> ru.r3xed.qsolog.data.Geo.locatorToLatLon(r.receiverLocator)?.let { it to (r.band ?: "") } } else emptyList()
+        if (cells.isNotEmpty() || heard.isNotEmpty()) v.overlays.add(object : org.osmdroid.views.overlay.Overlay() {
+            override fun draw(c: android.graphics.Canvas, mv: MapView, shadow: Boolean) {
+                if (shadow) return
+                val pj = mv.projection
+                val paint = android.graphics.Paint()
+                val a = android.graphics.Point(); val b = android.graphics.Point()
+                cells.forEach { (cell, size, color) ->
+                    pj.toPixels(GeoPoint(cell.lat + size.second / 2, cell.lon - size.first / 2), a)
+                    pj.toPixels(GeoPoint(cell.lat - size.second / 2, cell.lon + size.first / 2), b)
+                    paint.color = color
+                    c.drawRect(a.x.toFloat(), a.y.toFloat(), b.x.toFloat(), b.y.toFloat(), paint)
+                }
+                if (heard.isNotEmpty() && me != null) {
+                    paint.strokeWidth = 4f; paint.style = android.graphics.Paint.Style.STROKE
+                    pj.toPixels(GeoPoint(me.lat, me.lon), a)
+                    heard.forEach { (p, band) ->
+                        pj.toPixels(GeoPoint(p.lat, p.lon), b)
+                        paint.color = bandColor(band)
+                        c.drawLine(a.x.toFloat(), a.y.toFloat(), b.x.toFloat(), b.y.toFloat(), paint)
+                        paint.style = android.graphics.Paint.Style.FILL
+                        c.drawCircle(b.x.toFloat(), b.y.toFloat(), 9f, paint)
+                        paint.style = android.graphics.Paint.Style.STROKE
+                    }
+                }
+            }
+        })
+        // MUF of the ionosondes: a label with the value, coloured by it.
+        if ("muf" in layers) prop.ionosondes.filter { it.confidence >= 25 }.forEach { io ->
+            v.overlays.add(labelMarker(v, GeoPoint(io.point.lat, io.point.lon), "%.0f".format(io.mufMhz) + " " + tr("МГц"), mufColor(io.mufMhz)) { true })
+        }
         if (grey) v.overlays.add(org.osmdroid.views.overlay.Polygon(v).apply {
             points = ru.r3xed.qsolog.data.Sun.night(tick).map { GeoPoint(it.lat.coerceIn(-85.0, 85.0), it.lon) }
             fillPaint.color = 0x55101820
@@ -282,4 +328,24 @@ private fun labelIcon(context: Context, text: String, color: Int, home: Boolean 
         c.drawCircle(w / 2 + 1f, cy, dotR * 0.34f, fill)
     }
     return BitmapDrawable(context.resources, bmp) to cy / bmp.height
+}
+
+
+/** A band's colour on the map: low bands warm, high bands cool. */
+internal fun bandColor(band: String): Int = when (band) {
+    "160m", "80m" -> 0xFFB03A2E.toInt()
+    "60m", "40m" -> 0xFFD9822B.toInt()
+    "30m", "20m" -> 0xFF2E8B57.toInt()
+    "17m", "15m" -> 0xFF1F77B4.toInt()
+    "12m", "10m" -> 0xFF6A3D9A.toInt()
+    else -> 0xFF555555.toInt()
+}
+
+/** MUF from 7 MHz (red) to 30 MHz and up (violet). */
+internal fun mufColor(mhz: Double): Int = when {
+    mhz < 10 -> 0xFFB03A2E.toInt()
+    mhz < 15 -> 0xFFD9822B.toInt()
+    mhz < 20 -> 0xFF2E8B57.toInt()
+    mhz < 26 -> 0xFF1F77B4.toInt()
+    else -> 0xFF6A3D9A.toInt()
 }

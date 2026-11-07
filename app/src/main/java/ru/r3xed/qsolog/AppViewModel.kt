@@ -177,7 +177,12 @@ sealed interface Screen {
     data object DxCluster : Screen
     /** Award tracking: DXCC, WAZ, WAS, regions of Russia, RDA. */
     data object Awards : Screen
+    /** Band conditions from free services, seen from the station's QTH. */
+    data object Propagation : Screen
 }
+
+/** A map layer and the service it comes from. */
+val MAP_LAYER_SOURCE = mapOf("muf" to "kc2g", "drap" to "drap", "aurora" to "aurora", "heard" to "psk")
 
 /** User-Agent for the online logbooks: they ask programs to name themselves. */
 private val ONLINE_AGENT = "QSO-LOG/" + BuildConfig.VERSION_NAME + " (Android)"
@@ -329,6 +334,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             solar = runCatching { ru.r3xed.qsolog.data.SolarData.fetch("QSO-LOG/${BuildConfig.VERSION_NAME} (Android)") }.getOrNull() ?: solar
             if (solar == null) solarAt = 0L
         }
+    }
+
+    /** "Прохождение": what the services say, kept while the app runs; each part is asked again after its period. */
+    var prop by mutableStateOf(ru.r3xed.qsolog.data.PropagationData()); private set
+    var propLoading by mutableStateOf(false); private set
+
+    fun refreshPropagation(parts: Set<String> = ru.r3xed.qsolog.data.Propagation.PERIOD.keys, force: Boolean = false) {
+        if (propLoading) return
+        propLoading = true
+        viewModelScope.launch {
+            prop = ru.r3xed.qsolog.data.Propagation.refresh(prop, "QSO-LOG/${BuildConfig.VERSION_NAME} (Android; +https://github.com/vladkondratyev/qso-log)", settings.myCall, settings.myLocator, parts, force)
+            prop.solar?.let { solar = it }
+            propLoading = false
+        }
+    }
+
+    fun openPropagation() {
+        screen = Screen.Propagation
+    }
+
+    /** A beacon of NCDXF: the radio to its frequency, CW. */
+    fun tuneBeacon(khz: Double) {
+        if (!rigControllable) return
+        val hz = Math.round(khz * 1000)
+        rigTune(hz)
+        CatModes.toRadio("CW", hz)?.let(::rigSend)
+        say(tr("Трансивер: %s CW", String.format(java.util.Locale.ROOT, "%.1f", khz)))
+    }
+
+    /** The QSO map's layers of the conditions: MUF of the ionosondes, D-RAP absorption, the aurora, who heard me. */
+    var mapLayers by mutableStateOf(prefs.text("map_layers").split(',').filter { it.isNotBlank() }.toSet()); private set
+
+    fun toggleMapLayer(l: String) {
+        mapLayers = if (l in mapLayers) mapLayers - l else mapLayers + l
+        prefs.putText("map_layers", mapLayers.joinToString(","))
+        refreshPropagation(setOf(MAP_LAYER_SOURCE.getValue(l)))
     }
 
     /** The QSO map: spots of the DX cluster and the grey line on it. */

@@ -103,7 +103,7 @@ fun AddQsoButton(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(if (recording) 84.dp else 68.dp)
+                .height(if (recording) 72.dp else 54.dp)
                 .shadow(if (recording) 10.dp else 4.dp, RoundedCornerShape(20.dp))
                 .clip(RoundedCornerShape(20.dp))
                 .background(bg)
@@ -166,10 +166,10 @@ fun AddQsoButton(
             if (recording) RecordingContent(vm.recordingSince ?: 0L, onBg)
             else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Add, null, Modifier.size(32.dp), tint = onBg)
+                    Icon(Icons.Filled.Add, null, Modifier.size(26.dp), tint = onBg)
                     Spacer(Modifier.width(10.dp))
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(tr("Добавить QSO"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = onBg)
+                        Text(tr("Добавить QSO"), fontSize = 19.sp, fontWeight = FontWeight.Bold, color = onBg)
                         // With a keyboard attached: the keys that do the same, so they are found without F1.
                         if (vm.hardKeyboard || vm.keysUsed) Text(ru.r3xed.qsolog.keys.KeyMap.label(ru.r3xed.qsolog.keys.KeyAction.NEW_QSO, false), fontSize = 13.sp, fontFamily = Mono, color = onBg.copy(alpha = 0.8f))
                     }
@@ -213,9 +213,9 @@ private suspend fun AwaitPointerEventScope.waitForAllUp() {
 @Composable
 private fun MicSpot(color: Color, modifier: Modifier = Modifier) {
     Box(
-        modifier.padding(end = 14.dp).size(44.dp).background(color.copy(alpha = 0.18f), CircleShape),
+        modifier.padding(end = 10.dp).size(38.dp).background(color.copy(alpha = 0.18f), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Filled.Mic, tr("Записать голос"), Modifier.size(24.dp), tint = color)
+        Icon(Icons.Filled.Mic, tr("Записать голос"), Modifier.size(22.dp), tint = color)
     }
 }

@@ -299,6 +299,7 @@ fun main() {
                     Separator()
                     Item(tr("Дашборд"), shortcut = menuShortcut(KeyAction.DASHBOARD), onClick = state::dashboardOrDelete)
                     Item(tr("Дипломы"), onClick = state::openAwards)
+                    Item(tr("Прохождение"), onClick = state::openPropagation)
                     Item(tr("Карта QSO"), shortcut = menuShortcut(KeyAction.MAP), onClick = state::openMap)
                     Item(tr("История поиска"), shortcut = menuShortcut(KeyAction.HISTORY), onClick = state::openHistory)
                 }
@@ -343,6 +344,7 @@ fun paletteCommands(state: AppState, files: Exports): List<Pair<String, () -> Un
     tr("Найти в журнале") to state::requestSearchFocus,
     tr("Дашборд") to state::openDashboard,
     tr("Дипломы") to state::openAwards,
+    tr("Прохождение") to state::openPropagation,
     tr("Карта QSO") to state::openMap,
     tr("DX-кластер") to state::openDxCluster,
     tr("История поиска") to state::openHistory,
@@ -420,6 +422,7 @@ fun App(state: AppState, files: Exports) {
                         Pane.Welcome -> WelcomePane(state)
                         Pane.Reference -> ReferencePane(onClose = state::closeReference, myPosition = state.settings.myPosition)
                         Pane.Awards -> ru.r3xed.qsolog.ui.AwardsPane(state)
+                        Pane.Propagation -> ru.r3xed.qsolog.ui.PropagationPane(state)
                     }
                 }
             }

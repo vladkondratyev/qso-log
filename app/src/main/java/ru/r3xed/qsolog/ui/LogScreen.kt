@@ -40,6 +40,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material.icons.filled.SortByAlpha
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.MarkEmailRead
@@ -184,6 +190,11 @@ fun LogScreen(
                             text = { Text(tr("Дипломы"), fontSize = 18.sp) },
                             leadingIcon = { Icon(Icons.Filled.EmojiEvents, null) },
                             onClick = { menu = false; vm.openAwards() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(tr("Прохождение"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.Filled.Public, null) },
+                            onClick = { menu = false; vm.openPropagation() },
                         )
                         HistoryMenuItem(vm) { menu = false; vm.openHistory() }
                         HorizontalDivider()
@@ -508,21 +519,11 @@ private fun StationLine(vm: AppViewModel, color: androidx.compose.ui.graphics.Co
 /** "Станция": with two or more callsigns of one's own, the log shows the contacts of one of them or all. */
 @Composable
 private fun StationFilterChip(vm: AppViewModel) {
-    val x = LocalExtra.current
     var open by remember { mutableStateOf(false) }
     val selected = vm.stationFilter != null
-    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     Box {
-        Row(
-            Modifier.height(44.dp).clip(RoundedCornerShape(22.dp))
-                .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
-                .clickable(onClickLabel = tr("Фильтр по своему позывному")) { open = true }
-                .padding(start = 14.dp, end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(tr("Станция: %s", vm.stationFilter ?: tr("все")), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1, softWrap = false)
-            Icon(Icons.Filled.ArrowDropDown, null, Modifier.size(20.dp), tint = fg)
-        }
+        // The station in work is already named under the logo: here only the icon, filled while the filter is on.
+        IconPill(Icons.Filled.CellTower, null, selected, description = tr("Фильтр по своему позывному") + (vm.stationFilter?.let { ": $it" } ?: "")) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             val counts = remember(vm.allQsos) { vm.allQsos.groupingBy { it.myCall.uppercase() }.eachCount() }
             DropdownMenuItem(text = { Text(tr("Все станции") + "  " + vm.allQsos.size, fontSize = 17.sp) }, onClick = { open = false; vm.changeStationFilter(null) })
@@ -539,42 +540,51 @@ private fun StationFilterChip(vm: AppViewModel) {
 /** Four compact sort chips sized to their labels; with a large system font the row scrolls sideways instead of cutting words. */
 @Composable
 private fun SortBar(vm: AppViewModel) {
-    val x = LocalExtra.current
+    // One compact row: the sorts as icons (the chosen one with its name and arrow), then the station and the filter.
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         SortBy.entries.forEach { by ->
             val selected = vm.sortBy == by
-            val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-            Row(
-                Modifier.height(44.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
-                    .clickable(onClickLabel = tr("Сортировать: %s", by.label)) { vm.sort(by) }
-                    .padding(horizontal = 14.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(by.label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1, softWrap = false)
-                if (selected) {
-                    Icon(
-                        if (vm.sortDesc) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
-                        if (vm.sortDesc) tr("по убыванию") else tr("по возрастанию"),
-                        Modifier.size(16.dp),
-                        tint = fg,
-                    )
-                }
-            }
+            IconPill(
+                sortIcon(by), if (selected) by.label else null, selected,
+                trailing = if (selected) (if (vm.sortDesc) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward) else null,
+                description = tr("Сортировать: %s", by.label),
+            ) { vm.sort(by) }
         }
-    }
-    // The second row: the station (two or more callsigns of one's own) and the filter, so neither is off the screen.
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+        Spacer(Modifier.width(4.dp))
         if (vm.stationCalls.size > 1) StationFilterChip(vm)
         LogFilterChip(vm)
+    }
+}
+
+private fun sortIcon(by: SortBy) = when (by) {
+    SortBy.DATE -> Icons.Filled.Event
+    SortBy.DISTANCE -> Icons.Filled.Straighten
+    SortBy.CALL -> Icons.Filled.SortByAlpha
+    SortBy.BAND -> Icons.Filled.Waves
+}
+
+/** A round pill with an icon; the [label] shows only when the pill is chosen (or the filter is on). */
+@Composable
+internal fun IconPill(
+    icon: androidx.compose.ui.graphics.vector.ImageVector, label: String?, selected: Boolean,
+    trailing: androidx.compose.ui.graphics.vector.ImageVector? = null, description: String, onClick: () -> Unit,
+) {
+    val x = LocalExtra.current
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    Row(
+        Modifier.height(38.dp).clip(RoundedCornerShape(19.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
+            .clickable(onClickLabel = description, onClick = onClick)
+            .padding(horizontal = if (label == null) 9.dp else 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, if (label == null) description else null, Modifier.size(20.dp), tint = fg)
+        if (label != null) Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 5.dp).widthIn(max = 150.dp), overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        if (trailing != null) Icon(trailing, null, Modifier.padding(start = 2.dp).size(15.dp), tint = fg)
     }
 }
 
@@ -838,20 +848,7 @@ private fun LogFilterChip(vm: AppViewModel) {
     val selected = f.active
     val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     Box {
-        Row(
-            Modifier.height(44.dp).clip(RoundedCornerShape(22.dp))
-                .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
-                .clickable(onClickLabel = tr("Фильтр журнала")) { open = true }
-                .padding(start = 14.dp, end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Filled.FilterList, null, Modifier.size(18.dp), tint = fg)
-            Text(
-                if (selected) f.describe() else tr("Фильтр"), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg,
-                maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp),
-            )
-            Icon(Icons.Filled.ArrowDropDown, null, Modifier.size(20.dp), tint = fg)
-        }
+        IconPill(Icons.Filled.FilterList, if (selected) f.describe() else null, selected, description = tr("Фильтр журнала")) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             if (selected) DropdownMenuItem(text = { Text(tr("Сбросить фильтр"), fontSize = 17.sp) }, leadingIcon = { Icon(Icons.Filled.Close, null) }, onClick = { open = false; vm.changeLogFilter(ru.r3xed.qsolog.data.LogFilter()) })
             if (vm.savedFilters.isNotEmpty()) {

@@ -357,6 +357,7 @@ class MainActivity : ComponentActivity() {
                                         Screen.Contests -> ContestsScreen(vm)
                                         Screen.DxCluster -> ru.r3xed.qsolog.ui.DxClusterScreen(vm)
                                         Screen.Awards -> ru.r3xed.qsolog.ui.AwardsScreen(vm)
+                                    Screen.Propagation -> ru.r3xed.qsolog.ui.PropagationScreen(vm)
                                         Screen.Settings -> SettingsScreen(
                                             vm,
                                             onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
@@ -444,7 +445,7 @@ class MainActivity : ComponentActivity() {
                         if (vm.screen == Screen.Contest) SnackbarHost(snackbar, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 4.dp))
                         else SnackbarHost(
                             snackbar,
-                            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = if (vm.screen == Screen.Edit || vm.screen in ru.r3xed.qsolog.ui.BOTTOM_TABS) 80.dp else 16.dp),
+                            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = if (vm.screen == Screen.Edit || vm.screen in ru.r3xed.qsolog.ui.BOTTOM_TABS) 64.dp else 16.dp),
                         )
                     }
                 }

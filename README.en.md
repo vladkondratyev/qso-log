@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.9.1 | [QSO-LOG-2.9.1.apk](../../releases/tag/v2.9.1) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.1 | [QSO-LOG-2.9.1-macos-arm64.dmg](../../releases/tag/desktop-v2.9.1) |
-| macOS 11 or newer, Intel | 2.9.1 | [QSO-LOG-2.9.1-macos-x64.dmg](../../releases/tag/desktop-v2.9.1) |
-| Windows 10 and 11, 64-bit | 2.9.1 | [QSO-LOG-2.9.1-windows-x64.zip](../../releases/tag/desktop-v2.9.1) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.1 | [QSO-LOG-2.9.1-linux-amd64.deb](../../releases/tag/desktop-v2.9.1) |
+| Android 8.0 or newer | 2.9.2 | [QSO-LOG-2.9.2.apk](../../releases/tag/v2.9.2) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.2 | [QSO-LOG-2.9.2-macos-arm64.dmg](../../releases/tag/desktop-v2.9.2) |
+| macOS 11 or newer, Intel | 2.9.2 | [QSO-LOG-2.9.2-macos-x64.dmg](../../releases/tag/desktop-v2.9.2) |
+| Windows 10 and 11, 64-bit | 2.9.2 | [QSO-LOG-2.9.2-windows-x64.zip](../../releases/tag/desktop-v2.9.2) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.2 | [QSO-LOG-2.9.2-linux-amd64.deb](../../releases/tag/desktop-v2.9.2) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -347,6 +347,19 @@ The same settings are in "Callbooks and online logs" → "DX cluster".
 a new country, a new region of Russia, a new band for a country. The spot list also marks "new region". The phone can
 keep the cluster in the background; on the computer the system shows the notification. **The QSO map** shows spots
 (at the country's centre) and the **grey line**, the night side of the Earth now.
+
+## Propagation
+
+Since 2.9.2: Statistics → Propagation (the button on the dashboard, the ⋮ menu; on the computer View → Propagation or the
+indices in the status bar). Everything is seen **from the QTH locator of the station in use**: day or night and when
+the sun rises or sets; the MUF of the nearest ionosonde (prop.kc2g.com) and up to which band long paths are open;
+D-RAP absorption and aurora probability near you; fresh M/X flares by day. Also the N0NBH band ratings (hamqsl.com)
+by day and night, SFI, sunspots, K and A, the Kp forecast for 3 days, the F10.7 flux for 30 days and the day's flares
+(NOAA SWPC); **what is heard at your place** — receivers of your grid square for 15 minutes on PSK Reporter by band and
+by eight directions from your QTH; **who hears you** — your callsign for an hour; the **NCDXF/IARU beacons** on air now
+with distance and bearing (a tap tunes the radio); VHF aurora and sporadic E. The **QSO map** gets the layers "Hears
+me", "MUF", "Absorption" and "Aurora". PSK Reporter is asked at most every 5 minutes and gets only your callsign and the
+two letters of your locator.
 
 ## Contest mode
 
@@ -889,21 +902,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.9.1-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.9.1), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.9.2-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.9.2), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.9.1-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.1), unpack the
+Download `QSO-LOG-2.9.2-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.2), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.9.1-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.1) and install it:
+Download `QSO-LOG-2.9.2-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.2) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.9.1-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.9.2-linux-amd64.deb
 ```
 
 ## Where the data is kept

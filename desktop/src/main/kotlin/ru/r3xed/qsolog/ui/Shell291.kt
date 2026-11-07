@@ -83,7 +83,7 @@ fun StatusBar(state: AppState) {
             val day = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
             state.allQsos.count { java.time.Instant.ofEpochMilli(it.timeUtc).atZone(java.time.ZoneOffset.UTC).toLocalDate() == day }
         }
-        state.solar?.let { s -> StatusItem(s.short, x.muted, state::openDashboard) }
+        state.solar?.let { s -> StatusItem(s.short, x.muted, state::openPropagation) }
         StatusItem(tr("Сегодня: %s QSO", today), x.muted, state::openDashboard)
         StatusItem(state.settings.myCall.ifBlank { "—" }, MaterialTheme.colorScheme.onSurface) { state.openSettings(stations = true) }
     }
