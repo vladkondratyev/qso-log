@@ -210,7 +210,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val stationCalls: List<String> get() = MyStations.calls(stations)
 
     /** The log shows only the contacts made under this callsign of mine; null — all of them. */
-    var stationFilter by mutableStateOf<String?>(null); private set
+    var stationFilter by mutableStateOf<String?>(activeStation.call.trim().uppercase().takeIf { it.isNotBlank() && stationCalls.size > 1 }); private set
 
     fun changeStationFilter(call: String?) {
         stationFilter = call
@@ -268,6 +268,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun onStationSwitched(st: MyStation) {
         if (st.autoLocator) refreshLocation(force = true)
+        // The log follows the station in work: its contacts only ("Станция: все" in the chip shows them all again).
+        val call = st.call.trim().uppercase()
+        if (stationCalls.size > 1 && call.isNotBlank() && call in stationCalls) changeStationFilter(call)
     }
 
     /** When the locator last came from the phone's location; 0 — not in this run of the app. */
@@ -711,6 +714,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.infoFromLog = on
     }
 
+    /** "Только имя": the first name alone goes into the card (no patronymic, no surname). */
+    var nameOnly by mutableStateOf(prefs.nameOnly); private set
+
+    fun changeNameOnly(on: Boolean) {
+        nameOnly = on
+        prefs.nameOnly = on
+    }
+
+    /** "Масштаб интерфейса": the activity applies it to its density (see MainActivity), so dialogs and maps follow too. */
+    var uiScale by mutableStateOf(ru.r3xed.qsolog.data.UiScale.of(prefs.uiScale, ru.r3xed.qsolog.data.UiScale.PHONE)); private set
+
+    fun changeUiScale(s: ru.r3xed.qsolog.data.UiScale) {
+        if (s == uiScale) return
+        uiScale = s
+        prefs.uiScale = s.percent
+    }
+
+    fun zoomIn() = changeUiScale(ru.r3xed.qsolog.data.UiScale.bigger(uiScale, ru.r3xed.qsolog.data.UiScale.PHONE))
+    fun zoomOut() = changeUiScale(ru.r3xed.qsolog.data.UiScale.smaller(uiScale, ru.r3xed.qsolog.data.UiScale.PHONE))
+    fun zoomReset() = changeUiScale(ru.r3xed.qsolog.data.UiScale.S100)
+
     var themeMode by mutableStateOf(runCatching { ThemeMode.valueOf(prefs.theme.uppercase()) }.getOrDefault(ThemeMode.SYSTEM)); private set
 
     fun setTheme(mode: ThemeMode) {
@@ -930,7 +954,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun newQsoFor(call: String, info: QrzInfo) {
         newQso()
         form = form.copy(
-            call = call, name = info.fullName, qth = info.city, country = info.country,
+            call = call, name = info.nameFor(nameOnly), qth = info.city, country = info.country,
             locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
             lat = info.lat, lon = info.lon, infoFromQrz = true,
             adif = withQrzExtras(form.adif, info),
@@ -1238,6 +1262,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         form = form.copy(freq = freq, band = band ?: form.band)
     }
 
+    /** "QTH на карте": towns by name from OpenStreetMap, in the interface's language. */
+    suspend fun searchPlaces(q: String): List<ru.r3xed.qsolog.data.Place> =
+        ru.r3xed.qsolog.data.Geocoder.search(q, ru.r3xed.qsolog.I18n.current.code, "QSO-LOG/${ru.r3xed.qsolog.BuildConfig.VERSION_NAME} (Android; +https://github.com/vladkondratyev/qso-log)")
+
+    /** The town and the point picked on the map: QTH, the 6-character locator and the coordinates of the card. */
+    fun setPlace(name: String, p: LatLon) {
+        val f = form
+        form = f.copy(
+            qth = name.ifBlank { f.qth }, locator = Geo.latLonToLocator(p), lat = p.lat, lon = p.lon, infoFromQrz = false,
+            adif = f.adif - HamQth.POSITION_FIELD,
+        )
+    }
+
     fun setLocator(loc: String) {
         form = form.copy(locator = loc, lat = null, lon = null, infoFromQrz = false, adif = form.adif - HamQth.POSITION_FIELD)
     }
@@ -1351,14 +1388,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     // Filled from the log: QRZ.ru's values win, but what it leaves blank keeps the log's.
                     val pos = info.position
                     form = f.copy(
-                        name = info.fullName.ifBlank { f.name }, qth = info.city.ifBlank { f.qth }, country = info.country.ifBlank { f.country },
+                        name = info.nameFor(nameOnly).ifBlank { f.name }, qth = info.city.ifBlank { f.qth }, country = info.country.ifBlank { f.country },
                         locator = info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) } ?: f.locator },
                         lat = if (pos != null) info.lat else f.lat, lon = if (pos != null) info.lon else f.lon,
                         adif = withQrzExtras(if (pos != null || info.locator.isNotBlank()) f.adif - HamQth.POSITION_FIELD else f.adif, info),
                     )
                 } else if (f.call == call && (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && locatorFree(f)))) {
                     form = f.copy(
-                        name = info.fullName, qth = info.city, country = info.country,
+                        name = info.nameFor(nameOnly), qth = info.city, country = info.country,
                         locator = info.locator.ifBlank { info.position?.let { Geo.latLonToLocator(it) }.orEmpty() },
                         lat = info.lat, lon = info.lon, infoFromQrz = true,
                         // Region, RDA and zones are the found station's: none stay from the callsign typed before.
@@ -1475,7 +1512,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val me = Geo.locatorToLatLon(qso.myLocator) ?: settings.myPosition
             val them = if (lat != null && lon != null) LatLon(lat, lon) else null
             val updated = qso.copy(
-                name = qso.name.ifBlank { info.fullName },
+                name = qso.name.ifBlank { info.nameFor(nameOnly) },
                 qth = if (approx) info.city.ifBlank { qso.qth } else qso.qth.ifBlank { info.city },
                 country = qso.country.ifBlank { info.country },
                 locator = qso.locator.ifBlank { info.locator.ifBlank { pos?.let { Geo.latLonToLocator(it) }.orEmpty() } },

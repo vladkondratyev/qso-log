@@ -122,6 +122,14 @@ class Settings(context: Context) {
     var infoFromLog: Boolean
         get() = prefs.getBoolean("info_from_log", false)
         set(v) = prefs.edit().putBoolean("info_from_log", v).apply()
+    /** "Только имя": the callbooks' name goes into the card without the patronymic and the surname. */
+    var nameOnly: Boolean
+        get() = prefs.getBoolean("name_only", false)
+        set(v) = prefs.edit().putBoolean("name_only", v).apply()
+    /** "Масштаб интерфейса" in percent: 100, 70 or 50 (UiScale.PHONE). */
+    var uiScale: Int
+        get() = prefs.getInt("ui_scale", 100)
+        set(v) = prefs.edit().putInt("ui_scale", v).apply()
     /** Last ЕРМАК / Cabrillo export: format name, CONTEST code, CATEGORY-OPERATOR. */
     /** ADIF export encoding: UTF-8 (most programs and sites) or Windows-1251 (LogHX, UR5EQF). */
     /** Stations looked up but not logged are kept in the search history (off until switched on). */

@@ -49,6 +49,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -77,6 +79,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -319,139 +322,153 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // --- callsign ---
-            // IntrinsicSize.Min: the play button takes the height of the field; top padding skips the floating label.
-            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (keypad) KeyField(
-                    tr("Позывной корреспондента"), f.call, active == KeyTarget.CALL, replace && active == KeyTarget.CALL,
-                    error == CALL_ERROR, Modifier.weight(1f), big = true, caret = caret,
-                    onClear = { setValue(KeyTarget.CALL, ""); caret = null; replace = false; active = KeyTarget.CALL },
-                ) { activate(KeyTarget.CALL) }
-                else OutlinedTextField(
-                    value = f.call,
-                    onValueChange = { error = null; vm.setCall(it) },
-                    modifier = Modifier.weight(1f).focusRequester(callFocus).onFocusChanged { callFocused = it.isFocused },
-                    label = { Text(tr("Позывной корреспондента"), fontSize = 16.sp) },
-                    isError = error == CALL_ERROR,
-                    supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
-                    // ⌫ wipes the whole callsign, the cursor stays in the field.
-                    trailingIcon = if (f.call.isNotEmpty()) { { ClearButton { error = null; vm.setCall(""); callFocus.requestFocus() } } } else null,
-                    textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 1.sp),
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Characters,
-                        autoCorrect = false,
-                        keyboardType = KeyboardType.Ascii,
-                        imeAction = ImeAction.Next,
-                    ),
-                    // "Далее" goes to what is usually typed next: the frequency, or the report if it is already there.
-                    keyboardActions = KeyboardActions(onNext = { if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus() }),
-                    colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
-                )
-                if (f.audio.isNotBlank()) {
-                    val context = LocalContext.current
-                    AudioPlayButton(
-                        vm.voice.file(f.audio),
-                        onDelete = vm::removeAudio,
-                        onShare = {
-                            val form = vm.form
-                            shareForm(context, form, vm.myPositionFor(form), vm.voice.file(form.audio))
-                        },
-                        modifier = Modifier.fillMaxHeight().padding(top = 8.dp),
-                    )
-                }
-            }
-            if (keypad && error == CALL_ERROR) Text(CALL_ERROR, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-            // With a physical keyboard a saved card takes the cursor too, so its keys work at once.
-            if (!keypad && (f.isNew || vm.hardKeyboard || vm.openedByKeys)) LaunchedEffect(Unit) { callFocus.requestFocus() }
-            // Callsigns from the log that start with what is typed: one tap instead of the rest.
-            if (f.isNew) CallSuggestions(vm) { call ->
-                vm.setCall(call)
-                if (keypad) activate(nextOf(KeyTarget.CALL))
-                else if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
-            }
-
-            StationCard(vm)
-            DupeCard(vm)
-            HistoryCard(vm)
-
-            // --- date/time ---
-            if (editTime) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Field(tr("Дата UTC"), f.date, { vm.update(f.copy(date = it)) }, Modifier.weight(1.3f), KeyboardType.Number, mono = true)
-                    Field(tr("Время UTC"), f.time, { vm.update(f.copy(time = it)) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
-                    IconButton(onClick = vm::setNow, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Refresh, tr("Текущее время")) }
-                }
-            } else {
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
-                        .clickable(onClickLabel = tr("Изменить дату и время")) { editTime = true }
-                        .padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Filled.Schedule, null, Modifier.size(22.dp), tint = x.muted)
-                    Spacer(Modifier.width(10.dp))
-                    // Time first (what changes), then the date; wraps to a second line with a large system font.
-                    // "Фиксировать время сохранения": the clock runs until the contact is saved.
-                    val live = vm.timeLive
-                    val now = if (live) utc(utcNow()) else null
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp)) { append(now?.let(TIME_SEC_FMT::format) ?: f.time) }
-                            withStyle(SpanStyle(fontSize = 14.sp, color = x.muted)) { append(" UTC   ") }
-                            withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp)) { append(now?.let(DATE_FMT::format) ?: f.date) }
-                            if (live) withStyle(SpanStyle(fontSize = 14.sp, color = x.muted)) { append("\n" + tr("время запишется при сохранении")) }
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = vm::setNow) { Icon(Icons.Filled.Refresh, tr("Текущее время")) }
-                    IconButton(onClick = { editTime = true }) { Icon(Icons.Filled.Edit, tr("Изменить дату и время")) }
-                }
-            }
-
-            // Frequency first: typing it picks the band below by itself.
-            if (keypad) KeyField(
-                tr("Частота, МГц"), f.freq, active == KeyTarget.FREQ, replace && active == KeyTarget.FREQ, false,
-                Modifier.fillMaxWidth().bringIntoViewRequester(freqView), caret = caret,
-            ) { activate(KeyTarget.FREQ) }
-            else Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
-            RigBadge(vm)
-            CwBar(vm)
-
-            // One scrolling row each: what is switched on in the settings, plus the record's own value if that one is off.
-            // Nothing to choose from (one value on, and the record has it) — the label alone shows it.
-            val modes = MODES.filter { it in vm.enabledModes || it == f.mode } + listOfNotNull(f.mode.takeIf { it.isNotBlank() && it !in MODES })
-            val bands = BANDS.filter { it in vm.enabledBands || it == f.band } + listOfNotNull(f.band.takeIf { it.isNotBlank() && it !in BANDS })
-            Label(tr("Вид связи"), f.mode)
-            if (modes != listOf(f.mode)) ChipRow(modes, f.mode, vm::setMode)
-            Label(tr("Диапазон"), f.band)
-            if (bands != listOf(f.band)) ChipRow(bands, f.band, vm::setBand)
-
-            // Reports: the usual values one tap away, digits keyboard unless the mode reports in dB.
-            val quick = quickReports(f.mode)
-            val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
-            Row(Modifier.bringIntoViewRequester(rstView), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (keypad) KeyField(tr("RST отправлен"), f.rstSent, active == KeyTarget.RST_SENT, replace && active == KeyTarget.RST_SENT, false, Modifier.fillMaxWidth(), caret = caret) { activate(KeyTarget.RST_SENT) }
-                    else RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus).onFocusChanged { rstSentFocused = it.isFocused }, rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
-                    QuickValues(quick, f.rstSent) { vm.update(vm.form.copy(rstSent = it)) }
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (keypad) KeyField(tr("RST принят"), f.rstRcvd, active == KeyTarget.RST_RCVD, replace && active == KeyTarget.RST_RCVD, false, Modifier.fillMaxWidth(), caret = caret) { activate(KeyTarget.RST_RCVD) }
-                    else RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
-                    QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
-                }
-            }
-            // A contest contact: the exchanged numbers right under the reports, as in the contest card.
+            // 70% and 50%: the card has room for two columns — who the station is | the contact itself.
             val contest = ContestMode.isContest(f.adif)
-            if (contest) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field(tr("Код передан"), f.adif[ContestMode.SENT].orEmpty(), { vm.setAdif(ContestMode.SENT, it) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
-                Field(
-                    tr("Код принят"), f.adif[ContestMode.RCVD].orEmpty(), { vm.setAdif(ContestMode.RCVD, it) },
-                    Modifier.weight(1f).focusRequester(contestRcvdFocus).onFocusChanged { contestRcvdFocused = it.isFocused },
-                    KeyboardType.Number, mono = true, last = true,
-                )
+            val head: @Composable ColumnScope.() -> Unit = {
+                // --- callsign ---
+                // IntrinsicSize.Min: the play button takes the height of the field; top padding skips the floating label.
+                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (keypad) KeyField(
+                        tr("Позывной корреспондента"), f.call, active == KeyTarget.CALL, replace && active == KeyTarget.CALL,
+                        error == CALL_ERROR, Modifier.weight(1f), big = true, caret = caret,
+                        onClear = { setValue(KeyTarget.CALL, ""); caret = null; replace = false; active = KeyTarget.CALL },
+                    ) { activate(KeyTarget.CALL) }
+                    else OutlinedTextField(
+                        value = f.call,
+                        onValueChange = { error = null; vm.setCall(it) },
+                        modifier = Modifier.weight(1f).focusRequester(callFocus).onFocusChanged { callFocused = it.isFocused },
+                        label = { Text(tr("Позывной корреспондента"), fontSize = 16.sp) },
+                        isError = error == CALL_ERROR,
+                        supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
+                        // ⌫ wipes the whole callsign, the cursor stays in the field.
+                        trailingIcon = if (f.call.isNotEmpty()) { { ClearButton { error = null; vm.setCall(""); callFocus.requestFocus() } } } else null,
+                        textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 1.sp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            autoCorrect = false,
+                            keyboardType = KeyboardType.Ascii,
+                            imeAction = ImeAction.Next,
+                        ),
+                        // "Далее" goes to what is usually typed next: the frequency, or the report if it is already there.
+                        keyboardActions = KeyboardActions(onNext = { if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus() }),
+                        colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
+                    )
+                    if (f.audio.isNotBlank()) {
+                        val context = LocalContext.current
+                        AudioPlayButton(
+                            vm.voice.file(f.audio),
+                            onDelete = vm::removeAudio,
+                            onShare = {
+                                val form = vm.form
+                                shareForm(context, form, vm.myPositionFor(form), vm.voice.file(form.audio))
+                            },
+                            modifier = Modifier.fillMaxHeight().padding(top = 8.dp),
+                        )
+                    }
+                }
+                if (keypad && error == CALL_ERROR) Text(CALL_ERROR, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                // With a physical keyboard a saved card takes the cursor too, so its keys work at once.
+                if (!keypad && (f.isNew || vm.hardKeyboard || vm.openedByKeys)) LaunchedEffect(Unit) { callFocus.requestFocus() }
+                // Callsigns from the log that start with what is typed: one tap instead of the rest.
+                if (f.isNew) CallSuggestions(vm) { call ->
+                    vm.setCall(call)
+                    if (keypad) activate(nextOf(KeyTarget.CALL))
+                    else if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus()
+                }
+
+                StationCard(vm)
+                DupeCard(vm)
+                HistoryCard(vm)
+            }
+            val body: @Composable ColumnScope.() -> Unit = {
+                // --- date/time ---
+                if (editTime) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Field(tr("Дата UTC"), f.date, { vm.update(f.copy(date = it)) }, Modifier.weight(1.3f), KeyboardType.Number, mono = true)
+                        Field(tr("Время UTC"), f.time, { vm.update(f.copy(time = it)) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
+                        IconButton(onClick = vm::setNow, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Refresh, tr("Текущее время")) }
+                    }
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
+                            .clickable(onClickLabel = tr("Изменить дату и время")) { editTime = true }
+                            .padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Schedule, null, Modifier.size(22.dp), tint = x.muted)
+                        Spacer(Modifier.width(10.dp))
+                        // Time first (what changes), then the date; wraps to a second line with a large system font.
+                        // "Фиксировать время сохранения": the clock runs until the contact is saved.
+                        val live = vm.timeLive
+                        val now = if (live) utc(utcNow()) else null
+                        Text(
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp)) { append(now?.let(TIME_SEC_FMT::format) ?: f.time) }
+                                withStyle(SpanStyle(fontSize = 14.sp, color = x.muted)) { append(" UTC   ") }
+                                withStyle(SpanStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp)) { append(now?.let(DATE_FMT::format) ?: f.date) }
+                                if (live) withStyle(SpanStyle(fontSize = 14.sp, color = x.muted)) { append("\n" + tr("время запишется при сохранении")) }
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = vm::setNow) { Icon(Icons.Filled.Refresh, tr("Текущее время")) }
+                        IconButton(onClick = { editTime = true }) { Icon(Icons.Filled.Edit, tr("Изменить дату и время")) }
+                    }
+                }
+
+                // Frequency first: typing it picks the band below by itself.
+                if (keypad) KeyField(
+                    tr("Частота, МГц"), f.freq, active == KeyTarget.FREQ, replace && active == KeyTarget.FREQ, false,
+                    Modifier.fillMaxWidth().bringIntoViewRequester(freqView), caret = caret,
+                ) { activate(KeyTarget.FREQ) }
+                else Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.fillMaxWidth().focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
+                RigBadge(vm)
+                CwBar(vm)
+
+                // One scrolling row each: what is switched on in the settings, plus the record's own value if that one is off.
+                // Nothing to choose from (one value on, and the record has it) — the label alone shows it.
+                val modes = MODES.filter { it in vm.enabledModes || it == f.mode } + listOfNotNull(f.mode.takeIf { it.isNotBlank() && it !in MODES })
+                val bands = BANDS.filter { it in vm.enabledBands || it == f.band } + listOfNotNull(f.band.takeIf { it.isNotBlank() && it !in BANDS })
+                Label(tr("Вид связи"), f.mode)
+                if (modes != listOf(f.mode)) ChipRow(modes, f.mode, vm::setMode)
+                Label(tr("Диапазон"), f.band)
+                if (bands != listOf(f.band)) ChipRow(bands, f.band, vm::setBand)
+
+                // Reports: the usual values one tap away, digits keyboard unless the mode reports in dB.
+                val quick = quickReports(f.mode)
+                val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
+                Row(Modifier.bringIntoViewRequester(rstView), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (keypad) KeyField(tr("RST отправлен"), f.rstSent, active == KeyTarget.RST_SENT, replace && active == KeyTarget.RST_SENT, false, Modifier.fillMaxWidth(), caret = caret) { activate(KeyTarget.RST_SENT) }
+                        else RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus).onFocusChanged { rstSentFocused = it.isFocused }, rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                        QuickValues(quick, f.rstSent) { vm.update(vm.form.copy(rstSent = it)) }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (keypad) KeyField(tr("RST принят"), f.rstRcvd, active == KeyTarget.RST_RCVD, replace && active == KeyTarget.RST_RCVD, false, Modifier.fillMaxWidth(), caret = caret) { activate(KeyTarget.RST_RCVD) }
+                        else RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
+                        QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
+                    }
+                }
+                // A contest contact: the exchanged numbers right under the reports, as in the contest card.
+                if (contest) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Field(tr("Код передан"), f.adif[ContestMode.SENT].orEmpty(), { vm.setAdif(ContestMode.SENT, it) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
+                    Field(
+                        tr("Код принят"), f.adif[ContestMode.RCVD].orEmpty(), { vm.setAdif(ContestMode.RCVD, it) },
+                        Modifier.weight(1f).focusRequester(contestRcvdFocus).onFocusChanged { contestRcvdFocused = it.isFocused },
+                        KeyboardType.Number, mono = true, last = true,
+                    )
+                }
+
+            }
+            BoxWithConstraints {
+                if (maxWidth >= 600.dp) Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { head() }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { body() }
+                } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    head()
+                    body()
+                }
             }
 
             // --- distance & map ---
@@ -649,6 +666,14 @@ private fun StationCard(vm: AppViewModel) {
     if (f.call.length < 3 && f.name.isBlank()) return
     // The only place to edit name, QTH, country and locator: tap the pencil, the card turns into fields.
     var editing by remember(f.id, f.createdAt) { mutableStateOf(false) }
+    // "QTH на карте": the callbooks gave no QTH — the town is found by name and its square picked on the map.
+    var picker by remember { mutableStateOf(false) }
+    if (picker) QthPickerDialog(
+        initial = f.qth, start = vm.settings.myPosition, search = vm::searchPlaces,
+        onPick = { name, p -> picker = false; vm.setPlace(name, p) }, onDismiss = { picker = false },
+    )
+    // The photo from QRZ.ru / QRZ.com, only while the card is open: not saved anywhere.
+    val photo = (lookup as? Lookup.Found)?.info?.takeIf { it.call.equals(f.call, ignoreCase = true) }?.photo.orEmpty()
 
     val hasInfo = f.name.isNotBlank() || f.qth.isNotBlank() || f.country.isNotBlank() || f.locator.isNotBlank()
     Column(
@@ -672,8 +697,10 @@ private fun StationCard(vm: AppViewModel) {
                     Field(tr("Страна"), f.country, { vm.update(f.copy(country = it, infoFromQrz = false)) }, Modifier.weight(1f))
                     Field(tr("QTH-локатор"), f.locator, vm::setLocator, Modifier.weight(1f), mono = true)
                 }
+                QthMapButton(MaterialTheme.colorScheme.onPrimaryContainer) { picker = true }
             }
-        } else if (hasInfo) {
+        } else if (hasInfo) Row {
+          Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (f.name.isNotBlank()) Text(f.name, fontSize = 30.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, color = ink)
             val place = listOf(f.qth, f.country).filter { it.isNotBlank() }.joinToString(", ")
             if (place.isNotBlank()) Text(place, fontSize = 24.sp, lineHeight = 30.sp, color = ink)
@@ -697,7 +724,11 @@ private fun StationCard(vm: AppViewModel) {
                     )
                 }
             }
-        }
+          }
+          if (photo.isNotBlank()) CallPhoto(photo, Modifier.padding(start = 8.dp, end = 12.dp).size(width = 96.dp, height = 120.dp))
+        } else if (photo.isNotBlank()) CallPhoto(photo, Modifier.size(width = 96.dp, height = 120.dp))
+        // No QTH from the callbooks: the town can be found on the map, its square goes into the locator.
+        if (!editing && f.qth.isBlank() && f.call.length >= 3 && lookup != Lookup.Loading && lookup != Lookup.Idle) QthMapButton(ink) { picker = true }
         when (lookup) {
             Lookup.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = ink)
@@ -748,6 +779,15 @@ private fun StationCard(vm: AppViewModel) {
             }
             else -> if (!hasInfo && !editing) Text(tr("Данные появятся здесь. Ввести вручную: ✎ справа"), fontSize = 18.sp, color = x.muted)
         }
+    }
+}
+
+/** "Указать QTH на карте": opens [QthPickerDialog]. */
+@Composable
+private fun QthMapButton(ink: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    TextButton(onClick = onClick, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
+        Icon(Icons.Filled.Place, null, tint = ink)
+        Text(tr("Указать QTH на карте"), fontSize = 17.sp, color = ink, modifier = Modifier.padding(start = 6.dp))
     }
 }
 

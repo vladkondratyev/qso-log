@@ -773,7 +773,18 @@ while (${'$'}true) {
   try {
     switch (${'$'}p[0]) {
       'poll' { [Console]::Out.WriteLine('S ' + [int]${'$'}r.Status + ' ' + ${'$'}r.Freq + ' ' + ${'$'}r.Mode + ' ' + ${'$'}r.Tx + ' ' + ${'$'}r.StatusStr) }
-      'freq' { ${'$'}r.Freq = [int]${'$'}p[1]; [Console]::Out.WriteLine('OK') }
+      'freq' {
+        # Many rig files write only FreqA/FreqB (no plain Freq): setting Freq then does nothing. Pick what the rig
+        # can write, the VFO in use first; SetSimplexMode as the last resort.
+        ${'$'}f = [int]${'$'}p[1]; ${'$'}w = [int]${'$'}r.WriteableParams; ${'$'}v = [int]${'$'}r.Vfo
+        ${'$'}onB = (${'$'}v -band 0x1600) -ne 0
+        if (${'$'}onB -and (${'$'}w -band 0x08)) { ${'$'}r.FreqB = ${'$'}f }
+        elseif (${'$'}w -band 0x04) { ${'$'}r.FreqA = ${'$'}f }
+        elseif (${'$'}w -band 0x02) { ${'$'}r.Freq = ${'$'}f }
+        elseif (${'$'}w -band 0x08) { ${'$'}r.FreqB = ${'$'}f }
+        else { ${'$'}r.SetSimplexMode(${'$'}f) }
+        [Console]::Out.WriteLine('OK')
+      }
       'mode' { ${'$'}r.Mode = [int]${'$'}p[1]; [Console]::Out.WriteLine('OK') }
       'tx' { if (${'$'}p[1] -eq '1') { ${'$'}r.Tx = 0x00400000 } else { ${'$'}r.Tx = 0x00200000 }; [Console]::Out.WriteLine('OK') }
       default { [Console]::Out.WriteLine('?') }

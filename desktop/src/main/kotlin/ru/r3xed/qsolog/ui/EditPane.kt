@@ -83,6 +83,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Map
@@ -304,7 +305,7 @@ fun EditPane(vm: AppState) {
                     colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
                 )
                 // Frequency next to the callsign: typing it picks the band below by itself.
-                Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.width(190.dp).padding(top = 8.dp).focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
+                Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.width(190.dp * LocalTextBoost.current).padding(top = 8.dp).focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
                 if (f.audio.isNotBlank()) {
                     AudioPlayButton(
                         vm.voice.file(f.audio),
@@ -347,11 +348,11 @@ fun EditPane(vm: AppState) {
             val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.width(150.dp).focusRequester(rstFocus).onFocusChanged { rstSentFocused = it.isFocused }, rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.width(150.dp * LocalTextBoost.current).focusRequester(rstFocus).onFocusChanged { rstSentFocused = it.isFocused }, rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
                     QuickValues(quick, f.rstSent, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstSent = it)) }
                 }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(150.dp).focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
+                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(150.dp * LocalTextBoost.current).focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
                     QuickValues(quick, f.rstRcvd, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstRcvd = it)) }
                 }
             }
@@ -520,6 +521,15 @@ fun EditPane(vm: AppState) {
 }
 
 /** Name, city and locator of the other station, in large type. */
+/** "Указать QTH на карте": opens [QthPickerDialog]. */
+@Composable
+private fun QthMapButton(ink: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    TextButton(onClick = onClick, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
+        Icon(Icons.Filled.Place, null, tint = ink)
+        Text(tr("Указать QTH на карте"), fontSize = 16.sp, color = ink, modifier = Modifier.padding(start = 6.dp))
+    }
+}
+
 @Composable
 private fun StationCard(vm: AppState) {
     val f = vm.form
@@ -528,6 +538,14 @@ private fun StationCard(vm: AppState) {
     if (f.call.length < 3 && f.name.isBlank()) return
     // The only place to edit name, QTH, country and locator: tap the pencil, the card turns into fields.
     var editing by remember(f.id, f.createdAt) { mutableStateOf(false) }
+    // "QTH на карте": the callbooks gave no QTH — the town is found by name and its square picked on the map.
+    var picker by remember { mutableStateOf(false) }
+    if (picker) QthPickerDialog(
+        initial = f.qth, start = vm.settings.myPosition, search = vm::searchPlaces,
+        onPick = { name, p -> picker = false; vm.setPlace(name, p) }, onDismiss = { picker = false },
+    )
+    // The photo from QRZ.ru / QRZ.com, only while the card is open: not saved anywhere.
+    val photo = (lookup as? Lookup.Found)?.info?.takeIf { it.call.equals(f.call, ignoreCase = true) }?.photo.orEmpty()
 
     val hasInfo = f.name.isNotBlank() || f.qth.isNotBlank() || f.country.isNotBlank() || f.locator.isNotBlank()
     Column(
@@ -551,8 +569,10 @@ private fun StationCard(vm: AppState) {
                     Field(tr("Страна"), f.country, { vm.update(f.copy(country = it, infoFromQrz = false)) }, Modifier.weight(1f))
                     Field(tr("QTH-локатор"), f.locator, vm::setLocator, Modifier.weight(1f), mono = true)
                 }
+                QthMapButton(MaterialTheme.colorScheme.onPrimaryContainer) { picker = true }
             }
-        } else if (hasInfo) {
+        } else if (hasInfo) Row {
+          Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (f.name.isNotBlank()) Text(f.name, fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, color = ink, modifier = Modifier.padding(end = 12.dp))
             val place = listOf(f.qth, f.country).filter { it.isNotBlank() }.joinToString(", ")
             if (place.isNotBlank()) Text(place, fontSize = 17.sp, lineHeight = 22.sp, color = ink, modifier = Modifier.padding(end = 12.dp))
@@ -564,7 +584,11 @@ private fun StationCard(vm: AppState) {
                     if (rda.isNotBlank()) Tag("RDA", rda, ink)
                 }
             }
-        }
+          }
+          if (photo.isNotBlank()) CallPhoto(photo, Modifier.padding(start = 8.dp, end = 12.dp, top = 2.dp).size(width = 96.dp, height = 120.dp))
+        } else if (photo.isNotBlank()) CallPhoto(photo, Modifier.size(width = 96.dp, height = 120.dp))
+        // No QTH from the callbooks: the town can be found on the map, its square goes into the locator.
+        if (!editing && f.qth.isBlank() && f.call.length >= 3 && lookup != Lookup.Loading && lookup != Lookup.Idle) QthMapButton(ink) { picker = true }
         when (lookup) {
             Lookup.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = ink)

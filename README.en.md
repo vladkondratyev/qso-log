@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.8.0 | [QSO-LOG-2.8.0.apk](../../releases/tag/v2.8.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.8.0 | [QSO-LOG-2.8.0-macos-arm64.dmg](../../releases/tag/desktop-v2.8.0) |
-| macOS 11 or newer, Intel | 2.8.0 | [QSO-LOG-2.8.0-macos-x64.dmg](../../releases/tag/desktop-v2.8.0) |
-| Windows 10 and 11, 64-bit | 2.8.0 | [QSO-LOG-2.8.0-windows-x64.zip](../../releases/tag/desktop-v2.8.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.8.0 | [QSO-LOG-2.8.0-linux-amd64.deb](../../releases/tag/desktop-v2.8.0) |
+| Android 8.0 or newer | 2.9.0 | [QSO-LOG-2.9.0.apk](../../releases/tag/v2.9.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.0 | [QSO-LOG-2.9.0-macos-arm64.dmg](../../releases/tag/desktop-v2.9.0) |
+| macOS 11 or newer, Intel | 2.9.0 | [QSO-LOG-2.9.0-macos-x64.dmg](../../releases/tag/desktop-v2.9.0) |
+| Windows 10 and 11, 64-bit | 2.9.0 | [QSO-LOG-2.9.0-windows-x64.zip](../../releases/tag/desktop-v2.9.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.0 | [QSO-LOG-2.9.0-linux-amd64.deb](../../releases/tag/desktop-v2.9.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -223,7 +223,8 @@ CAT settings. When a Kenwood or Yaesu stays silent, the app tries the other port
 
 **OmniRig** (since 2.7.0, Windows). If the transceiver is already set up in OmniRig, choose "OmniRig" and Rig 1 or Rig 2:
 QSO-LOG takes the frequency, mode and transmit state from OmniRig and tunes the radio through it, together with MixW,
-JTDX and other programs working through OmniRig.
+JTDX and other programs working through OmniRig. Since 2.9.0 the frequency is also set on radios whose OmniRig
+description changes only VFO A / VFO B (before, the frequency went only from the radio to the log there).
 
 <p>
 <img src="docs/screenshots/73-rig-panel.png" width="200" alt="The transceiver panel on the phone: S-meter and band scale">
@@ -523,9 +524,12 @@ Since 2.8.0. Home, portable, club — each station has its own callsign, QTH loc
 of the station in use and goes into use at once — fill in its fields below and give it a name ("Home", "Portable").
 A tap on a station in the list puts it into use; "Delete station" is at the bottom, its QSOs stay in the log.
 
-The station in use goes into every new QSO. Its callsign is under the logo; with several stations an arrow ▾ follows:
-a tap opens the list to switch and "Set up stations…". With two or more callsigns among the stations a **"Station: all"**
-chip appears under the sorting — the log with only the QSOs made under the chosen callsign, with their count.
+The station in use goes into every new QSO. Its callsign is under the logo with an arrow ▾. Since 2.9.0 a tap shows
+the settings of the station in use — QTH locator, QTH, power, radio, antenna and other fields (a tap on it opens the
+settings) — the other stations to switch to, and "Set up stations…". With two or more callsigns among the stations a
+**"Station: …"** chip appears under the sorting — the log with only the QSOs made under the chosen callsign, with their
+count. Since 2.9.0 the log follows the station: pick another one and the log shows its QSOs, after a restart too;
+"Station: all" in the chip shows every QSO again.
 
 **Locator from the location** (Android only). Under the QTH locator field is "Take the locator from the location".
 The first time Android asks for the permission. The locator comes from the phone's location at start, when the station
@@ -652,6 +656,17 @@ the callsign was not worked, the callbooks are searched as usual. The card says 
 "From callbooks" asks them: their answer replaces the log's data, and what they do not know stays from the log.
 
 <img src="docs/screenshots/89-card-from-log.png" width="200" alt="The card filled from the previous QSO">
+
+**First name only** (since 2.9.0). The switch "Record the first name only" in the same section: only the first name
+goes into the card, without the patronymic and the surname — "Ivan", not "Ivan Petrovich Demonstrov".
+
+**The station's photo** (since 2.9.0). When the station has a photo on QRZ.ru or QRZ.com, the card shows it next to the
+name while the card is open; a tap enlarges it. The photo is saved nowhere — neither in the log nor in the history.
+
+**QTH on the map** (since 2.9.0). When the callbooks gave no QTH, the "Station" card offers "Find the QTH on the map"
+(always while editing with ✎). Type the town's name — the search uses OpenStreetMap, only the typed name is sent — pick
+it in the list or click the map: the name goes into QTH and the point's 6-character locator into the card; distance and
+bearing are recalculated.
 
 ## Voice notes
 
@@ -800,7 +815,10 @@ opened twice and optionally closed with QSO-LOG; the page also opens with a long
 and from "File" → "Equipment and programs…" on the computer); **Callbooks and online logs ›** — a page with the station
 data sources and the LoTW, eQSL, Club Log and QRZ.com accounts; logbook ("Export and import…", "Select part of the log…",
 sync — its header says whether Google sync is on, delete all); interface (language: system, Russian, English — changes
-at once; theme; keep the screen on (phone); "Assign keys" — any key of an external keyboard can be replaced, added or
+at once; theme; **interface scale** since 2.9.0 — 100, 70 and 50% on the phone, 100, 85 and 70% on the computer:
+smaller buttons, fields and gaps, the text shrinks less, at 50% the phone's QSO card is laid out in two columns; keys
+⌘+ / ⌘− / ⌘0 on the Mac, Ctrl + / Ctrl − / Ctrl 0 on Windows, Linux and with a keyboard on the phone, and the "View" menu
+on the computer; keep the screen on (phone); "Assign keys" — any key of an external keyboard can be replaced, added or
 taken off). At the bottom: version, "What's new", "Report a problem" and
 "Check for updates", with "Check for a new version when the app starts" under it (on since 2.7.0): at start the app
 quietly asks GitHub and, when a new version is out, shows its new features once with an "Update" button; a closed window
@@ -843,21 +861,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.8.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.8.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.9.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.9.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.8.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.8.0), unpack the
+Download `QSO-LOG-2.9.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.8.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.8.0) and install it:
+Download `QSO-LOG-2.9.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.8.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.9.0-linux-amd64.deb
 ```
 
 ## Where the data is kept

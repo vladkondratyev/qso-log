@@ -133,9 +133,22 @@ class QrzSite(private val credentials: () -> Pair<String, String>) {
                 locator = locator?.let { it.take(4).uppercase() + it.drop(4).lowercase() }.orEmpty(),
                 lat = lat?.takeIf { lon != null }, lon = lon?.takeIf { lat != null },
                 region = region, rda = rda,
+                photo = photo(info),
             )
         }
 
         private fun text(html: String) = WebSession.text(html)
+
+        /** The photo before the data in #infoBlock: an <img> that is not a flag or an icon. */
+        internal fun photo(info: String): String {
+            val src = Regex("<img[^>]*src=\"([^\"]+)\"", RegexOption.IGNORE_CASE).findAll(info).map { it.groupValues[1] }
+                .firstOrNull { s -> !s.contains("/flags/") && !s.contains("/icons/") && Regex("\\.(jpe?g|png|gif|webp)(\\?|$)", RegexOption.IGNORE_CASE).containsMatchIn(s) }
+                ?: return ""
+            return when {
+                src.startsWith("//") -> "https:$src"
+                src.startsWith("/") -> "https://www.qrz.ru$src"
+                else -> src
+            }
+        }
     }
 }

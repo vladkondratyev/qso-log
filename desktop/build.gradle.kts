@@ -12,7 +12,7 @@ kotlin {
 // -Ptarget=windows / linux builds the jar with that system's graphics libraries (bundles for them are made on a Mac).
 val target = (findProperty("target") as String?) ?: "current"
 
-val appVersion = "2.8.0"
+val appVersion = "2.9.0"
 
 // APP_VERSION for the settings pane, the ADIF header and the HTTP User-Agent.
 val generateBuildInfo by tasks.registering {
@@ -106,7 +106,9 @@ tasks.test {
 tasks.register<JavaExec>("screenshots") {
     dependsOn("testClasses")
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("ru.r3xed.qsolog.ScreenshotsKt")
-    args(rootProject.file("docs/screenshots").absolutePath)
+    // -PshotsMain=… -PshotsOut=…: another generator (checks during development) or another folder.
+    mainClass.set(providers.gradleProperty("shotsMain").orElse("ru.r3xed.qsolog.ScreenshotsKt"))
+    args(listOf(providers.gradleProperty("shotsOut").orElse(rootProject.file("docs/screenshots").absolutePath).get()) +
+        providers.gradleProperty("shotsArgs").orElse("").get().split(' ').filter { it.isNotBlank() })
     jvmArgs("-Djava.awt.headless=true")
 }

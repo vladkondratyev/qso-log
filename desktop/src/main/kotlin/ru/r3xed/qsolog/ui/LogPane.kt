@@ -430,8 +430,8 @@ private fun groupAndSort(list: List<Qso>, by: SortBy, desc: Boolean): List<Group
 }
 
 /**
- * Under the logo: the callsign in work (with the locator when it comes from the location) and the count. With several
- * stations a tap opens the list to switch.
+ * Under the logo: the callsign in work and the count. A click shows the station's settings (locator, QTH, power,
+ * station fields) and, with several stations, the list to switch.
  */
 @Composable
 private fun StationLine(vm: AppState, color: androidx.compose.ui.graphics.Color) {
@@ -441,26 +441,35 @@ private fun StationLine(vm: AppState, color: androidx.compose.ui.graphics.Color)
     val count = if (vm.stationFilter != null && vm.query.isBlank()) tr("записей: %s из %s", vm.qsos.size, vm.total) else tr("записей: %s", vm.total)
     var open by remember { mutableStateOf(false) }
     Box {
-        Box(if (many) Modifier.clickable(onClickLabel = tr("Выбрать станцию")) { open = true } else Modifier) {
-            Text((if (who.isNotBlank()) who + (if (many) " ▾" else "") + " · " else "") + count, style = MaterialTheme.typography.bodyMedium, color = color, maxLines = 1)
+        Box(Modifier.clickable(onClickLabel = if (many) tr("Выбрать станцию") else tr("Моя станция")) { open = true }) {
+            Text((if (who.isNotBlank()) "$who ▾ · " else "") + count, style = MaterialTheme.typography.bodyMedium, color = color, maxLines = 1)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            val muted = LocalExtra.current.muted
             vm.stations.forEach { st ->
+                val active = st.id == vm.activeStationId
                 DropdownMenuItem(
                     text = {
                         Column {
                             Text(st.call.ifBlank { "—" }, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            val d = ru.r3xed.qsolog.data.MyStations.describe(st, tr("локатор по геолокации"))
-                            if (d.isNotBlank()) Text(d, fontSize = 14.sp, color = LocalExtra.current.muted)
+                            if (active) {
+                                // The station in work: all its settings, one per line.
+                                ru.r3xed.qsolog.data.MyStations.details(st, tr("по геолокации")).forEach { (k, v) ->
+                                    Text("$k: $v", fontSize = 14.sp, color = muted)
+                                }
+                            } else {
+                                val d = ru.r3xed.qsolog.data.MyStations.describe(st, tr("локатор по геолокации"))
+                                if (d.isNotBlank()) Text(d, fontSize = 14.sp, color = muted)
+                            }
                         }
                     },
-                    leadingIcon = { if (st.id == vm.activeStationId) Icon(Icons.Filled.Check, tr("В работе")) else Spacer(Modifier.size(24.dp)) },
-                    onClick = { open = false; vm.switchStation(st.id) },
+                    leadingIcon = { if (active) Icon(Icons.Filled.Check, tr("В работе")) else Spacer(Modifier.size(24.dp)) },
+                    onClick = { open = false; if (active) vm.openSettings(stations = true) else vm.switchStation(st.id) },
                 )
             }
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text(tr("Настроить станции…"), fontSize = 17.sp) },
+                text = { Text(if (many) tr("Настроить станции…") else tr("Настроить станцию…"), fontSize = 17.sp) },
                 leadingIcon = { Icon(Icons.Filled.Settings, null) },
                 onClick = { open = false; vm.openSettings(stations = true) },
             )

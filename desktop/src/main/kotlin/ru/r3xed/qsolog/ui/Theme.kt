@@ -87,16 +87,24 @@ private val AppTypography = Typography(
     labelSmall = base.labelSmall.sans().copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
 )
 
+/**
+ * How much bigger the text is than the rest at a compact "Масштаб интерфейса" (1 at 100%): fields of a fixed width
+ * that hold a label widen by it, so the label does not wrap.
+ */
+val LocalTextBoost = androidx.compose.runtime.staticCompositionLocalOf { 1f }
+
 /** How much smaller than its sizes in dp the desktop interface is drawn (1.14.0: 30% more compact). */
 const val UI_SCALE = 0.7f
 
 @Composable
-fun QsoTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun QsoTheme(dark: Boolean = isSystemInDarkTheme(), scale: ru.r3xed.qsolog.data.UiScale = ru.r3xed.qsolog.data.UiScale.S100, content: @Composable () -> Unit) {
     // The whole window drawn 30% smaller than the phone sizes the screens were made with: text, buttons and gaps alike.
+    // "Масштаб интерфейса" makes it smaller still, the text less than the rest (UiScale.text) so it stays readable.
     val d = androidx.compose.ui.platform.LocalDensity.current
     androidx.compose.runtime.CompositionLocalProvider(
         LocalExtra provides if (dark) DarkExtra else LightExtra,
-        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density * UI_SCALE, d.fontScale),
+        LocalTextBoost provides scale.text / scale.factor,
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density * UI_SCALE * scale.factor, d.fontScale * scale.text / scale.factor),
     ) {
         MaterialTheme(colorScheme = if (dark) Dark else Light, typography = AppTypography, content = content)
     }

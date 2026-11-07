@@ -268,6 +268,7 @@ class QrzComXml(private val credentials: () -> Pair<String, String>) {
                 lon = lon?.takeIf { lat != null && !(lat == 0.0 && lon == 0.0) },
                 region = c["state"].orEmpty(),
                 cqZone = zone("cqzone"), ituZone = zone("ituzone"),
+                photo = c["image"].orEmpty().takeIf { it.startsWith("http") }.orEmpty(),
             )
         }
     }
@@ -343,7 +344,10 @@ suspend fun lookupAll(books: List<Pair<SearchSource, suspend () -> QrzInfo?>>): 
         if (info == null || found?.complete == true) return@forEachIndexed
         found = found?.fillFrom(info) ?: info.copy(source = info.source.ifBlank { books[i].first.key })
     }
-    found ?: if (notFound || books.isEmpty()) null else throw problem!!
+    // The photo: from the first book that has one, even if it answered after the card was complete.
+    val photo = answers.firstNotNullOfOrNull { r -> r.getOrNull()?.photo?.ifBlank { null } }
+    found?.let { f -> if (f.photo.isBlank() && photo != null) f.copy(photo = photo) else f }
+        ?: if (notFound || books.isEmpty()) null else throw problem!!
 }
 
 /** Has what the card needs most: the QTH and where the station is. */

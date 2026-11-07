@@ -387,7 +387,7 @@ private fun fakeRigctld(): java.net.ServerSocket {
     return server
 }
 
-private fun seed(dir: File) {
+internal fun seed(dir: File) {
     val today = LocalDate.now(ZoneOffset.UTC)
     fun at(daysAgo: Long, hhmm: String) = today.minusDays(daysAgo).atTime(LocalTime.parse(hhmm)).toInstant(ZoneOffset.UTC).toEpochMilli()
     fun qso(call: String, t: Long, band: String, mode: String, freq: String, rst: Pair<String, String>, name: String, qth: String, country: String, pos: LatLon?, audio: String = "", pending: Boolean = false) =

@@ -560,6 +560,14 @@ class Settings {
     var infoFromLog: Boolean
         get() = get("info_from_log", "false") == "true"
         set(v) = put("info_from_log", v.toString())
+    /** "Только имя": the callbooks' name goes into the card without the patronymic and the surname. */
+    var nameOnly: Boolean
+        get() = get("name_only", "false") == "true"
+        set(v) = put("name_only", v.toString())
+    /** "Масштаб интерфейса" in percent: 100, 85 or 70 (UiScale.DESKTOP). */
+    var uiScale: Int
+        get() = get("ui_scale", "100").toIntOrNull() ?: 100
+        set(v) = put("ui_scale", v.toString())
 
     /** Last ЕРМАК / Cabrillo export: format name, CONTEST code, CATEGORY-OPERATOR. */
     /** ADIF export encoding: UTF-8 (most programs and sites) or Windows-1251 (LogHX, UR5EQF). */

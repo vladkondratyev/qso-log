@@ -109,6 +109,8 @@ class QrzCom(private val credentials: () -> Pair<String, String>) {
                 region = region,
                 cqZone = Regex("^\\d+").find(detail("CQ Zone"))?.value.orEmpty(),
                 ituZone = Regex("^\\d+").find(detail("ITU Zone"))?.value.orEmpty(),
+                photo = Regex("<img[^>]*src=\"([^\"]+)\"[^>]*id=\"mypic\"|<img[^>]*id=\"mypic\"[^>]*src=\"([^\"]+)\"").find(html)
+                    ?.groupValues?.drop(1)?.firstOrNull { it.isNotBlank() }?.takeIf { it.startsWith("http") }.orEmpty(),
             )
         }
     }

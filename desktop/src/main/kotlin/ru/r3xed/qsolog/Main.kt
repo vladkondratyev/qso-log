@@ -157,6 +157,12 @@ fun main() {
                 }
                 // The keys are the user's (Настройки → Дополнительные настройки → Клавиши); the defaults are those of KeyAction.
                 val mod = if (IS_MAC) e.isMetaPressed else e.isCtrlPressed
+                // ⌘+ typed with Shift, and the keypad's + and −: the menu has ⌘= and ⌘− only.
+                if (e.type == KeyEventType.KeyDown && mod && !e.isAltPressed) when {
+                    e.key == Key.Plus || e.key == Key.NumPadAdd || (e.key == Key.Equals && e.isShiftPressed) -> { state.zoomIn(); return@Window true }
+                    e.key == Key.NumPadSubtract || (e.key == Key.Minus && e.isShiftPressed) -> { state.zoomOut(); return@Window true }
+                    e.key == Key.NumPad0 -> { state.zoomReset(); return@Window true }
+                }
                 val c = if (e.type == KeyEventType.KeyDown) e.chord() else null
                 val inCard = state.pane == Pane.Edit || state.pane == Pane.Contest
                 // The menu bar has the first key of these actions as its shortcut and does them itself.
@@ -274,6 +280,16 @@ fun main() {
                         Item(tr("Выход"), onClick = { state.flushSettings(); state.stopServer(); state.closeCw(); state.stopStartApps(); exitApplication() })
                     }
                 }
+                // "Масштаб интерфейса", as in a browser: ⌘+ ⌘− ⌘0 on the Mac, Ctrl elsewhere.
+                Menu(tr("Вид")) {
+                    Item(tr("Крупнее"), enabled = state.uiScale != ru.r3xed.qsolog.data.UiScale.S100, shortcut = shortcut(Key.Equals), onClick = state::zoomIn)
+                    Item(tr("Мельче"), enabled = state.uiScale != ru.r3xed.qsolog.data.UiScale.DESKTOP.last(), shortcut = shortcut(Key.Minus), onClick = state::zoomOut)
+                    Item(tr("Обычный размер (100%)"), shortcut = shortcut(Key.Zero), onClick = state::zoomReset)
+                    Separator()
+                    ru.r3xed.qsolog.data.UiScale.DESKTOP.forEach { sc ->
+                        CheckboxItem(tr("Масштаб %s", sc.label), checked = state.uiScale == sc, onCheckedChange = { state.changeUiScale(sc) })
+                    }
+                }
             } }
             // Theme from the settings; "system" follows the OS (macOS, Windows).
             val dark = when (state.themeMode) {
@@ -281,7 +297,7 @@ fun main() {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
-            QsoTheme(dark) { key(state.language) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest, saveExport)) } }
+            QsoTheme(dark, state.uiScale) { key(state.language) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest, saveExport)) } }
         }
     }
 }
@@ -316,7 +332,7 @@ fun App(state: AppState, files: Exports) {
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
         Box(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxSize()) {
-                LogPane(state, NEW_SHORTCUT, files.exportSelected, Modifier.width(460.dp).fillMaxHeight())
+                LogPane(state, NEW_SHORTCUT, files.exportSelected, Modifier.width(460.dp * ru.r3xed.qsolog.ui.LocalTextBoost.current).fillMaxHeight())
                 VerticalDivider(color = LocalExtra.current.line)
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     when (state.pane) {

@@ -62,6 +62,30 @@ import java.io.File
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
 
+    /** The "Масштаб интерфейса" this activity was made with; another one in the settings re-creates it. */
+    private var appliedScale = ru.r3xed.qsolog.data.UiScale.S100
+
+    /**
+     * "Масштаб интерфейса": a smaller density for the whole activity — screens, dialogs, menus and the osmdroid map —
+     * with the text shrinking less than the rest (UiScale.text), as Android's own "display size" does.
+     */
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(newBase)
+        val pct = newBase.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getInt("ui_scale", 100)
+        val s = ru.r3xed.qsolog.data.UiScale.of(pct, ru.r3xed.qsolog.data.UiScale.PHONE)
+        appliedScale = s
+        if (s == ru.r3xed.qsolog.data.UiScale.S100) return
+        val c = AndroidConfig()
+        val base = newBase.resources.configuration
+        c.densityDpi = (base.densityDpi * s.factor).toInt().coerceAtLeast(120)
+        c.fontScale = base.fontScale * s.text / s.factor
+        // The screen in the new dp: dialogs and windows size themselves by these.
+        c.screenWidthDp = (base.screenWidthDp / s.factor).toInt()
+        c.screenHeightDp = (base.screenHeightDp / s.factor).toInt()
+        c.smallestScreenWidthDp = (base.smallestScreenWidthDp / s.factor).toInt()
+        applyOverrideConfiguration(c)
+    }
+
     /**
      * Keys of a physical keyboard that work on every screen, before the focused field sees them: Ctrl+N / F9 a new
      * contact, Ctrl+E the contact just logged, Ctrl+F the search, F1 / Ctrl+/ the list of keys, Ctrl+D / Ctrl+M /
@@ -88,6 +112,10 @@ class MainActivity : ComponentActivity() {
         val handled = when {
             // The card in CW with the key line on: F1–F8 send the messages, on top of the card's own keys.
             inCard && vm.cwKey(c) -> true
+            // Ctrl + / Ctrl − / Ctrl 0: "Масштаб интерфейса", as in a browser.
+            ctrl && !event.isAltPressed && event.keyCode in listOf(KeyEvent.KEYCODE_PLUS, KeyEvent.KEYCODE_EQUALS, KeyEvent.KEYCODE_NUMPAD_ADD) -> { vm.zoomIn(); true }
+            ctrl && !event.isAltPressed && event.keyCode in listOf(KeyEvent.KEYCODE_MINUS, KeyEvent.KEYCODE_NUMPAD_SUBTRACT) -> { vm.zoomOut(); true }
+            ctrl && !event.isAltPressed && !event.isShiftPressed && event.keyCode == KeyEvent.KEYCODE_0 -> { vm.zoomReset(); true }
             hit(KeyAction.NEW_QSO) -> {
                 if (!inCard) vm.addQso()
                 true
@@ -224,6 +252,8 @@ class MainActivity : ComponentActivity() {
             }
             // "Не выключать экран" in the settings: the window keeps the screen on while the app is in front.
             val view = androidx.compose.ui.platform.LocalView.current
+            // Another "Масштаб интерфейса": the activity is made anew with that density (the state lives in the view model).
+            LaunchedEffect(vm.uiScale) { if (vm.uiScale != appliedScale) recreate() }
             DisposableEffect(vm.keepScreenOn) {
                 view.keepScreenOn = vm.keepScreenOn
                 onDispose { view.keepScreenOn = false }

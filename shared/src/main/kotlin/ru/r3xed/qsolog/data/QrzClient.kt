@@ -31,8 +31,15 @@ data class QrzInfo(
     val ituZone: String = "",
     /** Which source answered: a [SearchSource.key]; set by the app's lookup chain. */
     val source: String = "",
+    /** The station's photo on the callbook (a web address), shown in the card while it is filled; never saved. */
+    val photo: String = "",
 ) {
     val fullName get() = listOf(name, surname).filter { it.isNotBlank() }.joinToString(" ")
+
+    /** "Только имя" in the settings: the first name alone, without the patronymic or the surname. */
+    val firstName get() = (name.ifBlank { fullName }).trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+
+    fun nameFor(onlyFirst: Boolean) = if (onlyFirst) firstName else fullName
     val position: LatLon?
         get() = if (lat != null && lon != null) LatLon(lat, lon) else Geo.locatorToLatLon(locator)
 }
@@ -113,12 +120,15 @@ class QrzClient(private val credentials: () -> Pair<String, String>) {
             lat = c["latitude"]?.toDoubleOrNull(),
             lon = c["longitude"]?.toDoubleOrNull(),
             rda = c["rda"]?.uppercase()?.takeIf { Regex("[A-Z]{2}-\\d{2}").matches(it) }.orEmpty(),
+            photo = r.photo,
         )
     }
 
     private class Response(
         val callsign: Map<String, String>,
         val session: Map<String, String>,
+        /** The first picture among the record's attachments (<Files>), if any. */
+        val photo: String = "",
     ) {
         val error get() = session["error"]
         val errorCode get() = session["errorcode"]?.toIntOrNull() ?: if (error != null) -1 else 0
@@ -143,7 +153,13 @@ class QrzClient(private val credentials: () -> Pair<String, String>) {
                 if (text.isNotEmpty()) target[field.tagName.lowercase()] = text
             }
         }
-        return Response(callsign, session)
+        return Response(callsign, session, photoIn(xml))
+    }
+
+    /** A picture's address in the answer's <Files> block (or anywhere in it): https://….jpg/.png/.gif. */
+    internal fun photoIn(xml: String): String {
+        val files = Regex("<files>(.*?)</files>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(xml)?.groupValues?.get(1) ?: xml
+        return Regex("https?://[^\\s<>\"']+?\\.(?:jpe?g|png|gif|webp)", RegexOption.IGNORE_CASE).find(files)?.value.orEmpty()
     }
 
     private suspend fun request(url: String, postBody: String? = null): String {

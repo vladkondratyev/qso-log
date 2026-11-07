@@ -285,6 +285,7 @@ fun SettingsScreen(
                         listOfNotNull(
                             if (vm.language == Lang.SYSTEM) I18n.current.title else vm.language.title,
                             tr("тема: %s", vm.themeMode.label.lowercase()),
+                            if (vm.uiScale != ru.r3xed.qsolog.data.UiScale.S100) tr("масштаб %s", vm.uiScale.label) else null,
                             if (vm.keepScreenOn) tr("экран не гаснет") else null,
                             tr("клавиши: %s", if (vm.keymap.isEmpty()) tr("как в программе") else tr("свои")),
                         ).joinToString(" · "),
@@ -327,6 +328,24 @@ fun SettingsScreen(
                             }
                         }
                         Note(tr("«Как в системе» переключается вместе с тёмной темой Android."))
+                        Text(tr("Масштаб интерфейса"), style = MaterialTheme.typography.titleSmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ru.r3xed.qsolog.data.UiScale.PHONE.forEach { sc ->
+                                val on = vm.uiScale == sc
+                                Box(
+                                    Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
+                                        .background(if (on) MaterialTheme.colorScheme.primary else x.field)
+                                        .selectable(selected = on, role = Role.RadioButton) { vm.changeUiScale(sc) },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        sc.label, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                                        color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                            }
+                        }
+                        Note(tr("70% и 50% — компактный вид: кнопки, поля и отступы меньше, текст уменьшается мягче, карточка связи раскладывается в две колонки. С клавиатуры: Ctrl + и Ctrl − (Ctrl 0 — 100%)."))
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                                 .toggleable(value = vm.keepScreenOn, role = Role.Switch, onValueChange = vm::changeKeepScreenOn)
@@ -435,6 +454,16 @@ fun SettingsScreen(
                             Switch(checked = vm.infoFromLog, onCheckedChange = null)
                         }
                         Note(tr("Если со станцией уже была связь, имя, QTH, страна, локатор, область и зоны берутся из последней такой связи, где они заполнены, и справочники не спрашиваются: карточка заполняется сразу, без интернета и с вашими прежними исправлениями. Позывной должен совпасть полностью: UA3DEMO и UA3DEMO/P — разные станции. Если связей с позывным не было, поиск идёт по справочникам ниже, как обычно. Свежие данные из справочников — кнопка «Из справочников» в карточке; то, чего справочники не знают, останется из журнала."))
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
+                                .toggleable(value = vm.nameOnly, role = Role.Switch, onValueChange = vm::changeNameOnly)
+                                .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(tr("Записывать только имя"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
+                            Switch(checked = vm.nameOnly, onCheckedChange = null)
+                        }
+                        Note(tr("В карточку попадает только имя корреспондента, без отчества и фамилии: «Иван», а не «Иван Петрович Демонстров»."))
                         Note(tr("Данные корреспондента ищутся по порядку: 1) XML API QRZ.ru — основной и правильный способ; 2) сайт QRZ.ru по вашим e-mail и паролю — запасной, если XML API не указан или не ответил; 3) сайт QRZ.com — если QRZ.ru не знает позывного (зарубежные станции) или не ответил; 4) HamQTH — только страна и область, если остальные ничего не дали."))
                         Section(tr("1. QRZ.ru — XML API (основной)"))
                         SettingField(tr("Логин"), s.qrzLogin, { vm.updateSettings(s.copy(qrzLogin = it.trim())) }, mono = true)

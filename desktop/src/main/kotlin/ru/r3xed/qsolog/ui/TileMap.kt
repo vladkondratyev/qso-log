@@ -189,10 +189,14 @@ fun MarkerMap(
     modifier: Modifier = Modifier,
     camera: MapCamera? = null,
     onCamera: (MapCamera) -> Unit = {},
+    /** What the view fits when it changes (instead of the path or the markers). */
+    fitTo: List<LatLon>? = null,
+    /** A click on the map itself (not on a marker), as a point. */
+    onTapMap: ((LatLon) -> Unit)? = null,
 ) {
     val density = LocalDensity.current.density
     val tile = 256f * density // tile edge in pixels; scaled so map text stays readable on HiDPI screens
-    val fitPoints = path ?: markers.map { it.pos }
+    val fitPoints = fitTo ?: path ?: markers.map { it.pos }
     var size by remember { mutableStateOf(IntSize.Zero) }
     var zoom by remember(fitPoints) { mutableStateOf(camera?.zoom ?: -1) }
     // Map centre in "world pixels" at the current zoom.
@@ -286,7 +290,7 @@ fun MarkerMap(
                 zoomBy(if (scrollAcc < 0) 1 else -1, c.position)
                 scrollAcc = 0f
             }
-        }.pointerInput(markers) {
+        }.pointerInput(markers, onTapMap) {
             // A click on a dot or its label; the topmost (last drawn) marker wins.
             detectTapGestures { tap ->
                 if (zoom < 0) return@detectTapGestures
@@ -299,7 +303,15 @@ fun MarkerMap(
                     (tap - s).getDistance() <= 12.dp.toPx() ||
                         (tap.x in (s.x - w.width / 2f - pad)..(s.x + w.width / 2f + pad) && tap.y in labelTop..(s.y - 14.dp.toPx() + pad / 2))
                 }
-                hit?.onClick?.invoke()
+                if (hit != null) hit.onClick?.invoke()
+                else onTapMap?.let { f ->
+                    val scale = tile * 2.0.pow(zoom)
+                    val ux = (cx - size.width / 2 + tap.x) / scale
+                    val uy = (cy - size.height / 2 + tap.y) / scale
+                    val lon = ((ux * 360.0 - 180.0) % 360.0 + 540.0) % 360.0 - 180.0
+                    val lat = Math.toDegrees(kotlin.math.atan(kotlin.math.sinh(Math.PI * (1 - 2 * uy))))
+                    f(LatLon(lat, lon))
+                }
             }
         }
     }

@@ -48,6 +48,8 @@ class QrzComTest {
         val i = QrzCom.parse(html, "dl0demo")!!
         assertEquals("DL0DEMO", i.call)
         assertEquals("Hans-Peter Demomann", i.fullName)
+        assertEquals("Hans-Peter", i.firstName)
+        assertEquals("https://example.org/pic.jpg", i.photo)
         assertEquals("Demostadt", i.city)
         assertEquals("", i.region)
         assertEquals("Germany", i.country)

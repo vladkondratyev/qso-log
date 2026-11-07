@@ -15,13 +15,14 @@ class WhatsNewTest {
     }
 
     @Test
-    fun clusterAndStationsOnBothGeolocationOnPhone() {
-        // 2.8.0: the DX cluster and "Мои станции" everywhere, the locator from the location only on the phone.
+    fun scaleStepsDifferAndOmniRigOnlyOnComputer() {
+        // 2.9.0: 100/85/70 on the computer, 100/70/50 on the phone; OmniRig is a Windows program.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = true).first().startsWith("DX-кластер"))
-            assertTrue(WhatsNew.items(desktop = false).any { "геолокации" in it })
-            assertTrue(WhatsNew.items(desktop = true).none { "геолокации" in it })
+            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Масштаб интерфейса"))
+            assertTrue("85" in WhatsNew.items(desktop = true).first() && "50%" in WhatsNew.items(desktop = false).first())
+            assertTrue(WhatsNew.items(desktop = true).any { "OmniRig" in it })
+            assertTrue(WhatsNew.items(desktop = false).none { "OmniRig" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

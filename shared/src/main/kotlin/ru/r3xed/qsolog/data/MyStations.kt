@@ -57,6 +57,18 @@ object MyStations {
     /** Different callsigns among the stations: two or more bring the "Станция" filter to the log. */
     fun calls(list: List<MyStation>): List<String> = list.map { it.call.trim().uppercase() }.filter { it.isNotEmpty() }.distinct()
 
+    /**
+     * What a tap on one's own callsign under the logo shows of the station in work: locator, QTH, power and the
+     * station ADIF fields (OPERATOR, MY_RIG, …), each as label to value; empty ones are left out.
+     */
+    fun details(st: MyStation, autoText: String): List<Pair<String, String>> = listOf(
+        ru.r3xed.qsolog.tr("Название") to st.title,
+        ru.r3xed.qsolog.tr("QTH-локатор") to (if (st.autoLocator) listOf(st.locator, autoText).filter { it.isNotBlank() }.joinToString(" · ") else st.locator),
+        "QTH" to st.qth,
+        ru.r3xed.qsolog.tr("Мощность") to st.power.ifBlank { "" }.let { if (it.isNotBlank() && it.all(Char::isDigit)) ru.r3xed.qsolog.tr("%s Вт", it) else it },
+    ).filter { it.second.isNotBlank() } + AdifLabels.MINE.keys.filter { !st.station[it].isNullOrBlank() }.map { ru.r3xed.qsolog.tr(AdifLabels.MINE.getValue(it)) to st.station.getValue(it) } +
+        st.station.filter { it.value.isNotBlank() && it.key !in AdifLabels.MINE }.toList().sortedBy { it.first }
+
     /** The station's line in a list: "Дом · KO85ts · Москва". */
     fun describe(st: MyStation, autoText: String): String =
         listOf(st.title, if (st.autoLocator) autoText else st.locator, st.qth).filter { it.isNotBlank() }.joinToString(" · ")
