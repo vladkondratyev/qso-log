@@ -47,6 +47,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -235,6 +237,9 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
             }
         }
 
+        // "Выезд": the activation in progress, its count and the button that ends it.
+        ActivationBanner(state)
+
         // Ctrl+F (⌘F) puts the cursor here; Enter opens a new card for the station found, Esc clears the search.
         val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
         val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -282,10 +287,14 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
             }
         }
 
-        if (state.qsos.isEmpty() && state.stationFilter != null && state.query.isBlank()) {
-            // The "Станция" filter left nothing: the chips stay, so the filter can be changed back.
+        if (state.qsos.isEmpty() && (state.stationFilter != null || state.logFilter.active) && state.query.isBlank()) {
+            // The "Станция" filter or "Фильтр" left nothing: the chips stay, so the filter can be changed back.
             SortBar(state)
-            Text(tr("Связей с позывным %s в журнале нет.", state.stationFilter.orEmpty()), style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.padding(24.dp))
+            Text(
+                if (state.logFilter.active) tr("Нет связей для фильтра: %s.", state.logFilter.describe())
+                else tr("Связей с позывным %s в журнале нет.", state.stationFilter.orEmpty()),
+                style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.padding(24.dp),
+            )
             Spacer(Modifier.weight(1f))
         } else if (state.qsos.isEmpty()) {
             Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -438,7 +447,7 @@ private fun StationLine(vm: AppState, color: androidx.compose.ui.graphics.Color)
     val s = vm.settings
     val many = vm.stations.size > 1
     val who = s.myCall
-    val count = if (vm.stationFilter != null && vm.query.isBlank()) tr("записей: %s из %s", vm.qsos.size, vm.total) else tr("записей: %s", vm.total)
+    val count = if ((vm.stationFilter != null || vm.logFilter.active) && vm.query.isBlank()) tr("записей: %s из %s", vm.qsos.size, vm.total) else tr("записей: %s", vm.total)
     var open by remember { mutableStateOf(false) }
     Box {
         Box(Modifier.clickable(onClickLabel = if (many) tr("Выбрать станцию") else tr("Моя станция")) { open = true }) {
@@ -541,8 +550,10 @@ private fun SortBar(state: AppState) {
         }
     }
     // Two or more callsigns of one's own: the second row, so the filter is never off the edge of the screen.
-    if (state.stationCalls.size > 1) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) { StationFilterChip(state) }
+    // The second row: the station (two or more callsigns of one's own) and the filter.
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (state.stationCalls.size > 1) StationFilterChip(state)
+        LogFilterChip(state)
     }
 }
 
@@ -595,6 +606,9 @@ private fun SelectionBar(state: AppState, onExport: () -> Unit) {
                 DropdownMenuItem(text = { Text("CSV", fontSize = 17.sp) }, onClick = { menu = false; state.openExport(ExportFormat.CSV, selectedOnly = true) })
                 DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; state.openExport(ExportFormat.CONTEST, selectedOnly = true) })
                 DropdownMenuItem(text = { Text("LoTW · eQSL · Club Log · QRZ.com", fontSize = 17.sp) }, onClick = { menu = false; state.openUpload(selectedOnly = true) })
+                HorizontalDivider()
+                DropdownMenuItem(text = { Text(tr("Печать QSL-наклеек"), fontSize = 17.sp) }, onClick = { menu = false; state.printQslLabels() })
+                DropdownMenuItem(text = { Text(tr("Отметить: QSL отправлены"), fontSize = 17.sp) }, onClick = { menu = false; state.markQslSent() })
             }
         }
     }
@@ -713,10 +727,11 @@ private fun RowScope.CompactRowBody(qso: Qso, state: AppState, showDate: Boolean
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(0.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, modifier = Modifier.widthIn(min = 116.dp))
+            val cols = state.compactColumns
             val meta = listOfNotNull(
-                qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null },
+                if ("freq" in cols) qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null } else qso.band.ifBlank { null },
                 qso.mode.ifBlank { null },
-                if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent}/${qso.rstRcvd}" else null,
+                if ("rst" in cols && (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank())) "${qso.rstSent}/${qso.rstRcvd}" else null,
                 if (ContestMode.isContest(qso.adif)) "№ ${qso.adif[ContestMode.SENT].orEmpty()}/${qso.adif[ContestMode.RCVD].orEmpty().ifBlank { "—" }}" else null,
             ).joinToString(" · ")
             Text(meta, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
@@ -734,10 +749,10 @@ private fun RowScope.CompactRowBody(qso: Qso, state: AppState, showDate: Boolean
                 fontFamily = Mono, fontSize = 13.sp, color = x.muted, maxLines = 1, modifier = Modifier.padding(start = 6.dp, end = 8.dp),
             )
         }
-        val who = listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ").ifBlank { qso.country }
+        val who = if ("name" !in state.compactColumns) "" else listOf(qso.name, qso.qth).filter { it.isNotBlank() }.joinToString(", ").ifBlank { qso.country }
             .ifBlank { if (qso.pendingLookup) tr("Данные QRZ.ru не получены") else "" }
-        val km = qso.distanceKm?.let { (if (qso.approxPosition) "≈ " else "") + formatKm(it) }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        val km = qso.distanceKm?.takeIf { "km" in state.compactColumns }?.let { (if (qso.approxPosition) "≈ " else "") + formatKm(it) }
+        if (who.isNotEmpty() || km != null) Row(verticalAlignment = Alignment.CenterVertically) {
             Text(who, fontSize = 13.sp, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (km != null) Text(km, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = x.muted, maxLines = 1, modifier = Modifier.padding(start = 8.dp, end = 8.dp))
         }
@@ -761,3 +776,137 @@ private fun MenuText(text: String, key: String) {
         Text("   $key", fontFamily = Mono, fontSize = 14.sp, color = LocalExtra.current.muted)
     }
 }
+
+
+/** The activation in progress ("Выезд"): its reference, how many contacts, and "Завершить" (with the ADIF export). */
+@Composable
+private fun ActivationBanner(vm: AppState) {
+    val a = vm.activation ?: return
+    var ask by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.tertiaryContainer).padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Flag, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+        Text(
+            tr("Активация %s · связей: %s", a.title, vm.activationCount), fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.weight(1f).padding(start = 8.dp),
+        )
+        TextButton(onClick = { ask = true }) { Text(tr("Завершить")) }
+    }
+    if (ask) AlertDialog(
+        onDismissRequest = { ask = false },
+        title = { Text(tr("Завершить активацию %s?", a.title)) },
+        text = { Text(tr("Связей в активации: %s. Их можно сразу выгрузить в ADIF — для POTA, WWFF, SOTA или RDA.", vm.activationCount)) },
+        confirmButton = { Button(onClick = { ask = false; vm.stopActivation(export = true) }) { Text(tr("Завершить и выгрузить ADIF")) } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { ask = false }) { Text(tr("Отмена")) }
+                TextButton(onClick = { ask = false; vm.stopActivation(export = false) }) { Text(tr("Просто завершить")) }
+            }
+        },
+    )
+}
+
+/**
+ * "Фильтр": not yet in LoTW / eQSL / Club Log / QRZ.com, the paper QSL queue, a band or a mode; and "Мои фильтры" —
+ * the search, the station and the filter saved under a name.
+ */
+@Composable
+private fun LogFilterChip(vm: AppState) {
+    val x = LocalExtra.current
+    var open by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    val f = vm.logFilter
+    val selected = f.active
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    Box {
+        Row(
+            Modifier.height(44.dp).clip(RoundedCornerShape(22.dp))
+                .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
+                .clickable(onClickLabel = tr("Фильтр журнала")) { open = true }
+                .padding(start = 14.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.FilterList, null, Modifier.size(18.dp), tint = fg)
+            Text(
+                if (selected) f.describe() else tr("Фильтр"), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg,
+                maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp),
+            )
+            Icon(Icons.Filled.ArrowDropDown, null, Modifier.size(20.dp), tint = fg)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (selected) DropdownMenuItem(text = { Text(tr("Сбросить фильтр"), fontSize = 17.sp) }, leadingIcon = { Icon(Icons.Filled.Close, null) }, onClick = { open = false; vm.changeLogFilter(ru.r3xed.qsolog.data.LogFilter()) })
+            if (vm.savedFilters.isNotEmpty()) {
+                Text(tr("Мои фильтры"), style = MaterialTheme.typography.labelMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                vm.savedFilters.forEach { sf ->
+                    DropdownMenuItem(
+                        text = { Text(sf.name, fontSize = 17.sp, fontWeight = FontWeight.Bold) },
+                        onClick = { open = false; vm.applySavedFilter(sf) },
+                        trailingIcon = { IconButton(onClick = { vm.deleteSavedFilter(sf.name) }) { Icon(Icons.Filled.Delete, tr("Удалить фильтр")) } },
+                    )
+                }
+                HorizontalDivider()
+            }
+            Text(tr("Не отправлено"), style = MaterialTheme.typography.labelMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            ru.r3xed.qsolog.data.OnlineLog.entries.forEach { log ->
+                DropdownMenuItem(
+                    text = { Text(log.title, fontSize = 17.sp, fontWeight = if (f.unsent == log) FontWeight.Bold else null) },
+                    onClick = { open = false; vm.changeLogFilter(f.copy(unsent = if (f.unsent == log) null else log)) },
+                )
+            }
+            HorizontalDivider()
+            ru.r3xed.qsolog.data.QslQueue.entries.forEach { qq ->
+                DropdownMenuItem(
+                    text = { Text(qq.title, fontSize = 17.sp, fontWeight = if (f.qsl == qq) FontWeight.Bold else null) },
+                    onClick = { open = false; vm.changeLogFilter(f.copy(qsl = if (f.qsl == qq) null else qq)) },
+                )
+            }
+            HorizontalDivider()
+            val bands = remember(vm.allQsos) { ru.r3xed.qsolog.data.BANDS.filter { b -> vm.allQsos.any { it.band.equals(b, true) } } }
+            val modes = remember(vm.allQsos) { ru.r3xed.qsolog.data.MODES.filter { m -> vm.allQsos.any { it.mode.equals(m, true) } } }
+            Text(tr("Диапазон"), style = MaterialTheme.typography.labelMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                bands.forEach { b -> FilterPill(b, f.band == b) { vm.changeLogFilter(f.copy(band = if (f.band == b) null else b)) } }
+            }
+            Text(tr("Вид связи"), style = MaterialTheme.typography.labelMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                modes.forEach { m -> FilterPill(m, f.mode == m) { vm.changeLogFilter(f.copy(mode = if (f.mode == m) null else m)) } }
+            }
+            HorizontalDivider(Modifier.padding(top = 8.dp))
+            DropdownMenuItem(
+                text = { Text(tr("Сохранить как «Мой фильтр»…"), fontSize = 17.sp) },
+                leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
+                onClick = { open = false; saving = true },
+            )
+        }
+    }
+    if (saving) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { saving = false },
+            title = { Text(tr("Сохранить фильтр")) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(tr("Сохраняются поиск, станция и фильтр: %s", listOfNotNull(vm.query.ifBlank { null }, vm.stationFilter, f.describe().ifBlank { null }).joinToString(" · ").ifBlank { tr("ничего не выбрано") }))
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(tr("Название")) }, singleLine = true)
+                }
+            },
+            confirmButton = { Button(onClick = { saving = false; vm.saveCurrentFilter(name) }, enabled = name.isNotBlank()) { Text(tr("Сохранить")) } },
+            dismissButton = { TextButton(onClick = { saving = false }) { Text(tr("Отмена")) } },
+        )
+    }
+}
+
+@Composable
+private fun FilterPill(text: String, on: Boolean, onClick: () -> Unit) {
+    val x = LocalExtra.current
+    Text(
+        text, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+        color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(if (on) MaterialTheme.colorScheme.primary else x.field)
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+

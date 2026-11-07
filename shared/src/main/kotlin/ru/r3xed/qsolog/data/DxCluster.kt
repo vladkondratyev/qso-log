@@ -19,7 +19,7 @@ data class DxSpot(val khz: Double, val call: String, val spotter: String, val co
 }
 
 /** How a spot stands against the log, the most interesting first. */
-enum class DxMark { NEW_COUNTRY, NEW_BAND, NEW_MODE, WORKED, NONE }
+enum class DxMark { NEW_COUNTRY, NEW_REGION, NEW_BAND, NEW_MODE, WORKED, NONE }
 
 /** The DX cluster settings: the same keys (dxc_*) on the phone and the computer. */
 data class DxClusterConfig(
@@ -173,9 +173,12 @@ class DxLogIndex(qsos: List<Qso>) {
     private val entityBand = HashSet<String>()
     private val entityGroup = HashSet<String>()
     private val callBand = HashSet<String>()
+    /** Regions of Russia worked (by the callsign's letter after the digit): a spot from another one is "новая область". */
+    private val regions = HashSet<String>()
 
     init {
         for (q in qsos) {
+            RussianRegions.of(q.call)?.let { regions += it.rda }
             val e = Cty.lookup(q.call)?.entity?.name
             val band = q.band.lowercase()
             callBand += q.call.uppercase() + "|" + band
@@ -193,6 +196,7 @@ class DxLogIndex(qsos: List<Qso>) {
         val e = Cty.lookup(s.call)?.entity?.name ?: return DxMark.NONE
         return when {
             e !in entities -> DxMark.NEW_COUNTRY
+            RussianRegions.of(s.call)?.rda?.let { it !in regions } == true -> DxMark.NEW_REGION
             "$e|$band" !in entityBand -> DxMark.NEW_BAND
             e + "|" + DxCluster.group(s.mode) !in entityGroup -> DxMark.NEW_MODE
             else -> DxMark.NONE

@@ -124,7 +124,9 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SettingsScreen(
     vm: AppViewModel,
@@ -148,6 +150,9 @@ fun SettingsScreen(
             }
             Text(settingsTitle(vm.settingsPage), style = MaterialTheme.typography.headlineSmall)
         }
+        // "Поиск по настройкам": a word finds the block, a tap opens its page and unfolds it.
+        if (vm.settingsPage == SettingsPage.MAIN) SettingsSearch(vm)
+        androidx.compose.runtime.CompositionLocalProvider(LocalSettingsFocus provides vm.settingsFocus) {
         Column(
             Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -188,6 +193,10 @@ fun SettingsScreen(
                         }
                         Note(tr("Эти значения попадают в каждую новую связь и хранятся в ней. Если позже их поменять, старые записи не изменятся."))
                         if (many) StationDelete(vm.activeStation) { vm.deleteStation(vm.activeStationId) }
+                    }
+
+                    SettingsBlock(tr("Выезд и активация"), vm.activation?.let { tr("идёт: %s · связей: %s", it.title, vm.activationCount) } ?: tr("нет")) {
+                        ActivationSettings(vm)
                     }
 
                     SettingsBlock(
@@ -232,8 +241,8 @@ fun SettingsScreen(
                         Note(tr("Если у записи диапазон или вид, который здесь выключен, кнопка для него в её карточке всё равно видна."))
                     }
 
-                    PageRow(tr("Оборудование и программы"), hardwareSummary(vm), Icons.Filled.Router) { vm.settingsPage = SettingsPage.HARDWARE }
-                    PageRow(tr("Справочники и онлайн-журналы"), sourcesSummary(vm), Icons.Filled.TravelExplore) { vm.settingsPage = SettingsPage.SOURCES }
+                    PageRow(tr("Оборудование и программы"), hardwareSummary(vm), Icons.Filled.Router, alert = catAlert(vm)) { vm.settingsPage = SettingsPage.HARDWARE }
+                    PageRow(tr("Справочники и онлайн-журналы"), sourcesSummary(vm), Icons.Filled.TravelExplore, alert = sourcesAlert(vm)) { vm.settingsPage = SettingsPage.SOURCES }
 
                     SettingsBlock(
                         tr("Журнал связей"),
@@ -245,6 +254,7 @@ fun SettingsScreen(
                         Note(tr("ADIF, CSV, ЕРМАК / Cabrillo и онлайн-журналы — в окне «Экспорт и импорт» (оно же в меню ⋮ журнала). «Выбрать часть журнала» отмечает записи за период, на нужных диапазонах и видах; потом нажмите «Экспорт» над журналом."))
 
                         SheetSyncSettings(vm)
+                        BackupSettings(vm)
 
                         var confirmDeleteAll by remember { mutableStateOf(false) }
                         Button(
@@ -393,6 +403,7 @@ fun SettingsScreen(
                         tr("CAT — трансивер"),
                         if (!vm.catConfig.enabled) tr("выключено") + " · " + Rigs.title(vm.catConfig.model)
                         else vm.catStatus.let { st -> (st as? CatStatus.Connected)?.state?.takeIf { !st.silent }?.let { Rigs.title(vm.catConfig.model) + " · " + it.short() } ?: st.describe() },
+                        alert = catAlert(vm),
                     ) {
                         CatSettings(vm)
                     }
@@ -442,6 +453,7 @@ fun SettingsScreen(
                             "HamQTH: " + if (vm.hamqthEnabled) tr("вкл") else tr("выкл"),
                         ).joinToString(" · ", prefix = if (vm.infoFromLog) tr("сначала журнал") + " · " else ""),
                         open = s.qrzLogin.isBlank() && s.qrzSiteEmail.isBlank() && s.qrzComLogin.isBlank(),
+                        alert = sourcesAlert(vm),
                     ) {
                         // Before every callbook: a station worked before is taken from the log, offline and with past corrections.
                         Row(
@@ -602,13 +614,14 @@ fun SettingsScreen(
 
                     SettingsBlock(tr("DX-кластер"), dxSummary(vm.dxConfig, s.myCall), open = vm.settingsReturn == ru.r3xed.qsolog.Screen.DxCluster) {
                         DxClusterSettings(vm.dxConfig, s.myCall, vm::changeDxConfig)
+                        DxAlertSettings(vm)
                     }
 
                     SettingsBlock(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com"), onlineSummary(vm.online, s.myCall, lotwReady = true)) {
                         val pickP12 = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::importLotwP12) }
                         OnlineSettings(
                             vm.online, vm::changeOnline, computer = false,
-                            lotwCert = vm.lotwCert?.let(ru.r3xed.qsolog.data.Lotw::describe),
+                            lotwCerts = vm.lotwCerts.map { it.callsign to ru.r3xed.qsolog.data.Lotw.describe(it) },
                             onPickP12 = { pickP12.launch(arrayOf("application/x-pkcs12", "application/octet-stream", "*/*")) },
                             onForgetP12 = vm::forgetLotwCert,
                         )
@@ -616,6 +629,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(24.dp))
                 }
             }
+        }
         }
     }
 }
@@ -762,7 +776,7 @@ private fun sourcesSummary(vm: AppViewModel): String {
 
 /** A row that opens a settings page: icon, title, what is set there, arrow. */
 @Composable
-internal fun PageRow(title: String, summary: String, icon: ImageVector, onClick: () -> Unit) {
+internal fun PageRow(title: String, summary: String, icon: ImageVector, alert: Boolean = false, onClick: () -> Unit) {
     val x = LocalExtra.current
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(16.dp))
@@ -774,20 +788,43 @@ internal fun PageRow(title: String, summary: String, icon: ImageVector, onClick:
         Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                if (alert) AlertDot()
+            }
             Text(summary, style = MaterialTheme.typography.bodyMedium, color = x.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
     }
 }
 
-/** A collapsible settings block: title, one-line summary of what is set, chevron. */
+/** The settings block "Поиск по настройкам" picked: it unfolds and scrolls into view. */
+internal val LocalSettingsFocus = androidx.compose.runtime.compositionLocalOf<String?> { null }
+
+/** "Требует внимания": a red dot after a block's title (a login refused, the radio not answering). */
 @Composable
-internal fun SettingsBlock(title: String, summary: String, open: Boolean = false, content: @Composable () -> Unit) {
+internal fun AlertDot() {
+    Box(Modifier.padding(start = 8.dp).size(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(MaterialTheme.colorScheme.error))
+}
+
+/** A collapsible settings block: title, one-line summary of what is set, chevron. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+internal fun SettingsBlock(title: String, summary: String, open: Boolean = false, alert: Boolean = false, content: @Composable () -> Unit) {
     val x = LocalExtra.current
     var expanded by rememberSaveable(title) { mutableStateOf(open) }
+    // "Поиск по настройкам" chose this block: it unfolds and comes into view.
+    val focus = LocalSettingsFocus.current
+    val seen = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    LaunchedEffect(focus) {
+        if (focus != null && (focus == title || tr(focus) == title)) {
+            expanded = true
+            kotlinx.coroutines.delay(150)
+            seen.bringIntoView()
+        }
+    }
     Column(
-        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(16.dp))
+        Modifier.fillMaxWidth().padding(top = 8.dp).then(Modifier.bringIntoViewRequester(seen)).clip(RoundedCornerShape(16.dp))
             .border(1.dp, x.line, RoundedCornerShape(16.dp)),
     ) {
         Row(
@@ -797,7 +834,10 @@ internal fun SettingsBlock(title: String, summary: String, open: Boolean = false
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, style = MaterialTheme.typography.titleMedium)
+                    if (alert) AlertDot()
+                }
                 Text(summary, style = MaterialTheme.typography.bodyMedium, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)

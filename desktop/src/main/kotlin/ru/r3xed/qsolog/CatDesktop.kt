@@ -83,7 +83,7 @@ object CatDesktop {
         val name = c.device.ifBlank { ports().firstOrNull()?.key }
             ?: throw IOException(tr("COM-порт не найден. Подключите трансивер кабелем USB или интерфейсом CAT/CI-V и нажмите «Обновить список»."))
         val p = SerialPort.getCommPort(name)
-        p.setComPortParameters(baud, 8, if (c.protocol == CatProtocol.YAESU_OLD) SerialPort.TWO_STOP_BITS else SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY)
+        p.setComPortParameters(baud, 8, if (c.protocol == CatProtocol.YAESU_OLD || c.protocol == CatProtocol.YAESU_LEGACY) SerialPort.TWO_STOP_BITS else SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY)
         p.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED)
         p.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 0, 0)
         if (!p.openPort()) throw IOException(tr("Не удалось открыть порт %s: он занят другой программой или нет доступа", name))

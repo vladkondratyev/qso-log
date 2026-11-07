@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.9.0 | [QSO-LOG-2.9.0.apk](../../releases/tag/v2.9.0) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.0 | [QSO-LOG-2.9.0-macos-arm64.dmg](../../releases/tag/desktop-v2.9.0) |
-| macOS 11 or newer, Intel | 2.9.0 | [QSO-LOG-2.9.0-macos-x64.dmg](../../releases/tag/desktop-v2.9.0) |
-| Windows 10 and 11, 64-bit | 2.9.0 | [QSO-LOG-2.9.0-windows-x64.zip](../../releases/tag/desktop-v2.9.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.0 | [QSO-LOG-2.9.0-linux-amd64.deb](../../releases/tag/desktop-v2.9.0) |
+| Android 8.0 or newer | 2.9.1 | [QSO-LOG-2.9.1.apk](../../releases/tag/v2.9.1) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.1 | [QSO-LOG-2.9.1-macos-arm64.dmg](../../releases/tag/desktop-v2.9.1) |
+| macOS 11 or newer, Intel | 2.9.1 | [QSO-LOG-2.9.1-macos-x64.dmg](../../releases/tag/desktop-v2.9.1) |
+| Windows 10 and 11, 64-bit | 2.9.1 | [QSO-LOG-2.9.1-windows-x64.zip](../../releases/tag/desktop-v2.9.1) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.1 | [QSO-LOG-2.9.1-linux-amd64.deb](../../releases/tag/desktop-v2.9.1) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -178,6 +178,7 @@ the transceiver answers right now.
 | Kenwood TS-590, TS-890, TS-990, TS-480, TS-2000; Elecraft K3, K4, KX2, KX3; FlexRadio (SmartSDR CAT) | Kenwood |
 | Yaesu FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450 | Yaesu, new CAT |
 | Yaesu FT-817, FT-818, FT-857, FT-897 | Yaesu, old 5-byte CAT |
+| Yaesu FT-840, FT-890, FT-900, FT-990 (since 2.9.1, 4800 baud, not tried on a radio) | Yaesu FT-840 / 890 / 900 / 990 (old CAT) |
 | any transceiver Hamlib knows | rigctld over the network (also wfview, SDR++, flrig) |
 | any transceiver connected to DXLab Commander (Windows) | Commander directives over the network, port 52002 |
 | networked ICOM: IC-705, IC-7610, IC-7760, IC-9700, IC-905 and others | Icom network (as RS-BA1 and wfview), UDP 50001 |
@@ -341,6 +342,11 @@ The same settings are in "Callbooks and online logs" → "DX cluster".
 <img src="docs/screenshots/86-dx-settings.png" width="200" alt="Cluster settings">
 <img src="docs/screenshots/desktop-34-dx-cluster.png" width="440" alt="DX cluster on the computer">
 </p>
+
+**Notifications** (since 2.9.1, the cluster's gear → "Spot notifications"): callsigns on the watch list (`3Y0J VP8*`),
+a new country, a new region of Russia, a new band for a country. The spot list also marks "new region". The phone can
+keep the cluster in the background; on the computer the system shows the notification. **The QSO map** shows spots
+(at the country's centre) and the **grey line**, the night side of the Earth now.
 
 ## Contest mode
 
@@ -560,7 +566,27 @@ A microphone icon means the QSO has a voice note.
 - Select several QSOs with a long press (on the computer also Ctrl-click or ⌘-click) and export them with "Export".
   The filter button next to it selects the QSOs of a period, bands and modes (since 2.5.0).
 - A QSO is deleted only from its card. The app asks first, and after deleting you can still tap "Undo".
-- The ⋮ button in the top right opens the menu: settings, dashboard, QSO map, search history, reference.
+- The ⋮ button in the top right opens the menu: awards, search history, export and import, reference, settings.
+- **The bottom bar on the phone** (since 2.9.1): Log · Cluster · Map · Statistics. On the computer — the File · Edit ·
+  View · Radio · Tools · Help menus, **⌘K / Ctrl+K** to find any command by name, and a **status bar** at the bottom:
+  radio, cluster, activation, conditions, today's QSOs, callsign.
+- **Filter** (since 2.9.1), the chip next to "Station": QSOs not yet sent to LoTW, eQSL, Club Log or QRZ.com; the paper
+  QSL queue (to send, received); band and mode. "Save as My filter" keeps the search, station and filter by name.
+- **QSL labels** (since 2.9.1): pick QSOs → Export → "Print QSL labels" (A4, 3 × 8 labels of 70 × 37 mm) and "Mark: QSL
+  sent". The phone prints through Android's print service, the computer opens the page in the browser.
+
+## Portable and activation
+
+Since 2.9.1. Settings → "Portable and activation": the program (POTA, WWFF, SOTA, IOTA, RDA or your own), the
+reference and "Start activation". Every new QSO gets MY_SIG, MY_SIG_INFO and its program's field (MY_POTA_REF,
+MY_WWFF_REF, MY_SOTA_REF, MY_IOTA, MY_CNTY). The log shows "Activation POTA RU-0001 · QSOs: 12" with "Finish", which can
+pick the activation's QSOs and open the ADIF export.
+
+## Awards
+
+Since 2.9.1: Statistics → Awards. DXCC, WAZ, WAS, regions of Russia and RDA — worked and confirmed (paper QSL, LoTW or
+eQSL), by band, and what is missing; counted from the log, offline. The dashboard shows the band **conditions** (SFI,
+sunspots, A and K from hamqsl.com, hourly).
 
 ## Dashboard
 
@@ -805,6 +831,8 @@ understood), and assignment: press "Assign" and then the key, so an adapter send
 
 ## Settings
 
+Since 2.9.1 a **search field** on top finds a settings block ("scale", "lotw", "omnirig") and unfolds it; a block that needs attention (a refused login, a silent radio) has a red dot. Several **LoTW certificates** can be loaded, one per callsign.
+
 Since 2.5.0 the settings are two levels deep; each block header says briefly what is chosen. The main page: My station;
 QSO entry (time, keyboard and its hold time); Contests (CONTEST MODE, what is sent, locator exchange); bands and modes
 shown in the card; **Equipment and programs ›** — a page with CAT, digital modes, CW and "Start together with QSO-LOG"
@@ -813,7 +841,7 @@ comes back in front — or stay in front, with "Come back to QSO-LOG at once" of
 pop-up windows while running in the background" for QSO-LOG, and since 2.6.0 the page says so and opens that screen; on the computer, any programs with their arguments, such as JTDX, WSJT-X or Hamlib rigctld, not
 opened twice and optionally closed with QSO-LOG; the page also opens with a long press on the TRX badge on the phone,
 and from "File" → "Equipment and programs…" on the computer); **Callbooks and online logs ›** — a page with the station
-data sources and the LoTW, eQSL, Club Log and QRZ.com accounts; logbook ("Export and import…", "Select part of the log…",
+data sources and the LoTW, eQSL, Club Log and QRZ.com accounts; logbook (**automatic backup** since 2.9.1 — the whole log as ADIF daily or weekly, the last 10 copies kept; "Export and import…", "Select part of the log…",
 sync — its header says whether Google sync is on, delete all); interface (language: system, Russian, English — changes
 at once; theme; **interface scale** since 2.9.0 — 100, 70 and 50% on the phone, 100, 85 and 70% on the computer:
 smaller buttons, fields and gaps, the text shrinks less, at 50% the phone's QSO card is laid out in two columns; keys
@@ -861,21 +889,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.9.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.9.0), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.9.1-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.9.1), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.9.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.0), unpack the
+Download `QSO-LOG-2.9.1-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.1), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.9.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.0) and install it:
+Download `QSO-LOG-2.9.1-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.1) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.9.0-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.9.1-linux-amd64.deb
 ```
 
 ## Where the data is kept

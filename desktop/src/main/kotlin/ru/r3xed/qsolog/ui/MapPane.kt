@@ -16,6 +16,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,8 +44,17 @@ fun MapPane(vm: AppState) {
     val withoutPosition = remember(all) { all.filter { it.lat == null || it.lon == null }.map { it.call }.distinct().size }
     val myPos = vm.settings.myPosition
     val myCall = vm.settings.myCall
-    val markers = remember(stations, myPos, myCall) {
+    // Layers: DX cluster spots (at the country's centre) and the grey line, redrawn every minute.
+    val spots = if (vm.mapSpots) vm.dxSpots else emptyList()
+    var now by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    androidx.compose.runtime.LaunchedEffect(vm.mapGreyLine) { while (vm.mapGreyLine) { kotlinx.coroutines.delay(60_000); now = System.currentTimeMillis() } }
+    val shade = if (vm.mapGreyLine) androidx.compose.runtime.remember(now) { ru.r3xed.qsolog.data.Sun.night(now) } else null
+    val markers = remember(stations, myPos, myCall, spots) {
         buildList {
+            spots.distinctBy { it.call }.forEach { s ->
+                val e = ru.r3xed.qsolog.data.Cty.lookup(s.call)?.entity ?: return@forEach
+                add(MapMarker(LatLon(e.lat, e.lon), s.call + " " + (s.band ?: ""), SpotColor, onClick = vm::openDxCluster))
+            }
             stations.forEach { (q, count) ->
                 val label = if (count > 1) "${q.call} ×$count" else q.call
                 add(MapMarker(LatLon(q.lat!!, q.lon!!), label, StationColor, onClick = { vm.edit(q, from = Pane.Map) }))
@@ -58,16 +69,19 @@ fun MapPane(vm: AppState) {
             IconButton(onClick = { vm.pane = Pane.Empty }, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Назад (Esc)"), Modifier.size(30.dp))
             }
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(tr("Карта QSO"), style = MaterialTheme.typography.headlineSmall)
                 Text(
                     tr("позывных на карте: %s", stations.size) + if (withoutPosition > 0) tr(" · без координат: %s", withoutPosition) else "",
                     style = MaterialTheme.typography.bodyMedium, color = x.muted,
                 )
             }
+            androidx.compose.material3.FilterChip(selected = vm.mapSpots, onClick = { vm.changeMapSpots(!vm.mapSpots) }, label = { Text(tr("Споты кластера") + if (vm.mapSpots) " · ${vm.dxSpots.size}" else "") })
+            androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
+            androidx.compose.material3.FilterChip(selected = vm.mapGreyLine, onClick = { vm.changeMapGreyLine(!vm.mapGreyLine) }, label = { Text(tr("Серая зона")) }, modifier = Modifier.padding(end = 12.dp))
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (stations.isEmpty()) {
+            if (stations.isEmpty() && spots.isEmpty()) {
                 Text(
                     tr("В логе пока нет связей с известным QTH. Точки появятся, когда QRZ.ru вернёт координаты абонента или вы впишете его локатор."),
                     style = MaterialTheme.typography.bodyLarge, color = x.muted,
@@ -78,8 +92,12 @@ fun MapPane(vm: AppState) {
                     markers, path = null, interactive = true, filledLabels = true, fitHint = tr("Показать все станции"),
                     modifier = Modifier.fillMaxSize(),
                     camera = vm.mapCamera, onCamera = { vm.mapCamera = it },
+                    shade = shade,
                 )
             }
         }
     }
 }
+
+/** DX cluster spots on the map: the amber of the "new" marks. */
+private val SpotColor = androidx.compose.ui.graphics.Color(0xFFB07000)

@@ -83,7 +83,7 @@ class CatAndroid(private val context: Context) {
     }
 
     private fun openUsb(c: CatConfig, baud: Int): CatLink {
-        val (p, key) = openUsbPort(c.device, baud, twoStops = c.protocol == CatProtocol.YAESU_OLD, rts = c.rtsOn)
+        val (p, key) = openUsbPort(c.device, baud, twoStops = c.protocol == CatProtocol.YAESU_OLD || c.protocol == CatProtocol.YAESU_LEGACY, rts = c.rtsOn)
         catUsb = key to p
         return object : CatLink {
             override fun write(b: ByteArray) = p.write(b, 1000)

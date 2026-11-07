@@ -435,6 +435,34 @@ class CatTest {
         assertEquals(listOf(115200, 57600, 38400, 19200, 9600), tried.take(5))
     }
 
+    /** FT-890 / FT-990: the Status Update block of the current VFO, set frequency (BCD, lowest first), mode and PTT. */
+    @Test
+    fun yaesuLegacyStatusAndCommands() {
+        val block = ByteArray(19).also {
+            // 14.195.00 MHz = 1 419 500 tens of hertz = 0x15A8EC, USB.
+            it[1] = 0x15; it[2] = 0xA8.toByte(); it[3] = 0xEC.toByte(); it[7] = 1
+        }
+        val radio = FakeRadio({ b -> b.toList().chunked(5).map { it.toByteArray() } }) { c -> if (c[4] == 0x10.toByte()) block else null }
+        val d = YaesuLegacyDriver("FT-890", 19)
+        val s = d.poll(CatIo(radio), RigState())
+        assertTrue(d.answered)
+        assertEquals(14_195_000, s.freqHz)
+        assertEquals("USB", s.radioMode)
+        d.setFreq(CatIo(radio), 7_012_340)
+        assertEquals(listOf(0x34, 0x12, 0x70, 0x00, 0x0A), radio.heard.last().map { it.toInt() and 0xFF })
+        d.setMode(CatIo(radio), RadioMode.CW)
+        assertEquals(listOf(0, 0, 0, 2, 0x0C), radio.heard.last().map { it.toInt() and 0xFF })
+        d.setPtt(CatIo(radio), true)
+        assertEquals(listOf(0, 0, 0, 1, 0x0F), radio.heard.last().map { it.toInt() and 0xFF })
+        // FT-990: a 32-byte block, the same places.
+        val big = ByteArray(32).also { it[1] = 0x0A; it[2] = 0xAE.toByte(); it[3] = 0x60; it[7] = 2 }
+        val r990 = FakeRadio({ b -> listOf(b) }) { big }
+        val s990 = YaesuLegacyDriver("FT-990", 32).poll(CatIo(r990), RigState())
+        assertEquals(7_000_000, s990.freqHz)
+        assertEquals("CW", s990.radioMode)
+        assertEquals(CatProtocol.YAESU_LEGACY, Rigs.byName("FT-990").protocol)
+    }
+
     @Test
     fun omniRigLines() {
         val radio = FakeRadio(::text) { c ->

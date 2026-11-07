@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package ru.r3xed.qsolog
 
 import ru.r3xed.qsolog.keys.Chord
@@ -26,6 +28,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -225,8 +232,15 @@ class MainActivity : ComponentActivity() {
         })
     }
 
+    /** A DX cluster notification opens the cluster's list. */
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        if (intent.getStringExtra("open") == "dx") vm.openDxCluster()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null && intent?.getStringExtra("open") == "dx") vm.openDxCluster()
         // Once per run of the app: not after a turn of the screen or a return from another app.
         if (savedInstanceState == null && !vm.startAppsDone) {
             vm.startAppsDone = true
@@ -314,37 +328,45 @@ class MainActivity : ComponentActivity() {
                 key(vm.language) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
                     Box(Modifier.fillMaxSize()) {
-                        when (vm.screen) {
-                            Screen.Log -> LogScreen(
-                                vm,
-                                hasMicPermission = {
-                                    ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                                },
-                                requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
-                            )
-                            Screen.Map -> MapScreen(vm)
-                            Screen.Welcome -> WelcomeScreen(vm)
-                            Screen.Reference -> ReferenceScreen(onClose = vm::closeReference, myPosition = vm.settings.myPosition)
-                            // A fresh card (also "＋ Следующая") starts with fresh fields, focus and scroll.
-                            Screen.Edit -> key(vm.editSession) { EditScreen(
-                                vm,
-                                hasMicPermission = {
-                                    ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                                },
-                                requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
-                            ) }
-                            Screen.Contest -> key(vm.editSession) { ContestScreen(vm) }
-                            Screen.Dashboard -> DashboardScreen(vm)
-                            Screen.History -> HistoryScreen(vm)
-                            Screen.Contests -> ContestsScreen(vm)
-                            Screen.DxCluster -> ru.r3xed.qsolog.ui.DxClusterScreen(vm)
-                            Screen.Settings -> SettingsScreen(
-                                vm,
-                                onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
-                                onImportAdif = { importAdif.launch(arrayOf("*/*")) },
-                                onImportContest = { importContest.launch(arrayOf("*/*")) },
-                                onLaunchApps = ::launchStartApps,
-                            )
+                        // Журнал · Кластер · Карта · Статистика: the bottom bar on these four screens (hidden with the keyboard).
+                        val tabs = vm.screen in ru.r3xed.qsolog.ui.BOTTOM_TABS && !androidx.compose.foundation.layout.WindowInsets.isImeVisible
+                        Column(Modifier.fillMaxSize()) {
+                            Box(Modifier.weight(1f).fillMaxWidth().then(if (tabs) Modifier.consumeWindowInsets(androidx.compose.foundation.layout.WindowInsets.Companion.navigationBars) else Modifier)) {
+                                    when (vm.screen) {
+                                        Screen.Log -> LogScreen(
+                                            vm,
+                                            hasMicPermission = {
+                                                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                                            },
+                                            requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
+                                        )
+                                        Screen.Map -> MapScreen(vm)
+                                        Screen.Welcome -> WelcomeScreen(vm)
+                                        Screen.Reference -> ReferenceScreen(onClose = vm::closeReference, myPosition = vm.settings.myPosition)
+                                        // A fresh card (also "＋ Следующая") starts with fresh fields, focus and scroll.
+                                        Screen.Edit -> key(vm.editSession) { EditScreen(
+                                            vm,
+                                            hasMicPermission = {
+                                                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                                            },
+                                            requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
+                                        ) }
+                                        Screen.Contest -> key(vm.editSession) { ContestScreen(vm) }
+                                        Screen.Dashboard -> DashboardScreen(vm)
+                                        Screen.History -> HistoryScreen(vm)
+                                        Screen.Contests -> ContestsScreen(vm)
+                                        Screen.DxCluster -> ru.r3xed.qsolog.ui.DxClusterScreen(vm)
+                                        Screen.Awards -> ru.r3xed.qsolog.ui.AwardsScreen(vm)
+                                        Screen.Settings -> SettingsScreen(
+                                            vm,
+                                            onImportCsv = { import.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
+                                            onImportAdif = { importAdif.launch(arrayOf("*/*")) },
+                                            onImportContest = { importContest.launch(arrayOf("*/*")) },
+                                            onLaunchApps = ::launchStartApps,
+                                        )
+                                    }
+                            }
+                            if (tabs) ru.r3xed.qsolog.ui.BottomTabs(vm)
                         }
                         if (vm.showKeys) HardwareKeysDialog(cwMessages = vm.cwConfig.messages.takeIf { vm.cwConfig.enabled }, onClose = { vm.showKeys = false })
                         if (vm.showRigPanel) ru.r3xed.qsolog.ui.RigPanel(vm)
@@ -422,7 +444,7 @@ class MainActivity : ComponentActivity() {
                         if (vm.screen == Screen.Contest) SnackbarHost(snackbar, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 4.dp))
                         else SnackbarHost(
                             snackbar,
-                            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = if (vm.screen == Screen.Edit) 80.dp else 16.dp),
+                            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = if (vm.screen == Screen.Edit || vm.screen in ru.r3xed.qsolog.ui.BOTTOM_TABS) 80.dp else 16.dp),
                         )
                     }
                 }

@@ -63,7 +63,7 @@ class CatSession(
 
     /** The speeds to try, the set one first; one speed (no trying) when the radio's speed cannot be guessed so. */
     private val bauds: List<Int> =
-        if (openAt != null && config.protocol in setOf(CatProtocol.KENWOOD, CatProtocol.YAESU, CatProtocol.YAESU_OLD))
+        if (openAt != null && config.protocol in setOf(CatProtocol.KENWOOD, CatProtocol.YAESU, CatProtocol.YAESU_OLD, CatProtocol.YAESU_LEGACY))
             listOf(config.baud) + (Rigs.BAUDS.reversed() - config.baud)
         else listOf(config.baud)
 

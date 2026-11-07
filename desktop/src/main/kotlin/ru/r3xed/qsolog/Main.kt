@@ -158,6 +158,7 @@ fun main() {
                 // The keys are the user's (Настройки → Дополнительные настройки → Клавиши); the defaults are those of KeyAction.
                 val mod = if (IS_MAC) e.isMetaPressed else e.isCtrlPressed
                 // ⌘+ typed with Shift, and the keypad's + and −: the menu has ⌘= and ⌘− only.
+                if (e.type == KeyEventType.KeyDown && mod && !e.isAltPressed && e.key == Key.K && !IS_MAC) { state.showPalette = !state.showPalette; return@Window true }
                 if (e.type == KeyEventType.KeyDown && mod && !e.isAltPressed) when {
                     e.key == Key.Plus || e.key == Key.NumPadAdd || (e.key == Key.Equals && e.isShiftPressed) -> { state.zoomIn(); return@Window true }
                     e.key == Key.NumPadSubtract || (e.key == Key.Minus && e.isShiftPressed) -> { state.zoomOut(); return@Window true }
@@ -244,6 +245,7 @@ fun main() {
             }
             // Texts are read through tr() while composing: a new language rebuilds the menu and the window.
             key(state.language) { MenuBar {
+                // As in other programs of the system: Файл · Правка · Вид · Трансивер · Сервис · Справка.
                 Menu(tr("Файл")) {
                     Item(tr("Новый QSO"), shortcut = menuShortcut(KeyAction.NEW_QSO), onClick = { state.addQso() })
                     Item(tr("Сохранить связь"), enabled = state.pane == Pane.Edit, shortcut = shortcut(Key.S), onClick = state::trySave)
@@ -260,35 +262,68 @@ fun main() {
                     Separator()
                     Item(tr("Экспорт в ЕРМАК / Cabrillo…"), onClick = { state.openContestExport(selectedOnly = false) })
                     Item(tr("Импорт из ЕРМАК / Cabrillo…"), onClick = importContest)
-                    Item(tr("Выбрать часть журнала…"), onClick = { state.showSelect = true })
                     Separator()
-                    Item(tr("Дашборд"), shortcut = menuShortcut(KeyAction.DASHBOARD), onClick = state::dashboardOrDelete)
-                    Item(tr("Карта QSO"), shortcut = menuShortcut(KeyAction.MAP), onClick = state::openMap)
-                    Item(tr("DX-кластер"), onClick = state::openDxCluster)
-                    Item(tr("История поиска"), shortcut = menuShortcut(KeyAction.HISTORY), onClick = state::openHistory)
-                    Item(tr("Справка и калькуляторы"), onClick = state::openReference)
-                    Item(tr("Горячие клавиши") + KeyMap.label(KeyAction.KEYS_HELP, IS_MAC).ifEmpty { null }?.let { " ($it)" }.orEmpty(), onClick = { state.showKeys = true })
-                    if (state.catConfig.enabled || state.rig != null) Item(tr("Пульт трансивера"), onClick = { state.showRigPanel = true })
-                    Item(tr("Настройки"), shortcut = menuShortcut(KeyAction.SETTINGS), onClick = { state.openSettings() })
-                    Item(tr("Оборудование и программы…"), onClick = { state.openSettings(page = ru.r3xed.qsolog.SettingsPage.HARDWARE) })
-                    // Shown once the table is set up in the settings; the sync runs only when asked.
-                    if (ru.r3xed.qsolog.data.SheetSync.isScriptUrl(state.sheetUrl)) {
-                        Item(tr("Синхронизировать"), enabled = !state.sheetSyncing, onClick = state::syncSheet)
-                    }
+                    Item(tr("Сделать копию журнала"), onClick = { state.backupNow() })
+                    Item(tr("Открыть папку копий"), onClick = state::openBackupFolder)
                     if (!IS_MAC) {
                         Separator()
                         Item(tr("Выход"), onClick = { state.flushSettings(); state.stopServer(); state.closeCw(); state.stopStartApps(); exitApplication() })
                     }
+                }
+                Menu(tr("Правка")) {
+                    Item(tr("Найти в журнале"), onClick = state::requestSearchFocus)
+                    Item(tr("Команды…"), shortcut = shortcut(Key.K), onClick = { state.showPalette = true })
+                    Separator()
+                    Item(tr("Выбрать часть журнала…"), onClick = { state.showSelect = true })
+                    Item(tr("Снять выбор"), enabled = state.selecting, onClick = state::clearSelection)
+                    Item(tr("Печать QSL-наклеек"), enabled = state.selecting, onClick = state::printQslLabels)
+                    Item(tr("Отметить: QSL отправлены"), enabled = state.selecting, onClick = state::markQslSent)
+                    Separator()
+                    Item(tr("Сбросить фильтр журнала"), enabled = state.logFilter.active, onClick = { state.changeLogFilter(ru.r3xed.qsolog.data.LogFilter()) })
                 }
                 // "Масштаб интерфейса", as in a browser: ⌘+ ⌘− ⌘0 on the Mac, Ctrl elsewhere.
                 Menu(tr("Вид")) {
                     Item(tr("Крупнее"), enabled = state.uiScale != ru.r3xed.qsolog.data.UiScale.S100, shortcut = shortcut(Key.Equals), onClick = state::zoomIn)
                     Item(tr("Мельче"), enabled = state.uiScale != ru.r3xed.qsolog.data.UiScale.DESKTOP.last(), shortcut = shortcut(Key.Minus), onClick = state::zoomOut)
                     Item(tr("Обычный размер (100%)"), shortcut = shortcut(Key.Zero), onClick = state::zoomReset)
-                    Separator()
                     ru.r3xed.qsolog.data.UiScale.DESKTOP.forEach { sc ->
                         CheckboxItem(tr("Масштаб %s", sc.label), checked = state.uiScale == sc, onCheckedChange = { state.changeUiScale(sc) })
                     }
+                    Separator()
+                    CheckboxItem(tr("Компактный журнал"), checked = state.compactLog, onCheckedChange = { state.toggleCompactLog() })
+                    Menu(tr("Колонки компактного журнала")) {
+                        listOf("freq" to tr("Частота"), "rst" to "RST", "name" to tr("Имя и QTH"), "km" to tr("Расстояние")).forEach { (k, t) ->
+                            CheckboxItem(t, checked = k in state.compactColumns, onCheckedChange = { state.toggleCompactColumn(k) })
+                        }
+                    }
+                    Separator()
+                    Item(tr("Дашборд"), shortcut = menuShortcut(KeyAction.DASHBOARD), onClick = state::dashboardOrDelete)
+                    Item(tr("Дипломы"), onClick = state::openAwards)
+                    Item(tr("Карта QSO"), shortcut = menuShortcut(KeyAction.MAP), onClick = state::openMap)
+                    Item(tr("История поиска"), shortcut = menuShortcut(KeyAction.HISTORY), onClick = state::openHistory)
+                }
+                Menu(tr("Трансивер")) {
+                    Item(tr("Пульт трансивера"), enabled = state.catConfig.enabled || state.rig != null, onClick = { state.showRigPanel = true })
+                    Item(tr("CAT и программы…"), onClick = { state.openSettings(page = ru.r3xed.qsolog.SettingsPage.HARDWARE) })
+                }
+                Menu(tr("Сервис")) {
+                    Item(tr("DX-кластер"), onClick = state::openDxCluster)
+                    Item(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com…"), onClick = { state.openUpload(selectedOnly = false) })
+                    Item(tr("Подтверждения LoTW"), onClick = state::syncLotw)
+                    // Shown once the table is set up in the settings; the sync runs only when asked.
+                    if (ru.r3xed.qsolog.data.SheetSync.isScriptUrl(state.sheetUrl)) {
+                        Item(tr("Синхронизировать"), enabled = !state.sheetSyncing, onClick = state::syncSheet)
+                    }
+                    Separator()
+                    Item(tr("Настройки"), shortcut = menuShortcut(KeyAction.SETTINGS), onClick = { state.openSettings() })
+                }
+                Menu(tr("Справка")) {
+                    Item(tr("Справка и калькуляторы"), onClick = state::openReference)
+                    Item(tr("Горячие клавиши") + KeyMap.label(KeyAction.KEYS_HELP, IS_MAC).ifEmpty { null }?.let { " ($it)" }.orEmpty(), onClick = { state.showKeys = true })
+                    Item(tr("Что нового"), onClick = { state.showWhatsNew = true })
+                    Item(tr("Сообщить о проблеме"), onClick = {
+                        runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(ProblemReport.url(APP_VERSION, System.getProperty("os.name") + " " + System.getProperty("os.version"), System.getProperty("os.arch")))) }
+                    })
                 }
             } }
             // Theme from the settings; "system" follows the OS (macOS, Windows).
@@ -301,6 +336,41 @@ fun main() {
         }
     }
 }
+
+/** "⌘K": every command of the menus, searchable by name. */
+fun paletteCommands(state: AppState, files: Exports): List<Pair<String, () -> Unit>> = listOf(
+    tr("Новый QSO") to { state.addQso() },
+    tr("Найти в журнале") to state::requestSearchFocus,
+    tr("Дашборд") to state::openDashboard,
+    tr("Дипломы") to state::openAwards,
+    tr("Карта QSO") to state::openMap,
+    tr("DX-кластер") to state::openDxCluster,
+    tr("История поиска") to state::openHistory,
+    tr("Справка и калькуляторы") to state::openReference,
+    tr("Настройки") to { state.openSettings() },
+    tr("Оборудование и программы…") to { state.openSettings(page = ru.r3xed.qsolog.SettingsPage.HARDWARE) },
+    tr("Справочники и онлайн-журналы") to { state.openSettings(page = ru.r3xed.qsolog.SettingsPage.SOURCES) },
+    tr("Пульт трансивера") to { state.showRigPanel = true },
+    tr("Экспорт лога в ADIF…") to files.exportAdif,
+    tr("Импорт лога из ADIF…") to files.importAdif,
+    tr("Экспорт лога в CSV…") to files.exportCsv,
+    tr("Экспорт в ЕРМАК / Cabrillo…") to { state.openContestExport(selectedOnly = false) },
+    tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com…") to { state.openUpload(selectedOnly = false) },
+    tr("Подтверждения LoTW") to state::syncLotw,
+    tr("Выбрать часть журнала…") to { state.showSelect = true },
+    tr("Печать QSL-наклеек") to state::printQslLabels,
+    tr("Отметить: QSL отправлены") to state::markQslSent,
+    tr("Сделать копию журнала") to { state.backupNow() },
+    tr("Открыть папку копий") to state::openBackupFolder,
+    tr("Компактный журнал") to state::toggleCompactLog,
+    tr("Крупнее") to state::zoomIn,
+    tr("Мельче") to state::zoomOut,
+    tr("Обычный размер (100%)") to state::zoomReset,
+    "CONTEST MODE" to state::toggleContestMode,
+    tr("Горячие клавиши") to { state.showKeys = true },
+    tr("Что нового") to { state.showWhatsNew = true },
+) + state.savedFilters.map { f -> tr("Фильтр: %s", f.name) to { state.applySavedFilter(f) } } +
+    (state.activation?.let { listOf(tr("Завершить активацию %s", it.title) to { state.stopActivation(export = true) }) } ?: emptyList())
 
 /** File dialogs, opened from the menu, the settings pane and the selection bar. */
 class Exports(
@@ -331,7 +401,8 @@ fun App(state: AppState, files: Exports) {
     // Surface sets the default text colour from the theme, so text is light grey in the dark theme.
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
         Box(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+            Row(Modifier.weight(1f).fillMaxWidth()) {
                 LogPane(state, NEW_SHORTCUT, files.exportSelected, Modifier.width(460.dp * ru.r3xed.qsolog.ui.LocalTextBoost.current).fillMaxHeight())
                 VerticalDivider(color = LocalExtra.current.line)
                 Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -348,9 +419,14 @@ fun App(state: AppState, files: Exports) {
                         Pane.Map -> MapPane(state)
                         Pane.Welcome -> WelcomePane(state)
                         Pane.Reference -> ReferencePane(onClose = state::closeReference, myPosition = state.settings.myPosition)
+                        Pane.Awards -> ru.r3xed.qsolog.ui.AwardsPane(state)
                     }
                 }
             }
+            // The status bar: the radio, the cluster, the station in work, today's contacts, the band conditions.
+            ru.r3xed.qsolog.ui.StatusBar(state)
+            }
+            if (state.showPalette) ru.r3xed.qsolog.ui.CommandPalette(paletteCommands(state, files)) { state.showPalette = false }
             state.contestTarget?.let { target ->
                 ContestExportDialog(
                     defaults = state.contestDefaults(),

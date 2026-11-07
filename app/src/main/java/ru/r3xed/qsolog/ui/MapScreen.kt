@@ -63,7 +63,7 @@ fun MapScreen(vm: AppViewModel) {
             IconButton(onClick = { vm.screen = Screen.Log }, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Назад"), Modifier.size(30.dp))
             }
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(tr("Карта QSO"), style = MaterialTheme.typography.headlineSmall)
                 Text(
                     tr("позывных на карте: %s", stations.size) + if (withoutPosition > 0) tr(" · без координат: %s", withoutPosition) else "",
@@ -71,8 +71,17 @@ fun MapScreen(vm: AppViewModel) {
                 )
             }
         }
+        // Layers: DX cluster spots (by the country's centre) and the grey line (the day/night border, now).
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.FilterChip(selected = vm.mapSpots, onClick = { vm.changeMapSpots(!vm.mapSpots) }, label = { Text(tr("Споты кластера") + if (vm.mapSpots) " · ${vm.dxSpots.size}" else "") })
+            androidx.compose.material3.FilterChip(selected = vm.mapGreyLine, onClick = { vm.changeMapGreyLine(!vm.mapGreyLine) }, label = { Text(tr("Серая зона")) })
+        }
+        if (vm.mapSpots && vm.dxSpots.isEmpty()) Text(
+            tr("Спотов пока нет: откройте вкладку «Кластер» — споты приходят, пока он на связи."),
+            style = MaterialTheme.typography.bodyMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp),
+        )
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (stations.isEmpty()) {
+            if (stations.isEmpty() && !(vm.mapSpots && vm.dxSpots.isNotEmpty())) {
                 Text(
                     tr("В логе пока нет связей с известным QTH. Точки появятся, когда QRZ.ru вернёт координаты абонента или вы впишете его локатор."),
                     style = MaterialTheme.typography.bodyLarge, color = x.muted,
@@ -113,8 +122,30 @@ private fun StationsMap(vm: AppViewModel, stations: List<Station>) {
             map.onDetach()
         }
     }
+    // The grey line moves: redrawn every minute.
+    val tickState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    androidx.compose.runtime.LaunchedEffect(vm.mapGreyLine) {
+        while (vm.mapGreyLine) { kotlinx.coroutines.delay(60_000); tickState.longValue = System.currentTimeMillis() }
+    }
+    val tick = tickState.longValue
+    val spots = if (vm.mapSpots) vm.dxSpots else emptyList()
+    val grey = vm.mapGreyLine
     AndroidView(factory = { map }, modifier = Modifier.fillMaxSize().clipToBounds(), update = { v ->
         v.overlays.clear()
+        if (grey) v.overlays.add(org.osmdroid.views.overlay.Polygon(v).apply {
+            points = ru.r3xed.qsolog.data.Sun.night(tick).map { GeoPoint(it.lat.coerceIn(-85.0, 85.0), it.lon) }
+            fillPaint.color = 0x55101820
+            outlinePaint.color = 0x99101820.toInt()
+            outlinePaint.strokeWidth = 2f
+            setOnClickListener { _, _, _ -> false }
+            infoWindow = null
+        })
+        // Spots: one per callsign (the newest), at the centre of its country, in the colour of the "new" marks.
+        spots.distinctBy { it.call }.forEach { s ->
+            val e = ru.r3xed.qsolog.data.Cty.lookup(s.call)?.entity ?: return@forEach
+            val label = s.call + " " + (s.band ?: "")
+            v.overlays.add(labelMarker(v, GeoPoint(e.lat, e.lon), label, 0xFFB07000.toInt()) { vm.openDxCluster(); true })
+        }
         val points = mutableListOf<GeoPoint>()
         stations.forEach { st ->
             val q = st.latest

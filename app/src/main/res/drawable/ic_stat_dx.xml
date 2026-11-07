@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status bar icon of the DX cluster notifications: an antenna with waves. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M11,9h2v13h-2zM7.05,4.05l1.41,1.41C7.56,6.37 7,7.62 7,9s0.56,2.63 1.46,3.54l-1.41,1.41C5.79,12.68 5,10.93 5,9s0.79,-3.68 2.05,-4.95zM16.95,4.05C18.21,5.32 19,7.07 19,9s-0.79,3.68 -2.05,4.95l-1.41,-1.41C16.44,11.63 17,10.38 17,9s-0.56,-2.63 -1.46,-3.54l1.41,-1.41z"/>
+</vector>

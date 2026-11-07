@@ -310,6 +310,10 @@ class Settings {
     private val keyring: Keyring? = if (System.getProperty("qsolog.data") != null) null else try { Keyring.create() } catch (e: Exception) { null }
 
     private fun get(key: String, def: String = "") = props.getProperty(key, def)
+
+    /** Plain text settings of 2.9.1 (filters, backups, activation, cluster alerts): one key each. */
+    fun text(key: String, def: String = ""): String = get(key, def)
+    fun putText(key: String, value: String) = put(key, value)
     private fun put(key: String, value: String) {
         props.setProperty(key, value)
         file.outputStream().use { props.store(it, "QSO Log") }

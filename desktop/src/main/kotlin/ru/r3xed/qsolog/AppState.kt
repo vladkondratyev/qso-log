@@ -111,6 +111,8 @@ enum class Pane {
     Contests,
     /** Spots from the DX cluster, marked against the log. */
     DxCluster,
+    /** Award tracking: DXCC, WAZ, WAS, regions of Russia, RDA. */
+    Awards,
 }
 
 /** The contest card's message when the received number is missing; the card then puts the cursor in that field. */
@@ -529,6 +531,17 @@ class AppState {
     /** Which settings page is open; Back (Esc) from the equipment or the callbooks returns to the main one. */
     var settingsPage by mutableStateOf(SettingsPage.MAIN)
 
+    /** "Поиск по настройкам": what is typed, and the block a result opened (it unfolds and scrolls into view). */
+    var settingsQuery by mutableStateOf("")
+    var settingsFocus by mutableStateOf<String?>(null)
+
+    fun openSettingsBlock(e: ru.r3xed.qsolog.SettingsIndex.Entry) {
+        settingsQuery = ""
+        settingsFocus = null
+        settingsPage = e.page
+        scope.launch { delay(50); settingsFocus = e.block }
+    }
+
     /** The page was opened straight away (a long press on TRX, the menu): Back returns to where that was. */
     private var settingsPageDirect = false
 
@@ -638,6 +651,12 @@ class AppState {
             online = withContext(Dispatchers.IO) { prefs.loadOnline() }
             loadLotwCert()
         }
+        // The backup copy when due; the cluster for notifications.
+        scope.launch {
+            delay(3000)
+            checkBackup()
+            if (dxAlerts.enabled) dxShown()
+        }
     }
 
     fun say(text: String, undo: (() -> Unit)? = null) {
@@ -655,7 +674,8 @@ class AppState {
             allQsos = all
             // "Станция": only the contacts made under that callsign of mine.
             val mine = stationFilter?.takeIf { stationCalls.size > 1 }
-            qsos = if (mine == null) list else list.filter { it.myCall.equals(mine, ignoreCase = true) }
+            val f = logFilter
+            qsos = list.filter { (mine == null || it.myCall.equals(mine, ignoreCase = true)) && (!f.active || f.matches(it)) }
             total = all.size
         }
     }
@@ -1098,7 +1118,7 @@ class AppState {
             // "Моя станция" comes from the settings; each record then keeps its own copy.
             myCall = settings.myCall,
             myLocator = settings.myLocator,
-            adif = settings.station,
+            adif = settings.station + (activation?.fields() ?: emptyMap()),
         )
         formOriginal = form
         history = CallHistory(0, null)
@@ -2573,7 +2593,7 @@ class AppState {
         dxClient = DxClusterClient(
             dxConfig, login,
             onStatus = { st -> scope.launch { if (dxClient != null || st == DxStatus.Off) dxStatus = st } },
-            onSpot = { s -> scope.launch { dxSpots = DxCluster.merge(dxSpots, s, keepMs = dxConfig.keepMinutes * 60_000L) } },
+            onSpot = { s -> scope.launch { dxSpots = DxCluster.merge(dxSpots, s, keepMs = dxConfig.keepMinutes * 60_000L); alertSpot(s) } },
             onLine = { l -> scope.launch { dxLines = (dxLines + l).takeLast(200) } },
         ).also { it.start() }
     }
@@ -2588,7 +2608,8 @@ class AppState {
         dxStopJob?.cancel()
         dxStopJob = scope.launch {
             delay(5 * 60_000L)
-            if (pane != Pane.DxCluster) stopDx()
+            // Notifications keep the connection going.
+            if (pane != Pane.DxCluster && !dxAlerts.enabled) stopDx()
         }
     }
 
@@ -2894,6 +2915,187 @@ class AppState {
         return true
     }
 
+    // ---------- 2.9.1: log filters, backups, activation, QSL, awards, cluster alerts, solar data, palette ----------
+
+    /** "Фильтр": not yet sent to an online logbook, the paper QSL queue, one band or mode (on top of search and station). */
+    var logFilter by mutableStateOf(ru.r3xed.qsolog.data.LogFilter()); private set
+
+    fun changeLogFilter(f: ru.r3xed.qsolog.data.LogFilter) {
+        logFilter = f.copy(name = "", query = "", station = null)
+        reload()
+    }
+
+    /** "Мои фильтры": the search, the station and the filter saved under a name. */
+    var savedFilters by mutableStateOf(ru.r3xed.qsolog.data.LogFilters.decode(prefs.text("log_filters"))); private set
+
+    fun saveCurrentFilter(name: String) {
+        val n = name.trim().ifBlank { return }
+        val f = logFilter.copy(name = n, query = query.trim(), station = stationFilter)
+        savedFilters = savedFilters.filter { it.name != n } + f
+        prefs.putText("log_filters", ru.r3xed.qsolog.data.LogFilters.encode(savedFilters))
+        say(tr("Фильтр «%s» сохранён", n))
+    }
+
+    fun applySavedFilter(f: ru.r3xed.qsolog.data.LogFilter) {
+        logFilter = f.copy(name = "", query = "", station = null)
+        stationFilter = f.station?.takeIf { it in stationCalls }
+        query = f.query
+        reload()
+    }
+
+    fun deleteSavedFilter(name: String) {
+        savedFilters = savedFilters.filter { it.name != name }
+        prefs.putText("log_filters", ru.r3xed.qsolog.data.LogFilters.encode(savedFilters))
+    }
+
+    /** The compact log's second line: which parts it shows (name and QTH, distance, RST, frequency). */
+    var compactColumns by mutableStateOf(prefs.text("compact_cols", "name,km,rst,freq").split(',').filter { it.isNotBlank() }.toSet()); private set
+
+    fun toggleCompactColumn(c: String) {
+        compactColumns = if (c in compactColumns) compactColumns - c else compactColumns + c
+        prefs.putText("compact_cols", compactColumns.joinToString(","))
+    }
+
+    /** "Автокопия журнала": the period, when the last copy was made, and the folder (the data folder's "backups"). */
+    var backupPeriod by mutableStateOf(ru.r3xed.qsolog.data.BackupPeriod.of(prefs.text("backup_period", "WEEKLY"))); private set
+    var backupLast by mutableStateOf(prefs.text("backup_last", "0").toLongOrNull() ?: 0L); private set
+    val backupDir: File get() = File(AppDirs.data, "backups").apply { mkdirs() }
+
+    fun changeBackupPeriod(p: ru.r3xed.qsolog.data.BackupPeriod) {
+        backupPeriod = p
+        prefs.putText("backup_period", p.name)
+        checkBackup()
+    }
+
+    /** The whole log as UTF-8 ADIF into the backup folder; the newest copies stay (Backups.KEEP). */
+    fun backupNow(auto: Boolean = false) {
+        scope.launch {
+            val msg = try {
+                val name = withContext(Dispatchers.IO) {
+                    val all = db.all()
+                    if (auto && all.isEmpty()) return@withContext null
+                    val n = ru.r3xed.qsolog.data.Backups.fileName()
+                    File(backupDir, n).outputStream().use { ru.r3xed.qsolog.data.Adif.export(all, it, Charsets.UTF_8, program = "QSO-LOG", version = APP_VERSION) }
+                    ru.r3xed.qsolog.data.Backups.excess(backupDir.list()?.toList().orEmpty()).forEach { File(backupDir, it).delete() }
+                    n
+                } ?: return@launch
+                backupLast = System.currentTimeMillis()
+                prefs.putText("backup_last", backupLast.toString())
+                tr("Копия журнала сохранена: %s", name)
+            } catch (e: Exception) {
+                tr("Не удалось сохранить копию журнала: %s", e.message ?: e.javaClass.simpleName)
+            }
+            if (!auto) say(msg)
+        }
+    }
+
+    fun checkBackup() {
+        if (ru.r3xed.qsolog.data.Backups.due(backupPeriod, backupLast)) backupNow(auto = true)
+    }
+
+    fun openBackupFolder() {
+        runCatching { java.awt.Desktop.getDesktop().open(backupDir) }.onFailure { say(backupDir.absolutePath) }
+    }
+
+    /** "Выезд": the activation in progress, or null. New contacts get its fields; the log shows a banner. */
+    var activation by mutableStateOf(ru.r3xed.qsolog.data.Activation.decode(prefs.text("activation"))); private set
+    val activationCount: Int get() = activation?.let { a -> allQsos.count(a::owns) } ?: 0
+
+    fun startActivation(program: ru.r3xed.qsolog.data.ActivationProgram, reference: String, sigName: String = "") {
+        val a = ru.r3xed.qsolog.data.Activation(java.util.UUID.randomUUID().toString(), program, reference.trim().uppercase(), System.currentTimeMillis(), sigName.trim())
+        activation = a
+        prefs.putText("activation", a.encode())
+        say(tr("Активация %s начата: новые связи получат её поля", a.title))
+    }
+
+    /** Ends the activation; with [export] its contacts are picked and the ADIF export opens. */
+    fun stopActivation(export: Boolean) {
+        val a = activation ?: return
+        activation = null
+        prefs.putText("activation", "")
+        if (export) {
+            val ids = allQsos.filter(a::owns).map { it.id }.toSet()
+            if (ids.isEmpty()) { say(tr("В активации %s нет связей", a.title)); return }
+            selected = ids
+            pane = Pane.Empty
+            openExport(ExportFormat.ADIF, selectedOnly = true)
+        }
+    }
+
+    /** QSL labels of the picked contacts: an HTML page opened in the browser, which prints it. */
+    fun printQslLabels() {
+        val list = allQsos.filter { it.id in selected }
+        if (list.isEmpty()) return
+        scope.launch {
+            val f = withContext(Dispatchers.IO) {
+                File(AppDirs.data, "qsl-labels.html").apply { writeText(ru.r3xed.qsolog.data.QslLabels.html(list, settings.myCall)) }
+            }
+            runCatching { java.awt.Desktop.getDesktop().browse(f.toURI()) }.onFailure { say(f.absolutePath) }
+            say(tr("Наклейки открыты в браузере: напечатайте страницу (A4, 3 × 8, масштаб 100%)"))
+        }
+    }
+
+    /** The picked contacts get "QSL отправлена" (after the labels are printed). */
+    fun markQslSent() {
+        val list = allQsos.filter { it.id in selected && !it.qslSent }
+        scope.launch {
+            withContext(Dispatchers.IO) { list.forEach { db.save(it.copy(qslSent = true, updatedAt = System.currentTimeMillis())) } }
+            clearSelection()
+            reload()
+            say(tr("QSL отмечены отправленными: %s", list.size))
+        }
+    }
+
+    fun openAwards() {
+        pane = Pane.Awards
+    }
+
+    /** Solar flux, sunspots, A and K from hamqsl.com: asked for the status bar, the dashboard and the map, hourly. */
+    var solar by mutableStateOf<ru.r3xed.qsolog.data.SolarData?>(null); private set
+    private var solarAt = 0L
+
+    fun refreshSolar() {
+        if (System.currentTimeMillis() - solarAt < 3_600_000L) return
+        solarAt = System.currentTimeMillis()
+        scope.launch {
+            solar = runCatching { ru.r3xed.qsolog.data.SolarData.fetch(USER_AGENT) }.getOrNull() ?: solar
+            if (solar == null) solarAt = 0L
+        }
+    }
+
+    /** The QSO map: spots of the DX cluster and the grey line on it. */
+    var mapSpots by mutableStateOf(prefs.text("map_spots", "true") == "true"); private set
+    var mapGreyLine by mutableStateOf(prefs.text("map_grey", "true") == "true"); private set
+
+    fun changeMapSpots(on: Boolean) { mapSpots = on; prefs.putText("map_spots", on.toString()) }
+    fun changeMapGreyLine(on: Boolean) { mapGreyLine = on; prefs.putText("map_grey", on.toString()) }
+
+    /** DX cluster notifications (watch list, new country, region, band): the system's notification by the tray icon. */
+    var dxAlerts by mutableStateOf(ru.r3xed.qsolog.data.DxAlertConfig.from(ru.r3xed.qsolog.data.DxAlertConfig.KEYS.associateWith { k -> prefs.text(k).ifEmpty { null } })); private set
+    private val dxAlerted = HashMap<String, Long>()
+    private var dxAlertIndex: Pair<List<Qso>, ru.r3xed.qsolog.data.DxLogIndex>? = null
+
+    fun changeDxAlerts(c: ru.r3xed.qsolog.data.DxAlertConfig) {
+        dxAlerts = c
+        c.toMap().forEach { (k, v) -> prefs.putText(k, v) }
+        if (c.enabled) dxShown()
+    }
+
+    private fun alertSpot(s: ru.r3xed.qsolog.data.DxSpot) {
+        val c = dxAlerts
+        if (!c.enabled) return
+        val idx = dxAlertIndex?.takeIf { it.first === allQsos }?.second ?: ru.r3xed.qsolog.data.DxLogIndex(allQsos).also { dxAlertIndex = allQsos to it }
+        val why = ru.r3xed.qsolog.data.DxAlerts.reason(s, idx.mark(s), c) ?: return
+        val key = s.call.uppercase() + "|" + s.band
+        val now = System.currentTimeMillis()
+        if ((dxAlerted[key] ?: 0L) > now - c.quietMinutes * 60_000L) return
+        dxAlerted[key] = now
+        DesktopNotify.show(tr("DX-кластер"), ru.r3xed.qsolog.data.DxAlerts.text(s, why))
+    }
+
+    /** "⌘K": the command palette is open. */
+    var showPalette by mutableStateOf(false)
+
     // ---------- online logbooks: LoTW (through TQSL), QRZ.com, Club Log ----------
 
     var online by mutableStateOf(ru.r3xed.qsolog.data.OnlineConfig()); private set
@@ -2936,6 +3138,8 @@ class AppState {
         val target = uploadTarget ?: return
         if (uploading != null) return
         uploadProblem(log)?.let { say(it); return }
+        // With certificates LoTW goes per callsign; without one TQSL signs as before.
+        if (log == ru.r3xed.qsolog.data.OnlineLog.LOTW && lotwCerts.isNotEmpty()) { uploadLotwCerts(target, onlyNew, mark); return }
         val c = online
         val call = settings.myCall.trim()
         // The account is one callsign's: the LoTW certificate's, the eQSL login, otherwise the station in work.
@@ -3027,27 +3231,37 @@ class AppState {
 
     // ---------- LoTW without TQSL: the callsign certificate signs here ----------
 
-    /** The LoTW certificate loaded from its .p12 file (kept in the data folder); null — none. */
-    var lotwCert by mutableStateOf<ru.r3xed.qsolog.data.LotwCert?>(null); private set
+    /** The LoTW certificates, one per callsign (files in the data folder "lotw"; the first one of 2.8 — lotw.p12). */
+    var lotwCerts by mutableStateOf<List<ru.r3xed.qsolog.data.LotwCert>>(emptyList()); private set
+    /** The certificate of the station in work, or the first one. */
+    val lotwCert: ru.r3xed.qsolog.data.LotwCert? get() = lotwCerts.firstOrNull { it.callsign.equals(settings.myCall.trim(), ignoreCase = true) } ?: lotwCerts.firstOrNull()
     private val lotwFile get() = File(AppDirs.data, "lotw.p12")
+    private val lotwDir get() = File(AppDirs.data, "lotw").apply { mkdirs() }
+    private fun lotwName(call: String) = call.uppercase().replace('/', '_') + ".p12"
 
     private fun loadLotwCert() {
-        val f = lotwFile
-        if (!f.exists()) return
-        val pw = online.lotwP12Password
+        val c = online
         scope.launch {
-            lotwCert = withContext(Dispatchers.IO) { runCatching { ru.r3xed.qsolog.data.Lotw.loadP12(f.readBytes(), pw) }.getOrNull() }
+            lotwCerts = withContext(Dispatchers.IO) {
+                val legacy = lotwFile.takeIf { it.exists() }?.let { f -> runCatching { ru.r3xed.qsolog.data.Lotw.loadP12(f.readBytes(), c.lotwP12Password) }.getOrNull() }
+                val more = lotwDir.listFiles()?.filter { it.name.endsWith(".p12") }?.mapNotNull { f ->
+                    val call = f.name.removeSuffix(".p12").replace('_', '/')
+                    runCatching { ru.r3xed.qsolog.data.Lotw.loadP12(f.readBytes(), c.lotwPasswordFor(call) ?: c.lotwP12Password) }.getOrNull()
+                }.orEmpty()
+                (more + listOfNotNull(legacy)).distinctBy { it.callsign.uppercase() }
+            }
         }
     }
 
-    /** The .p12 file picked in the settings: checked with the password typed there, then kept. */
+    /** The .p12 file picked in the settings: checked with the password typed there, then kept as its callsign's certificate. */
     fun importLotwP12(file: File) {
         scope.launch {
             val msg = try {
                 val bytes = withContext(Dispatchers.IO) { file.readBytes() }
                 val c = withContext(Dispatchers.Default) { ru.r3xed.qsolog.data.Lotw.loadP12(bytes, online.lotwP12Password) }
-                withContext(Dispatchers.IO) { lotwFile.writeBytes(bytes) }
-                lotwCert = c
+                withContext(Dispatchers.IO) { File(lotwDir, lotwName(c.callsign)).writeBytes(bytes) }
+                changeOnline(online.withLotwPassword(c.callsign, online.lotwP12Password))
+                lotwCerts = lotwCerts.filter { !it.callsign.equals(c.callsign, ignoreCase = true) } + c
                 tr("Сертификат LoTW для %s загружен", c.callsign)
             } catch (e: ru.r3xed.qsolog.data.LotwException) {
                 e.message.orEmpty()
@@ -3058,9 +3272,53 @@ class AppState {
         }
     }
 
-    fun forgetLotwCert() {
-        lotwFile.delete()
-        lotwCert = null
+    /** Removes the certificate of [call] (all of them when null). */
+    fun forgetLotwCert(call: String? = null) {
+        val gone = lotwCerts.filter { call == null || it.callsign.equals(call, ignoreCase = true) }
+        gone.forEach { cert ->
+            File(lotwDir, lotwName(cert.callsign)).delete()
+            changeOnline(online.withLotwPassword(cert.callsign, null))
+        }
+        if (call == null || runCatching { ru.r3xed.qsolog.data.Lotw.loadP12(lotwFile.readBytes(), online.lotwP12Password).callsign.equals(call, ignoreCase = true) }.getOrDefault(false)) lotwFile.delete()
+        lotwCerts = lotwCerts - gone.toSet()
+    }
+
+    /** LoTW with a certificate per callsign: each callsign's contacts are signed with its own certificate. */
+    private fun uploadLotwCerts(target: UploadTarget, onlyNew: Boolean, mark: Boolean) {
+        val c = online
+        val (groups, skipped) = ru.r3xed.qsolog.data.UploadCalls.byCertificate(
+            uploadCandidates(ru.r3xed.qsolog.data.OnlineLog.LOTW, target.only, onlyNew), lotwCerts.map { it.callsign }, settings.myCall,
+        )
+        if (groups.isEmpty()) {
+            say(if (skipped > 0) tr("LoTW: нет сертификата для позывных этих связей (%s)", skipped) else tr("Новых связей для %s нет", "LoTW"))
+            return
+        }
+        uploading = ru.r3xed.qsolog.data.OnlineLog.LOTW
+        scope.launch {
+            var sent = 0; var dup = 0
+            val errors = mutableListOf<String>()
+            for ((call, list) in groups) {
+                val cert = lotwCerts.first { it.callsign.equals(call, ignoreCase = true) }
+                val r = ru.r3xed.qsolog.data.UploadCalls.byLocator(list, settings.myLocator) { loc, part ->
+                    ru.r3xed.qsolog.data.Lotw.send(cert, ru.r3xed.qsolog.data.Lotw.Station(loc, c.lotwCqz, c.lotwItuz), part, USER_AGENT)
+                }
+                if (mark) withContext(Dispatchers.IO) { r.sent.forEach { db.save(ru.r3xed.qsolog.data.OnlineLog.LOTW.mark(it)) } }
+                sent += r.sent.size; dup += r.duplicates
+                r.error?.let { errors += "$call: $it" }
+            }
+            reload()
+            uploading = null
+            uploadTarget = null
+            if (target.only != null && errors.isEmpty()) clearSelection()
+            say(buildString {
+                append(tr("%s: отправлено %s", "LoTW", sent))
+                if (groups.size > 1) append(" (" + groups.keys.joinToString(", ") + ")")
+                if (dup > 0) append(tr(", уже были там: %s", dup))
+                if (mark && sent > 0) append(tr(", отметка поставлена"))
+                if (skipped > 0) append(tr(", пропущено связей другого позывного: %s", skipped))
+                if (errors.isNotEmpty()) append(". ").append(errors.joinToString("; "))
+            })
+        }
     }
 
     var lotwSyncing by mutableStateOf(false); private set

@@ -90,7 +90,16 @@ data class OnlineConfig(
     val lotwItuz: String = "",
     /** The day confirmations were last downloaded ("2026-10-22"): the next download asks only for newer ones. */
     val lotwSince: String = "",
+    /** Passwords of the LoTW certificates by callsign ("UA3DEMO\tpassword" per line): one certificate per callsign. */
+    val lotwP12Passwords: String = "",
 ) {
+    fun lotwPasswordFor(call: String): String? = lotwP12Passwords.lines().firstOrNull { it.substringBefore('\t').equals(call, ignoreCase = true) }?.substringAfter('\t', "")
+
+    fun withLotwPassword(call: String, password: String?): OnlineConfig = copy(
+        lotwP12Passwords = (lotwP12Passwords.lines().filter { it.isNotBlank() && !it.substringBefore('\t').equals(call, ignoreCase = true) } +
+            listOfNotNull(password?.let { call.uppercase() + "\t" + it })).joinToString("\n"),
+    )
+
     /** What is missing for [log], or null when it can be sent (LoTW: see the platform's own check). */
     fun problem(log: OnlineLog, myCall: String): String? = when (log) {
         OnlineLog.QRZCOM -> if (qrzcomKey.isBlank()) tr("Укажите API-ключ журнала QRZ.com") else null
@@ -107,7 +116,7 @@ data class OnlineConfig(
     )
     fun secretMap(): Map<String, String> = mapOf(
         "qrzcom_key" to qrzcomKey, "clublog_password" to clublogPassword, "clublog_key" to clublogAppKey, "eqsl_password" to eqslPassword,
-        "lotw_password" to lotwPassword, "lotw_p12_password" to lotwP12Password,
+        "lotw_password" to lotwPassword, "lotw_p12_password" to lotwP12Password, "lotw_p12_passwords" to lotwP12Passwords,
     )
 
     /** What is missing to download the LoTW confirmations, or null. */
@@ -115,7 +124,7 @@ data class OnlineConfig(
 
     companion object {
         val PUBLIC_KEYS = listOf("clublog_email", "lotw_location", "tqsl_path", "eqsl_user", "eqsl_nickname", "lotw_user", "lotw_cqz", "lotw_ituz", "lotw_since")
-        val SECRET_KEYS = listOf("qrzcom_key", "clublog_password", "clublog_key", "eqsl_password", "lotw_password", "lotw_p12_password")
+        val SECRET_KEYS = listOf("qrzcom_key", "clublog_password", "clublog_key", "eqsl_password", "lotw_password", "lotw_p12_password", "lotw_p12_passwords")
 
         fun from(m: Map<String, String?>) = OnlineConfig(
             qrzcomKey = m["qrzcom_key"].orEmpty(), clublogEmail = m["clublog_email"].orEmpty(),
@@ -124,6 +133,7 @@ data class OnlineConfig(
             eqslUser = m["eqsl_user"].orEmpty(), eqslPassword = m["eqsl_password"].orEmpty(), eqslNickname = m["eqsl_nickname"].orEmpty(),
             lotwP12Password = m["lotw_p12_password"].orEmpty(), lotwUser = m["lotw_user"].orEmpty(), lotwPassword = m["lotw_password"].orEmpty(),
             lotwCqz = m["lotw_cqz"].orEmpty(), lotwItuz = m["lotw_ituz"].orEmpty(), lotwSince = m["lotw_since"].orEmpty(),
+            lotwP12Passwords = m["lotw_p12_passwords"].orEmpty(),
         )
     }
 }
@@ -133,6 +143,23 @@ data class UploadResult(val sent: List<Qso>, val duplicates: Int, val error: Str
 
 /** Uploads with several callsigns of one's own ("Мои станции"). */
 object UploadCalls {
+    /**
+     * LoTW with a certificate per callsign: the contacts of each certificate's callsign go with it; those with no
+     * callsign of one's own recorded go with [fallback] (the station in work, if it has a certificate). The second
+     * value: contacts of callsigns without a certificate, left out.
+     */
+    fun byCertificate(list: List<Qso>, certCalls: List<String>, fallback: String): Pair<Map<String, List<Qso>>, Int> {
+        val calls = certCalls.map { it.trim().uppercase() }.filter { it.isNotEmpty() }.distinct()
+        val home = fallback.trim().uppercase().takeIf { it in calls } ?: calls.firstOrNull()
+        val out = LinkedHashMap<String, MutableList<Qso>>()
+        var skipped = 0
+        for (q in list) {
+            val c = q.myCall.trim().uppercase().ifEmpty { home.orEmpty() }
+            if (c in calls) out.getOrPut(c) { mutableListOf() } += q else skipped++
+        }
+        return out to skipped
+    }
+
     /**
      * An account belongs to one callsign: only the contacts made under [call] (or with no callsign of one's own recorded)
      * go to it; the second value is how many were left out. A blank [call] takes everything.

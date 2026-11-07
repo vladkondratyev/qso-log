@@ -15,14 +15,13 @@ class WhatsNewTest {
     }
 
     @Test
-    fun scaleStepsDifferAndOmniRigOnlyOnComputer() {
-        // 2.9.0: 100/85/70 on the computer, 100/70/50 on the phone; OmniRig is a Windows program.
+    fun menusOnComputerTabsOnPhone() {
+        // 2.9.1: the computer gets the menus, ⌘K and the status bar; the phone the bottom bar.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Масштаб интерфейса"))
-            assertTrue("85" in WhatsNew.items(desktop = true).first() && "50%" in WhatsNew.items(desktop = false).first())
-            assertTrue(WhatsNew.items(desktop = true).any { "OmniRig" in it })
-            assertTrue(WhatsNew.items(desktop = false).none { "OmniRig" in it })
+            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Меню"))
+            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Нижняя панель"))
+            assertTrue(WhatsNew.items(desktop = false).any { "Дипломы" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

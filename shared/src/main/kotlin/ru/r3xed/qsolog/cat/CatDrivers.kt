@@ -82,6 +82,7 @@ interface RigDriver {
             CatProtocol.KENWOOD -> KenwoodDriver(c.model.name, c.model.elecraft, sMeter)
             CatProtocol.YAESU -> YaesuDriver(c.model.name, sMeter)
             CatProtocol.YAESU_OLD -> YaesuOldDriver(c.model.name, sMeter)
+            CatProtocol.YAESU_LEGACY -> YaesuLegacyDriver(c.model.name, c.model.civ.takeIf { it > 0 } ?: 19)
             CatProtocol.RIGCTLD -> RigctldDriver(sMeter)
             CatProtocol.COMMANDER -> CommanderDriver()
             CatProtocol.OMNIRIG -> OmniRigDriver(c.omniRig)
@@ -510,6 +511,70 @@ class YaesuOldDriver(private val name: String, private val sMeter: Boolean = tru
             0x00 to "LSB", 0x01 to "USB", 0x02 to "CW", 0x03 to "CW-R", 0x04 to "AM", 0x06 to "WFM", 0x08 to "FM",
             0x0A to "DIG", 0x0C to "PKT", 0x82 to "CW", 0x83 to "CW-R", 0x88 to "FM-N", 0x8A to "DIG",
         )
+    }
+}
+
+/**
+ * FT-840, FT-890, FT-900, FT-990: 5-byte commands (four parameters, then the opcode), 4800 baud 8N2. The state comes
+ * as the "Status Update" block of the current VFO ([statusLen] bytes): the frequency in bytes 1–3 (binary, tens of hertz,
+ * the highest first), the mode in byte 7. As described by Hamlib (ft840.c, ft890.c, ft900.c, ft990.c); not tried on
+ * a real radio.
+ */
+class YaesuLegacyDriver(private val name: String, private val statusLen: Int = 19) : RigDriver {
+    override var answered = false; private set
+    override val what get() = name
+
+    override fun poll(io: CatIo, last: RigState): RigState {
+        var s = last
+        answered = false
+        io.clear()
+        io.send(byteArrayOf(0, 0, 0, 0x02, 0x10))
+        val r = io.next(LEGACY_TIMEOUT) { b -> if (b.size >= statusLen) statusLen else 0 } ?: return s
+        answered = true
+        val f = ((r[1].u.toLong() shl 16) or (r[2].u.toLong() shl 8) or r[3].u.toLong()) * 10
+        if (f > 0) s = s.copy(freqHz = f, at = System.currentTimeMillis())
+        MODES[r[7].u and 0x07]?.let { s = s.copy(radioMode = it) }
+        return s
+    }
+
+    /** 0Ah: four BCD bytes of the frequency in tens of hertz, the lowest first. */
+    override fun setFreq(io: CatIo, hz: Long): Boolean {
+        var v = hz / 10
+        val b = ByteArray(4)
+        for (i in 0 until 4) {
+            val two = (v % 100).toInt()
+            v /= 100
+            b[i] = ((two / 10) shl 4 or (two % 10)).toByte()
+        }
+        io.send(b + byteArrayOf(0x0A))
+        return true
+    }
+
+    /** 0Ch with the mode in the fourth byte: LSB 0, USB 1, CW 2, AM 4, FM 6, RTTY 8 (FT-990), packet 0Ah. */
+    override fun setMode(io: CatIo, mode: RadioMode): Boolean {
+        val m = when (mode) {
+            RadioMode.LSB -> 0x00
+            RadioMode.USB -> 0x01
+            RadioMode.CW -> 0x02
+            RadioMode.AM -> 0x04
+            RadioMode.FM -> 0x06
+            RadioMode.RTTY -> if (statusLen >= 32) 0x08 else 0x00
+            RadioMode.DATA -> if (statusLen >= 32) 0x0A else 0x00
+        }
+        io.send(byteArrayOf(0, 0, 0, m.toByte(), 0x0C))
+        return true
+    }
+
+    /** 0Fh: 1 — transmit, 0 — receive. */
+    override fun setPtt(io: CatIo, on: Boolean): Boolean {
+        io.send(byteArrayOf(0, 0, 0, (if (on) 1 else 0).toByte(), 0x0F))
+        return true
+    }
+
+    companion object {
+        val MODES = mapOf(0 to "LSB", 1 to "USB", 2 to "CW", 3 to "AM", 4 to "FM", 5 to "RTTY", 6 to "PKT")
+        /** 19 or 32 bytes at 4800 baud take up to ~80 ms, plus the radio's own delay. */
+        private const val LEGACY_TIMEOUT = 600
     }
 }
 

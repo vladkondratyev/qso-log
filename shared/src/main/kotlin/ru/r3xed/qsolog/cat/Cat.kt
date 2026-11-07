@@ -15,6 +15,8 @@ enum class CatProtocol {
     YAESU,
     /** Yaesu's 5-byte binary CAT of FT-817, FT-818, FT-857, FT-897. */
     YAESU_OLD,
+    /** The older 5-byte CAT of FT-840, FT-890, FT-900, FT-990: 4800 baud 8N2, "Status Update" (10h) blocks. */
+    YAESU_LEGACY,
     /** Hamlib rigctld (and programs that imitate it: wfview, SDR++, flrig's rigctld bridge) over the network. */
     RIGCTLD,
     /** DXLab Commander (Windows), which holds the radio itself and takes directives over TCP. */
@@ -37,6 +39,7 @@ enum class CatProtocol {
             KENWOOD -> tr("Kenwood, Elecraft, FlexRadio")
             YAESU -> tr("Yaesu — новый CAT (FT-991, FT-710, FTDX10…)")
             YAESU_OLD -> tr("Yaesu FT-817 / 818 / 857 / 897")
+            YAESU_LEGACY -> tr("Yaesu FT-840 / 890 / 900 / 990 (старый CAT)")
             RIGCTLD -> tr("Hamlib rigctld (по сети)")
             COMMANDER -> tr("DXLab Commander (по сети, Windows)")
             OMNIRIG -> tr("OmniRig (Windows)")
@@ -115,6 +118,11 @@ object Rigs {
         RigModel(OTHER_YAESU, CatProtocol.YAESU, baud = 38400),
         RigModel("FT-817 / FT-818", CatProtocol.YAESU_OLD, baud = 9600),
         RigModel("FT-857 / FT-897", CatProtocol.YAESU_OLD, baud = 9600),
+        // civ = the length of the "Status Update" answer: 19 bytes for FT-840/890/900, 32 for FT-990 (Hamlib ft890.c, ft990.c).
+        RigModel("FT-840", CatProtocol.YAESU_LEGACY, civ = 19, baud = 4800),
+        RigModel("FT-890", CatProtocol.YAESU_LEGACY, civ = 19, baud = 4800),
+        RigModel("FT-900", CatProtocol.YAESU_LEGACY, civ = 19, baud = 4800),
+        RigModel("FT-990", CatProtocol.YAESU_LEGACY, civ = 32, baud = 4800),
         RigModel(RIGCTLD, CatProtocol.RIGCTLD),
         RigModel(COMMANDER, CatProtocol.COMMANDER),
         RigModel(OMNIRIG, CatProtocol.OMNIRIG),

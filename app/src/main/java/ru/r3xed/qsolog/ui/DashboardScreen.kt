@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Flag
@@ -140,7 +141,19 @@ fun DashboardScreen(vm: AppViewModel) {
             IconButton(onClick = vm::closeDashboard, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Назад"), Modifier.size(30.dp))
             }
-            Text(tr("Дашборд"), style = MaterialTheme.typography.headlineSmall)
+            Text(tr("Дашборд"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            androidx.compose.material3.FilledTonalButton(onClick = vm::openAwards, modifier = Modifier.padding(end = 8.dp)) {
+                Icon(Icons.Filled.EmojiEvents, null, Modifier.size(20.dp))
+                Text(tr("Дипломы"), modifier = Modifier.padding(start = 6.dp))
+            }
+        }
+        // Conditions on the bands: solar flux, sunspots, A and K (hamqsl.com), asked at most once an hour.
+        androidx.compose.runtime.LaunchedEffect(Unit) { vm.refreshSolar() }
+        vm.solar?.let { s ->
+            Text(
+                tr("Прохождение: %s", s.short) + (s.updated.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
+                style = MaterialTheme.typography.bodyMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp),
+            )
         }
 
         // --- the parameters: one row, above every chart ---
@@ -374,7 +387,7 @@ private fun CountryCard(stats: List<CountryStat>) {
 
 /** A card with a title, a line under it and the chart. */
 @Composable
-private fun ChartCard(title: String, subtitle: String?, content: @Composable () -> Unit) {
+internal fun ChartCard(title: String, subtitle: String?, content: @Composable () -> Unit) {
     val x = LocalExtra.current
     val shape = RoundedCornerShape(16.dp)
     Column(
@@ -397,7 +410,7 @@ private fun <T> Choice(items: List<Pair<T, String>>, selected: T, onPick: (T) ->
 }
 
 @Composable
-private fun Pill(text: String, selected: Boolean, small: Boolean = false, icon: Boolean = false, onClick: () -> Unit) {
+internal fun Pill(text: String, selected: Boolean, small: Boolean = false, icon: Boolean = false, onClick: () -> Unit) {
     val x = LocalExtra.current
     val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     Row(

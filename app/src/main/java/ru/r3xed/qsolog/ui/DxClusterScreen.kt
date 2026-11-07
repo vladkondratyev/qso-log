@@ -99,7 +99,7 @@ fun DxClusterScreen(vm: AppViewModel) {
     val shown = spots.filter { s ->
         (vm.dxBand == null || s.band == vm.dxBand) &&
             (vm.dxGroups.isEmpty() || DxCluster.group(s.mode) in vm.dxGroups) &&
-            (!vm.dxOnlyNew || marks[s] in setOf(DxMark.NEW_COUNTRY, DxMark.NEW_BAND, DxMark.NEW_MODE))
+            (!vm.dxOnlyNew || marks[s] in setOf(DxMark.NEW_COUNTRY, DxMark.NEW_REGION, DxMark.NEW_BAND, DxMark.NEW_MODE))
     }
     var spotDialog by remember { mutableStateOf(false) }
     var commandDialog by remember { mutableStateOf(false) }
@@ -276,6 +276,7 @@ private fun DxTag(mark: DxMark, s: DxSpot) {
     val x = LocalExtra.current
     val (text, bg, fg) = when (mark) {
         DxMark.NEW_COUNTRY -> Triple(tr("новая страна"), x.hl, x.hlInk)
+        DxMark.NEW_REGION -> Triple(tr("новая область"), x.hl, x.hlInk)
         DxMark.NEW_BAND -> Triple(tr("новый на %s", s.band.orEmpty()), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
         DxMark.NEW_MODE -> Triple(tr("новый вид"), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
         DxMark.WORKED -> Triple(tr("✓ в журнале"), x.okBg, x.ok)

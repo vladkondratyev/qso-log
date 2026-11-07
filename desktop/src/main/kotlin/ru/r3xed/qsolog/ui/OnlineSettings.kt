@@ -15,6 +15,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,20 +56,24 @@ fun OnlineSettings(
     onChange: (OnlineConfig) -> Unit,
     computer: Boolean,
     tqslFound: String? = null,
-    lotwCert: String? = null,
+    /** The loaded certificates: callsign to description. */
+    lotwCerts: List<Pair<String, String>> = emptyList(),
     onPickP12: () -> Unit = {},
-    onForgetP12: () -> Unit = {},
+    onForgetP12: (String) -> Unit = {},
 ) {
+    val lotwCert = lotwCerts.firstOrNull()?.second
     Note(tr("Здесь — только учётные записи. Выгрузка — из журнала: ⋮ → «Экспорт и импорт» → «Онлайн-журналы», или «Экспорт» у выбранных записей. Отметка о выгрузке с датой и временем видна в карточке каждой связи, и в следующий раз уходят только новые связи."))
     Section("LoTW (ARRL)")
-    if (lotwCert != null) {
-        Text(lotwCert, style = MaterialTheme.typography.titleSmall, color = LocalExtra.current.ok)
-        ActionButton(tr("Загрузить другой файл .p12…"), null, onPickP12)
-        ActionButton(tr("Удалить сертификат"), null, onForgetP12)
-    } else {
-        SecretField(tr("Пароль файла .p12 (если задавали в TQSL)"), c.lotwP12Password) { onChange(c.copy(lotwP12Password = it)) }
-        ActionButton(tr("Загрузить сертификат .p12…"), null, onPickP12)
+    // A certificate per callsign: each signs the contacts made under its callsign.
+    lotwCerts.forEach { (call, text) ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text, style = MaterialTheme.typography.titleSmall, color = LocalExtra.current.ok, modifier = Modifier.weight(1f))
+            TextButton(onClick = { onForgetP12(call) }) { Text(tr("Удалить"), color = MaterialTheme.colorScheme.error) }
+        }
     }
+    SecretField(tr("Пароль файла .p12 (если задавали в TQSL)"), c.lotwP12Password) { onChange(c.copy(lotwP12Password = it)) }
+    ActionButton(if (lotwCerts.isEmpty()) tr("Загрузить сертификат .p12…") else tr("Добавить сертификат другого позывного…"), null, onPickP12)
+    if (lotwCerts.size > 1) Note(tr("Связи уходят в LoTW с сертификатом своего позывного (поле «Мой позывной» в карточке); связи без него — с сертификатом станции в работе."))
     Note(tr("Как в RUMlog и SDR-Control: связи подписываются вашим сертификатом прямо здесь и уходят в LoTW по кнопке — TQSL не нужен. Файл .p12: в TQSL на компьютере — вкладка Callsign Certificates → ваш позывной → «Save the callsign certificate» (Сохранить сертификат); пароль — тот, что вы задали при сохранении (или пусто)."))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.weight(1f)) { SettingField(tr("Зона CQ"), c.lotwCqz, { onChange(c.copy(lotwCqz = it.filter(Char::isDigit).take(2))) }, mono = true) }

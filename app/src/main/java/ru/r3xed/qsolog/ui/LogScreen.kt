@@ -40,6 +40,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.MarkEmailRead
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.HorizontalDivider
@@ -175,20 +179,11 @@ fun LogScreen(
                     }
                     // Grouped: the log's views, files, help, the contest mode, then the keys and the settings.
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        // Кластер, карта и статистика — on the bottom bar; here the rest of the log's views.
                         DropdownMenuItem(
-                            text = { MenuText(tr("Дашборд"), KeyMap.label(KeyAction.DASHBOARD, false), vm.hardKeyboard) },
-                            leadingIcon = { Icon(Icons.Filled.BarChart, null) },
-                            onClick = { menu = false; vm.openDashboard() },
-                        )
-                        DropdownMenuItem(
-                            text = { MenuText(tr("Карта QSO"), KeyMap.label(KeyAction.MAP, false), vm.hardKeyboard) },
-                            leadingIcon = { Icon(Icons.Filled.Map, null) },
-                            onClick = { menu = false; vm.openMap() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(tr("DX-кластер"), fontSize = 18.sp) },
-                            leadingIcon = { Icon(Icons.Filled.CellTower, null) },
-                            onClick = { menu = false; vm.openDxCluster() },
+                            text = { Text(tr("Дипломы"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.Filled.EmojiEvents, null) },
+                            onClick = { menu = false; vm.openAwards() },
                         )
                         HistoryMenuItem(vm) { menu = false; vm.openHistory() }
                         HorizontalDivider()
@@ -250,6 +245,9 @@ fun LogScreen(
                 }
             }
 
+            // "Выезд": the activation in progress, its count and the button that ends it.
+            ActivationBanner(vm)
+
             // Ctrl+F on a physical keyboard puts the cursor here; Enter opens a new card for the station found, Esc clears.
             val searchFocus = remember { FocusRequester() }
             val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -303,10 +301,14 @@ fun LogScreen(
                 }
             }
 
-            if (vm.qsos.isEmpty() && vm.stationFilter != null && vm.query.isBlank()) {
-                // The "Станция" filter left nothing: the chips stay, so the filter can be changed back.
+            if (vm.qsos.isEmpty() && (vm.stationFilter != null || vm.logFilter.active) && vm.query.isBlank()) {
+                // The "Станция" filter or "Фильтр" left nothing: the chips stay, so the filter can be changed back.
                 SortBar(vm)
-                Text(tr("Связей с позывным %s в журнале нет.", vm.stationFilter.orEmpty()), style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.padding(24.dp))
+                Text(
+                    if (vm.logFilter.active) tr("Нет связей для фильтра: %s.", vm.logFilter.describe())
+                    else tr("Связей с позывным %s в журнале нет.", vm.stationFilter.orEmpty()),
+                    style = MaterialTheme.typography.bodyLarge, color = x.muted, modifier = Modifier.padding(24.dp),
+                )
                 Spacer(Modifier.weight(1f))
             } else if (vm.qsos.isEmpty()) {
                 Box(Modifier.weight(1f)) { EmptyLog(vm) }
@@ -464,7 +466,7 @@ private fun StationLine(vm: AppViewModel, color: androidx.compose.ui.graphics.Co
     val many = vm.stations.size > 1
     val loc = s.myLocator.takeIf { vm.activeStation.autoLocator && it.isNotBlank() }
     val who = listOfNotNull(s.myCall.ifBlank { null }, loc).joinToString(" · ")
-    val count = if (vm.stationFilter != null && vm.query.isBlank()) tr("записей: %s из %s", vm.qsos.size, vm.total) else tr("записей: %s", vm.total)
+    val count = if ((vm.stationFilter != null || vm.logFilter.active) && vm.query.isBlank()) tr("записей: %s из %s", vm.qsos.size, vm.total) else tr("записей: %s", vm.total)
     var open by remember { mutableStateOf(false) }
     Box {
         Box(Modifier.clickable(onClickLabel = if (many) tr("Выбрать станцию") else tr("Моя станция")) { open = true }) {
@@ -566,9 +568,13 @@ private fun SortBar(vm: AppViewModel) {
             }
         }
     }
-    // Two or more callsigns of one's own: the second row, so the filter is never off the edge of the screen.
-    if (vm.stationCalls.size > 1) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) { StationFilterChip(vm) }
+    // The second row: the station (two or more callsigns of one's own) and the filter, so neither is off the screen.
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (vm.stationCalls.size > 1) StationFilterChip(vm)
+        LogFilterChip(vm)
     }
 }
 
@@ -634,6 +640,18 @@ private fun SelectionBar(vm: AppViewModel) {
                 DropdownMenuItem(text = { Text("CSV", fontSize = 17.sp) }, onClick = { menu = false; vm.openExport(ExportFormat.CSV, selectedOnly = true) })
                 DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; vm.openExport(ExportFormat.CONTEST, selectedOnly = true) })
                 DropdownMenuItem(text = { Text("LoTW · eQSL · Club Log · QRZ.com", fontSize = 17.sp) }, onClick = { menu = false; vm.openUpload(selectedOnly = true) })
+                HorizontalDivider()
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                DropdownMenuItem(
+                    text = { Text(tr("Печать QSL-наклеек"), fontSize = 17.sp) },
+                    leadingIcon = { Icon(Icons.Filled.Print, null) },
+                    onClick = { menu = false; printHtml(ctx, vm.qslLabelsHtml(), "QSL") },
+                )
+                DropdownMenuItem(
+                    text = { Text(tr("Отметить: QSL отправлены"), fontSize = 17.sp) },
+                    leadingIcon = { Icon(Icons.Filled.MarkEmailRead, null) },
+                    onClick = { menu = false; vm.markQslSent() },
+                )
             }
         }
     }
@@ -774,3 +792,152 @@ private fun MenuText(text: String, key: String, keys: Boolean) {
         if (keys) Text("   $key", fontFamily = Mono, fontSize = 14.sp, color = LocalExtra.current.muted)
     }
 }
+
+
+/** The activation in progress ("Выезд"): its reference, how many contacts, and "Завершить" (with the ADIF export). */
+@Composable
+private fun ActivationBanner(vm: AppViewModel) {
+    val a = vm.activation ?: return
+    var ask by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.tertiaryContainer).padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Flag, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+        Text(
+            tr("Активация %s · связей: %s", a.title, vm.activationCount), fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.weight(1f).padding(start = 8.dp),
+        )
+        TextButton(onClick = { ask = true }) { Text(tr("Завершить")) }
+    }
+    if (ask) AlertDialog(
+        onDismissRequest = { ask = false },
+        title = { Text(tr("Завершить активацию %s?", a.title)) },
+        text = { Text(tr("Связей в активации: %s. Их можно сразу выгрузить в ADIF — для POTA, WWFF, SOTA или RDA.", vm.activationCount)) },
+        confirmButton = { Button(onClick = { ask = false; vm.stopActivation(export = true) }) { Text(tr("Завершить и выгрузить ADIF")) } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { ask = false }) { Text(tr("Отмена")) }
+                TextButton(onClick = { ask = false; vm.stopActivation(export = false) }) { Text(tr("Просто завершить")) }
+            }
+        },
+    )
+}
+
+/**
+ * "Фильтр": not yet in LoTW / eQSL / Club Log / QRZ.com, the paper QSL queue, a band or a mode; and "Мои фильтры" —
+ * the search, the station and the filter saved under a name.
+ */
+@Composable
+private fun LogFilterChip(vm: AppViewModel) {
+    val x = LocalExtra.current
+    var open by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    val f = vm.logFilter
+    val selected = f.active
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    Box {
+        Row(
+            Modifier.height(44.dp).clip(RoundedCornerShape(22.dp))
+                .background(if (selected) MaterialTheme.colorScheme.primary else x.field)
+                .clickable(onClickLabel = tr("Фильтр журнала")) { open = true }
+                .padding(start = 14.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.FilterList, null, Modifier.size(18.dp), tint = fg)
+            Text(
+                if (selected) f.describe() else tr("Фильтр"), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg,
+                maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp),
+            )
+            Icon(Icons.Filled.ArrowDropDown, null, Modifier.size(20.dp), tint = fg)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (selected) DropdownMenuItem(text = { Text(tr("Сбросить фильтр"), fontSize = 17.sp) }, leadingIcon = { Icon(Icons.Filled.Close, null) }, onClick = { open = false; vm.changeLogFilter(ru.r3xed.qsolog.data.LogFilter()) })
+            if (vm.savedFilters.isNotEmpty()) {
+                Text(tr("Мои фильтры"), style = MaterialTheme.typography.labelMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                vm.savedFilters.forEach { sf ->
+                    DropdownMenuItem(
+                        text = { Text(sf.name, fontSize = 17.sp, fontWeight = FontWeight.Bold) },
+                        onClick = { open = false; vm.applySavedFilter(sf) },
+                        trailingIcon = { IconButton(onClick = { vm.deleteSavedFilter(sf.name) }) { Icon(Icons.Filled.Delete, tr("Удалить фильтр")) } },
+                    )
+                }
+                HorizontalDivider()
+            }
+            Text(tr("Не отправлено"), style = MaterialTheme.typography.labelMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            ru.r3xed.qsolog.data.OnlineLog.entries.forEach { log ->
+                DropdownMenuItem(
+                    text = { Text(log.title, fontSize = 17.sp, fontWeight = if (f.unsent == log) FontWeight.Bold else null) },
+                    onClick = { open = false; vm.changeLogFilter(f.copy(unsent = if (f.unsent == log) null else log)) },
+                )
+            }
+            HorizontalDivider()
+            ru.r3xed.qsolog.data.QslQueue.entries.forEach { qq ->
+                DropdownMenuItem(
+                    text = { Text(qq.title, fontSize = 17.sp, fontWeight = if (f.qsl == qq) FontWeight.Bold else null) },
+                    onClick = { open = false; vm.changeLogFilter(f.copy(qsl = if (f.qsl == qq) null else qq)) },
+                )
+            }
+            HorizontalDivider()
+            val bands = remember(vm.allQsos) { ru.r3xed.qsolog.data.BANDS.filter { b -> vm.allQsos.any { it.band.equals(b, true) } } }
+            val modes = remember(vm.allQsos) { ru.r3xed.qsolog.data.MODES.filter { m -> vm.allQsos.any { it.mode.equals(m, true) } } }
+            Text(tr("Диапазон"), style = MaterialTheme.typography.labelMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                bands.forEach { b -> FilterPill(b, f.band == b) { vm.changeLogFilter(f.copy(band = if (f.band == b) null else b)) } }
+            }
+            Text(tr("Вид связи"), style = MaterialTheme.typography.labelMedium, color = x.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                modes.forEach { m -> FilterPill(m, f.mode == m) { vm.changeLogFilter(f.copy(mode = if (f.mode == m) null else m)) } }
+            }
+            HorizontalDivider(Modifier.padding(top = 8.dp))
+            DropdownMenuItem(
+                text = { Text(tr("Сохранить как «Мой фильтр»…"), fontSize = 17.sp) },
+                leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
+                onClick = { open = false; saving = true },
+            )
+        }
+    }
+    if (saving) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { saving = false },
+            title = { Text(tr("Сохранить фильтр")) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(tr("Сохраняются поиск, станция и фильтр: %s", listOfNotNull(vm.query.ifBlank { null }, vm.stationFilter, f.describe().ifBlank { null }).joinToString(" · ").ifBlank { tr("ничего не выбрано") }))
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(tr("Название")) }, singleLine = true)
+                }
+            },
+            confirmButton = { Button(onClick = { saving = false; vm.saveCurrentFilter(name) }, enabled = name.isNotBlank()) { Text(tr("Сохранить")) } },
+            dismissButton = { TextButton(onClick = { saving = false }) { Text(tr("Отмена")) } },
+        )
+    }
+}
+
+@Composable
+private fun FilterPill(text: String, on: Boolean, onClick: () -> Unit) {
+    val x = LocalExtra.current
+    Text(
+        text, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+        color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(if (on) MaterialTheme.colorScheme.primary else x.field)
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+/** Android's print dialog for an HTML page (QSL labels); the WebView lives until the page is handed over. */
+internal fun printHtml(context: android.content.Context, html: String, job: String) {
+    val wv = android.webkit.WebView(context)
+    printing = wv
+    wv.webViewClient = object : android.webkit.WebViewClient() {
+        override fun onPageFinished(view: android.webkit.WebView, url: String?) {
+            val pm = context.getSystemService(android.content.Context.PRINT_SERVICE) as android.print.PrintManager
+            pm.print(job, view.createPrintDocumentAdapter(job), android.print.PrintAttributes.Builder().setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4).build())
+            printing = null
+        }
+    }
+    wv.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+}
+
+private var printing: android.webkit.WebView? = null

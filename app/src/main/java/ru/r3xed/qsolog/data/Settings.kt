@@ -24,6 +24,10 @@ class Settings(context: Context) {
     }
 
     /** The settings without the passwords: quick, from the plain file. The passwords come from [loadSecrets]. */
+    /** Plain text settings of 2.9.1 (filters, backups, activation, cluster alerts): one key each. */
+    fun text(key: String, def: String = ""): String = prefs.getString(key, def) ?: def
+    fun putText(key: String, value: String) = prefs.edit().putString(key, value).apply()
+
     fun loadPublic() = StationSettings(
         myCall = prefs.getString("my_call", "") ?: "",
         myLocator = prefs.getString("my_locator", "") ?: "",

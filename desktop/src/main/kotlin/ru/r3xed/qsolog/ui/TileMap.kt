@@ -193,6 +193,8 @@ fun MarkerMap(
     fitTo: List<LatLon>? = null,
     /** A click on the map itself (not on a marker), as a point. */
     onTapMap: ((LatLon) -> Unit)? = null,
+    /** A shaded area (the night side of the grey line), drawn under the markers. */
+    shade: List<LatLon>? = null,
 ) {
     val density = LocalDensity.current.density
     val tile = 256f * density // tile edge in pixels; scaled so map text stays readable on HiDPI screens
@@ -331,6 +333,17 @@ fun MarkerMap(
                     dstOffset = IntOffset((tx * tile - ox).toInt(), (ty * tile - oy).toInt()),
                     dstSize = IntSize(edge, edge),
                 )
+            }
+
+            if (shade != null && shade.size > 2) {
+                // Drawn three times, a world apart, so the night side covers the map wherever it was panned.
+                val world = (tile * (1 shl zoom)).toFloat()
+                for (k in -1..1) {
+                    val area = Path()
+                    shade.forEachIndexed { i, p -> val s = screen(p) + Offset(world * k, 0f); if (i == 0) area.moveTo(s.x, s.y) else area.lineTo(s.x, s.y) }
+                    area.close()
+                    drawPath(area, Color(0x55101820))
+                }
             }
 
             if (path != null) {
