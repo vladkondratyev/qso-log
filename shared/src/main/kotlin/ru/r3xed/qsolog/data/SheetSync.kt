@@ -183,9 +183,9 @@ object SheetSync {
         return (json["rows"] as? Double)?.toInt() ?: 0
     }
 
-    private suspend fun get(url: String): String = request(url, null)
+    internal suspend fun get(url: String): String = request(url, null)
 
-    private suspend fun post(url: String, body: String): String = request(url, body)
+    internal suspend fun post(url: String, body: String): String = request(url, body)
 
     /** Apps Script answers a POST with a redirect to the result, which is then fetched with GET. */
     private suspend fun request(start: String, body: String?): String = withContext(Dispatchers.IO) {

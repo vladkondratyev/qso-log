@@ -67,7 +67,6 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -259,6 +258,7 @@ fun ContestScreen(vm: AppViewModel) {
             hit(KeyAction.SPACE_NEXT) && rcvdFocused && grids -> { locFocus.requestFocus(); true }
             hit(KeyAction.SPACE_NEXT) && (rcvdFocused || otherFocused != null) -> { callFocus.requestFocus(); true }
             e.key == Key.DirectionUp && callFocused && form.isNew && form.call.isEmpty() -> { prev(); true }
+            hit(KeyAction.CLEAR_CALL) -> { vm.setCall(""); error = null; if (keypad) activate(Target.CALL) else callFocus.requestFocus(); true }
             hit(KeyAction.CONTEST_PREV) -> { prev(); true }
             hit(KeyAction.CONTEST_NEXT) -> { next(); true }
             hit(KeyAction.SAVE) -> { next(); true }

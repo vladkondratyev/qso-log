@@ -15,13 +15,14 @@ class WhatsNewTest {
     }
 
     @Test
-    fun menusOnComputerTabsOnPhone() {
-        // 2.9.1: the computer gets the menus, ⌘K and the status bar; the phone the bottom bar.
+    fun tableOnComputerKeypadOnPhone() {
+        // 2.9.3: the table log and PTT are the computer's, the search keypad the phone's.
         I18n.chosen = Lang.RU
         try {
-            assertTrue("«Вид»" in WhatsNew.items(desktop = true).first())
-            assertTrue("«Статистика»" in WhatsNew.items(desktop = false).first())
-            assertTrue(WhatsNew.items(desktop = false).any { "QTH" in it })
+            assertTrue(WhatsNew.items(desktop = true).any { "таблицей" in it })
+            assertTrue(WhatsNew.items(desktop = true).any { "PTT" in it })
+            assertTrue(WhatsNew.items(desktop = false).none { "PTT" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "клавиатура" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

@@ -37,7 +37,46 @@ object Cabrillo {
         val location: String = "",
         val operators: String = "",
         val createdBy: String = "QSO-LOG",
-    )
+        /** CATEGORY-POWER: HIGH, LOW, QRP; empty to leave the line out. */
+        val categoryPower: String = "",
+        /** CATEGORY-ASSISTED: ASSISTED (the cluster, skimmers) or NON-ASSISTED. */
+        val categoryAssisted: String = "NON-ASSISTED",
+        /** CATEGORY-TRANSMITTER: ONE, TWO, LIMITED, UNLIMITED, SWL. */
+        val categoryTransmitter: String = "ONE",
+        val gridLocator: String = "",
+        val club: String = "",
+        val name: String = "",
+        /** Up to 6 lines, each an ADDRESS line. */
+        val address: String = "",
+        val email: String = "",
+    ) {
+        /** The fields the user types once and the next report takes again: "key=value" lines. */
+        fun extras(): String = listOf(
+            "power" to categoryPower, "assisted" to categoryAssisted, "transmitter" to categoryTransmitter,
+            "club" to club, "name" to name, "address" to address.replace("\n", "\\n"), "email" to email, "operators" to operators,
+        ).joinToString("\n") { (k, v) -> "$k=$v" }
+
+        /** [extras] saved earlier on top of this header; a blank saved value keeps this one's. */
+        fun withExtras(s: String): Header {
+            val m = s.lines().mapNotNull { l -> l.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
+            fun v(k: String, d: String) = m[k]?.ifBlank { null } ?: d
+            return copy(
+                categoryPower = m["power"] ?: categoryPower, categoryAssisted = v("assisted", categoryAssisted),
+                categoryTransmitter = v("transmitter", categoryTransmitter), club = m["club"] ?: club, name = v("name", name),
+                address = (m["address"] ?: address).replace("\\n", "\n"), email = v("email", email), operators = v("operators", operators),
+            )
+        }
+    }
+
+    /** CATEGORY-POWER for a transmitter power of [watts]: up to 5 W QRP, up to 100 W LOW, above HIGH; empty when unknown. */
+    fun powerCategory(watts: String): String {
+        val w = watts.replace(',', '.').filter { it.isDigit() || it == '.' }.toDoubleOrNull() ?: return ""
+        return when {
+            w <= 5 -> "QRP"
+            w <= 100 -> "LOW"
+            else -> "HIGH"
+        }
+    }
 
     private val DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HHmm")
@@ -143,11 +182,20 @@ object Cabrillo {
         sb.append("START-OF-LOG: 3.0\r\n")
         line("CONTEST", h.contest.uppercase().ifBlank { "NONE" })
         line("CALLSIGN", h.callsign.uppercase())
+        line("LOCATION", h.location)
         line("CATEGORY-OPERATOR", h.categoryOperator)
+        line("CATEGORY-ASSISTED", h.categoryAssisted)
         line("CATEGORY-BAND", categoryBand(sorted))
         line("CATEGORY-MODE", categoryMode(sorted, h.format))
-        line("LOCATION", h.location)
-        line("OPERATORS", h.operators)
+        line("CATEGORY-POWER", h.categoryPower)
+        line("CATEGORY-TRANSMITTER", h.categoryTransmitter)
+        line("GRID-LOCATOR", h.gridLocator.take(6).let { if (it.length >= 4) it.take(4).uppercase() + it.drop(4).lowercase() else "" })
+        line("CLUB", h.club)
+        // One operator: the callsign itself, as the rules ask (OPERATORS must not be empty).
+        line("OPERATORS", h.operators.ifBlank { h.callsign.uppercase() })
+        line("NAME", h.name)
+        h.address.lines().map { it.trim() }.filter { it.isNotEmpty() }.take(6).forEach { line("ADDRESS", it) }
+        line("EMAIL", h.email)
         line("CREATED-BY", h.createdBy)
         sorted.forEachIndexed { i, q ->
             val t = LocalDateTime.ofEpochSecond(q.timeUtc / 1000, 0, ZoneOffset.UTC)

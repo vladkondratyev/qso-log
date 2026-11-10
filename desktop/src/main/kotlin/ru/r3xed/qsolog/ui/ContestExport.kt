@@ -21,7 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,6 +64,14 @@ fun ContestExportDialog(
     var contest by remember { mutableStateOf(defaults.contest) }
     var operator by remember { mutableStateOf(defaults.categoryOperator) }
     var location by remember { mutableStateOf(defaults.location) }
+    var power by remember { mutableStateOf(defaults.categoryPower) }
+    var assisted by remember { mutableStateOf(defaults.categoryAssisted) }
+    var transmitter by remember { mutableStateOf(defaults.categoryTransmitter) }
+    var operators by remember { mutableStateOf(defaults.operators) }
+    var name by remember { mutableStateOf(defaults.name) }
+    var address by remember { mutableStateOf(defaults.address) }
+    var email by remember { mutableStateOf(defaults.email) }
+    var club by remember { mutableStateOf(defaults.club) }
     // Picked records go out as picked: none dropped as already exported or as not entered in contest mode.
     var onlyNew by remember { mutableStateOf(selected == null) }
     var mark by remember { mutableStateOf(true) }
@@ -107,6 +114,21 @@ fun ContestExportDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Text(tr("Мощность (CATEGORY-POWER)"), style = MaterialTheme.typography.titleSmall)
+                Options(listOf("QRP" to "QRP", "LOW" to "LOW", "HIGH" to "HIGH", "" to tr("Не указывать")), power) { power = it }
+                Text(tr("Помощь кластера (CATEGORY-ASSISTED)"), style = MaterialTheme.typography.titleSmall)
+                Options(listOf("NON-ASSISTED" to tr("Без помощи"), "ASSISTED" to tr("С кластером")), assisted) { assisted = it }
+                Text(tr("Передатчики (CATEGORY-TRANSMITTER)"), style = MaterialTheme.typography.titleSmall)
+                Options(listOf("ONE" to "ONE", "TWO" to "TWO", "LIMITED" to "LIM", "UNLIMITED" to "UNLIM", "SWL" to "SWL"), transmitter) { transmitter = it }
+                OutlinedTextField(operators, { operators = it.uppercase() }, label = { Text(tr("Операторы (OPERATORS)")) }, placeholder = { Text(tr("пусто — ваш позывной")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(name, { name = it }, label = { Text(tr("Имя и фамилия (NAME)")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(address, { address = it }, label = { Text(tr("Адрес (ADDRESS), до 6 строк")) }, minLines = 2, maxLines = 6, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(email, { email = it.trim() }, label = { Text("E-mail (EMAIL)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(club, { club = it }, label = { Text(tr("Клуб (CLUB)")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text(
+                    tr("Мощность берётся из настроек станции, имя и адрес — из полей станции; всё введённое здесь запоминается для следующего отчёта. Пустые строки в файл не попадают."),
+                    style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted,
+                )
                 Text(
                     tr("Контрольные номера берутся из полей карточки «Контрольный номер передан/принят»; если переданного нет, ставится порядковый номер 001, 002… Связи идут по времени, как требует формат."),
                     style = MaterialTheme.typography.bodyMedium, color = LocalExtra.current.muted,
@@ -137,7 +159,11 @@ fun ContestExportDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(defaults.copy(format = format, contest = contest.trim(), categoryOperator = operator, location = location.trim()), onlyNew, mark, contestOnly, ref.takeIf { contestOnly }) },
+                onClick = { onConfirm(defaults.copy(
+                    format = format, contest = contest.trim(), categoryOperator = operator, location = location.trim(),
+                    categoryPower = power, categoryAssisted = assisted, categoryTransmitter = transmitter, operators = operators.trim(),
+                    name = name.trim(), address = address.trim(), email = email, club = club.trim(),
+                ), onlyNew, mark, contestOnly, ref.takeIf { contestOnly }) },
                 enabled = n(onlyNew) > 0,
             ) { Text(tr("Сохранить файл (%s)", n(onlyNew))) }
         },

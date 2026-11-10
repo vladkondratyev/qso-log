@@ -360,6 +360,7 @@ object AdifLabels {
         "CONT" to "Континент",
         "CQZ" to "Зона CQ",
         "ITUZ" to "Зона ITU",
+        "IOTA" to "IOTA (остров)",
         "DXCC" to "Код DXCC",
         "QSL_VIA" to "QSL via",
         "EMAIL" to "E-mail",

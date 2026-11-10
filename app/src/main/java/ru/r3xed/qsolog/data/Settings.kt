@@ -149,6 +149,10 @@ class Settings(context: Context) {
     var contestCode: String
         get() = prefs.getString("contest_code", "") ?: ""
         set(v) = prefs.edit().putString("contest_code", v).apply()
+    /** The other lines of the contest report's header ([ru.r3xed.qsolog.data.Cabrillo.Header.extras]). */
+    var contestExtras: String
+        get() = prefs.getString("contest_extras", "") ?: ""
+        set(v) = prefs.edit().putString("contest_extras", v).apply()
     var contestOperator: String
         get() = prefs.getString("contest_operator", "SINGLE-OP") ?: "SINGLE-OP"
         set(v) = prefs.edit().putString("contest_operator", v).apply()
@@ -156,6 +160,14 @@ class Settings(context: Context) {
     var theme: String
         get() = prefs.getString("theme", "system") ?: "system"
         set(v) = prefs.edit().putString("theme", v).apply()
+    /** The colours of the user's own theme ([ru.r3xed.qsolog.data.CustomTheme.encode]). */
+    var customTheme: String
+        get() = prefs.getString("custom_theme", "") ?: ""
+        set(v) = prefs.edit().putString("custom_theme", v).apply()
+    /** The contrast outline of the input field with the cursor. */
+    var focusRing: Boolean
+        get() = prefs.getBoolean("focus_ring", false)
+        set(v) = prefs.edit().putBoolean("focus_ring", v).apply()
     /** App starts so far; the "hold to record" hint under the add button shows only on the first few. */
     /** The first-start setup has been shown (finished or put off). */
     var welcomeDone: Boolean
@@ -275,6 +287,74 @@ class Settings(context: Context) {
     var startAppsReturn: Boolean
         get() = prefs.getBoolean("start_apps_return", true)
         set(v) = prefs.edit().putBoolean("start_apps_return", v).apply()
+    // ---------- the settings through a Google Table of their own (see ru.r3xed.qsolog.data.SettingsSync) ----------
+
+    var settingsSyncOn: Boolean
+        get() = prefs.getBoolean("settings_sync_on", false)
+        set(v) = prefs.edit().putBoolean("settings_sync_on", v).apply()
+    /** The accounts of outside services go to the table too (they are then kept in the cloud). */
+    var settingsSyncCreds: Boolean
+        get() = prefs.getBoolean("settings_sync_creds", false)
+        set(v) = prefs.edit().putBoolean("settings_sync_creds", v).apply()
+    var settingsSyncUrl: String
+        get() = prefs.getString("settings_sync_url", "") ?: ""
+        set(v) = prefs.edit().putString("settings_sync_url", v).apply()
+    var settingsSyncStamp: String
+        get() = prefs.getString("settings_sync_stamp", "") ?: ""
+        set(v) = prefs.edit().putString("settings_sync_stamp", v).apply()
+    var settingsSyncHash: String
+        get() = prefs.getString("settings_sync_hash", "") ?: ""
+        set(v) = prefs.edit().putString("settings_sync_hash", v).apply()
+    var settingsSyncStatus: String
+        get() = prefs.getString("settings_sync_status", "") ?: ""
+        set(v) = prefs.edit().putString("settings_sync_status", v).apply()
+    /** This device's name in the table: which one wrote the settings last. */
+    val settingsSyncDevice: String
+        get() = prefs.getString("settings_sync_device", null) ?: ("android-" + java.util.UUID.randomUUID().toString().take(8)).also {
+            prefs.edit().putString("settings_sync_device", it).apply()
+        }
+
+    /** Every setting as text, the passwords and keys too (the sync then leaves out what it must). Slow — off the main thread. */
+    fun syncSnapshot(): Map<String, String> {
+        val plain = prefs.all.mapNotNull { (k, v) ->
+            when (v) {
+                null -> null
+                is Set<*> -> k to v.map { it.toString() }.sorted().joinToString(",")
+                else -> k to v.toString()
+            }
+        }.toMap()
+        val secrets = SettingsSync.SECRET_KEYS.associateWith { secret.getString(it, "") ?: "" }.filterValues { it.isNotEmpty() }
+        return plain + secrets
+    }
+
+    /** Writes the table's settings here, each in the type the app reads it in. Slow — off the main thread. */
+    fun applySync(m: Map<String, String>) {
+        val e = prefs.edit()
+        val s = secret.edit()
+        val existing = prefs.all
+        m.forEach { (k, v) ->
+            when {
+                k in SettingsSync.SECRET_KEYS -> s.putString(k, v)
+                k in BOOL_KEYS || existing[k] is Boolean -> e.putBoolean(k, v.toBoolean())
+                k in INT_KEYS || existing[k] is Int -> v.toIntOrNull()?.let { e.putInt(k, it) }
+                existing[k] is Long -> v.toLongOrNull()?.let { e.putLong(k, it) }
+                k in SET_KEYS || existing[k] is Set<*> -> e.putStringSet(k, v.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet())
+                else -> e.putString(k, v)
+            }
+        }
+        e.commit()
+        s.commit()
+    }
+
+    private companion object {
+        val BOOL_KEYS = setOf(
+            "adif_utf8", "auto_update_check", "contest_grids", "contest_keypad", "contest_rst_shown", "contest_sent_fixed",
+            "focus_ring", "hamqth_enabled", "info_from_log", "keep_screen_on", "name_only", "search_history", "time_on_save",
+        )
+        val INT_KEYS = setOf("cat_tune_step", "keypad_hold_ms")
+        val SET_KEYS = setOf("enabled_bands", "enabled_modes")
+    }
+
     /** The radio's last frequency on each band, "20m=14025000,40m=7074000": a band picked on the panel goes back there. */
     var bandMemory: String
         get() = prefs.getString("cat_band_memory", "") ?: ""

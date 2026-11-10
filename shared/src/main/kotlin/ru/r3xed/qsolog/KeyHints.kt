@@ -33,7 +33,7 @@ object KeyHints {
                 k(KeyAction.SPACE_NEXT), k(KeyAction.LOG_ENTER),
                 "Tab · Shift+Tab" to tr("следующее и предыдущее поле"),
                 "↑" to tr("в пустом позывном — исправить последнюю связь"),
-                k(KeyAction.CLEAR_CARD), k(KeyAction.CLOSE_CARD), k(KeyAction.DELETE_SAVED),
+                k(KeyAction.CLEAR_CARD), k(KeyAction.CLEAR_CALL), k(KeyAction.CLOSE_CARD), k(KeyAction.DELETE_SAVED),
                 k(KeyAction.FOCUS_CALL), k(KeyAction.FOCUS_FREQ), k(KeyAction.FOCUS_RST_SENT), k(KeyAction.FOCUS_RST_RCVD),
                 k(KeyAction.TIME_NOW), k(KeyAction.VOICE), k(KeyAction.SAVE_NEXT), k(KeyAction.SAVE),
                 "Alt+1…9 · Alt+Shift+1…9" to tr("диапазон · вид связи (n-й из включённых)"),
@@ -44,7 +44,7 @@ object KeyHints {
                 (listOf(KeyMap.label(KeyAction.LOG_ENTER, mac), KeyMap.label(KeyAction.SAVE, mac)).filter { it.isNotEmpty() }.joinToString(" · ")
                     .ifEmpty { null })?.let { it to tr("записать связь из любого поля") },
                 k(KeyAction.CONTEST_PREV, tr("предыдущая связь (↑ — в пустом позывном)")), k(KeyAction.CONTEST_NEXT),
-                k(KeyAction.CLEAR_CARD, tr("очистить карточку")), k(KeyAction.CLOSE_CARD, tr("закрыть карточку")),
+                k(KeyAction.CLEAR_CARD, tr("очистить карточку")), k(KeyAction.CLEAR_CALL), k(KeyAction.CLOSE_CARD, tr("закрыть карточку")),
             )),
             cwMessages?.let { msgs ->
                 Section(tr("Телеграф (CW)"), listOfNotNull(

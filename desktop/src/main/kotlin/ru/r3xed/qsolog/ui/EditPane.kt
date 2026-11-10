@@ -100,7 +100,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -213,6 +212,7 @@ fun EditPane(vm: AppState) {
                 hit(KeyAction.DELETE_SAVED) && !vm.form.isNew -> { confirmDelete = true; true }
                 e.key == Key.DirectionUp && callFocused && f.isNew && f.call.isEmpty() -> { vm.editLast(); true }
                 hit(KeyAction.FOCUS_CALL) -> { callFocus.requestFocus(); true }
+                hit(KeyAction.CLEAR_CALL) -> { vm.setCall(""); callFocus.requestFocus(); true }
                 hit(KeyAction.FOCUS_FREQ) -> { freqFocus.requestFocus(); true }
                 hit(KeyAction.FOCUS_RST_SENT) -> { rstFocus.requestFocus(); true }
                 hit(KeyAction.FOCUS_RST_RCVD) -> { rstRcvdFocus.requestFocus(); true }
@@ -281,6 +281,8 @@ fun EditPane(vm: AppState) {
             // What is typed comes first and never moves: the station's data, found later, shows up below the reports.
             // --- callsign and frequency ---
             // IntrinsicSize.Min: the play button takes the height of the field; top padding skips the floating label.
+            val dupe = vm.dupe
+            val tint = dupeTint(dupe)
             Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = f.call,
@@ -302,7 +304,11 @@ fun EditPane(vm: AppState) {
                     ),
                     // "Далее" goes to what is usually typed next: the frequency, or the report if it is already there.
                     keyboardActions = KeyboardActions(onNext = { if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus() }),
-                    colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
+                    // A repeat, this band in another mode, a new band: the field takes the colour (see [dupeTint]).
+                    colors = if (tint != null) OutlinedTextFieldDefaults.colors(
+                        unfocusedBorderColor = tint, focusedBorderColor = tint,
+                        unfocusedContainerColor = tint.copy(alpha = 0.14f), focusedContainerColor = tint.copy(alpha = 0.14f),
+                    ) else OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
                 )
                 // Frequency next to the callsign: typing it picks the band below by itself.
                 Field(tr("Частота, МГц"), f.freq, vm::setFreq, Modifier.width(190.dp * LocalTextBoost.current).padding(top = 8.dp).focusRequester(freqFocus), KeyboardType.Decimal, mono = true, onNext = { rstFocus.requestFocus() })
@@ -318,6 +324,7 @@ fun EditPane(vm: AppState) {
                     )
                 }
             }
+            if (tint != null && error != CALL_ERROR) dupe.note(f.band, f.mode)?.let { Text(it, color = tint, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) }
             RigBadge(vm)
             CwBar(vm)
             LaunchedEffect(vm.editSession) { if (f.isNew || vm.openedByKeys) callFocus.requestFocus() }
@@ -578,10 +585,12 @@ private fun StationCard(vm: AppState) {
             if (place.isNotBlank()) Text(place, fontSize = 17.sp, lineHeight = 22.sp, color = ink, modifier = Modifier.padding(end = 12.dp))
             // Locator and RDA district (from the QRZ.ru site page) side by side.
             val rda = f.adif["CNTY"].orEmpty()
-            if (f.locator.isNotBlank() || rda.isNotBlank()) {
+            val iota = f.adif["IOTA"].orEmpty()
+            if (f.locator.isNotBlank() || rda.isNotBlank() || iota.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                     if (f.locator.isNotBlank()) Tag(tr("Локатор"), f.locator, ink)
                     if (rda.isNotBlank()) Tag("RDA", rda, ink)
+                    if (iota.isNotBlank()) Tag("IOTA", iota, ink)
                 }
             }
           }
@@ -689,10 +698,8 @@ private fun HistoryCard(vm: AppState) {
                 tr("Последняя %s %s UTC", DATE_FMT.format(t), TIME_FMT.format(t)) + if (det.isNotBlank()) " · $det" else "",
                 fontSize = 15.sp, color = x.hlInk,
             )
-            // The last contact on each band: is this one a new band for the station, and when was it worked there.
-            if (h.byBand.size > 1 || (h.byBand.size == 1 && !h.byBand[0].band.equals(vm.form.band, ignoreCase = true))) {
-                BandChips(h.byBand, ink = x.hlInk, chip = x.hlBorder.copy(alpha = 0.22f), current = vm.form.band, modifier = Modifier.padding(top = 6.dp))
-            }
+            // Where the station was worked: bands × CW / PH / DIGI, the card's band and mode outlined (N1MM's "Previous QSOs").
+            BandModeGrid(h, vm.form.band, vm.form.mode, ink = x.hlInk, chip = x.hlBorder.copy(alpha = 0.22f), modifier = Modifier.padding(top = 6.dp))
         }
     }
 }

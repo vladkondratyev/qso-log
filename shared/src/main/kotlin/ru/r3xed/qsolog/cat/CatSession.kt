@@ -93,7 +93,8 @@ class CatSession(
                 while (running) {
                     // Transmit on or off first: a program waits for it to start or stop its audio.
                     ptt.getAndSet(null)?.let { io.clear(); driver.setPtt(io, it.on) }
-                    freq.getAndSet(null)?.let { io.clear(); driver.setFreq(io, it.hz) }
+                    // A transverter: the real frequency asked becomes the radio's IF.
+                    freq.getAndSet(null)?.let { io.clear(); driver.setFreq(io, config.rigHz(it.hz)) }
                     mode.getAndSet(null)?.let { io.clear(); driver.setMode(io, it.mode) }
                     state = driver.poll(io, state)
                     if (driver.answered) {
@@ -111,7 +112,9 @@ class CatSession(
                         break
                     }
                     val silent = silentPolls >= 3
-                    onStatus(CatStatus.Connected(if (baudFound) driver.what else label, if (heard) state else null, silent))
+                    // The driver keeps the radio's own frequency; the app sees the real one (through a transverter).
+                    val shown = state.freqHz?.let { hz -> state.copy(freqHz = config.realHz(hz)) } ?: state
+                    onStatus(CatStatus.Connected(if (baudFound) driver.what else label, if (heard) shown else null, silent))
                     // A command wakes the loop at once; otherwise the next poll comes after the pause.
                     wake.tryAcquire(pollMs, TimeUnit.MILLISECONDS)
                     wake.drainPermits()

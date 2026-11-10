@@ -72,7 +72,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.LocalTextStyle
@@ -85,6 +84,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
@@ -338,6 +339,8 @@ fun SettingsScreen(
                             }
                         }
                         Note(tr("«Как в системе» переключается вместе с тёмной темой Android."))
+                        if (vm.themeMode == ThemeMode.CUSTOM) CustomThemeEditor(vm.customTheme, vm::changeCustomTheme)
+                        FocusRingSwitch(vm.focusRing, vm::changeFocusRing)
                         Text(tr("Масштаб интерфейса"), style = MaterialTheme.typography.titleSmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             ru.r3xed.qsolog.data.UiScale.PHONE.forEach { sc ->
@@ -955,7 +958,82 @@ private fun SheetSyncSettings(vm: AppViewModel) {
     }
     Note(tr("Адрес скрипта — как пароль: кто его знает, может менять журнал. Саму таблицу открывать по ссылке не нужно."))
     Note(tr("В таблице появится лист «QSO-LOG»: в первой строке — названия полей и их описание, дальше по строке на связь. Связи можно править прямо в таблице. Чтобы удалить связь на всех устройствах, поставьте Y в столбце deleted — строку не удаляйте. Голосовые заметки остаются на своём устройстве. «Удалить весь журнал» очищает только это устройство: при следующей синхронизации связи вернутся из таблицы."))
+    SettingsSyncBlock(vm)
 }
+/**
+ * «Синхронизация настроек»: the program's settings through a second table and a second script (a second address
+ * …/exec, "a second sync token"); the log's script stays as it is. Accounts of outside services go only on request,
+ * with the warning that they are then kept in Google's cloud.
+ */
+@Composable
+private fun SettingsSyncBlock(vm: AppViewModel) {
+    val x = LocalExtra.current
+    val clipboard = LocalClipboardManager.current
+    Section(tr("Синхронизация настроек программы"))
+    SwitchRow(tr("Синхронизировать настройки программы"), vm.settingsSyncOn) { vm.changeSettingsSync(it) }
+    Note(tr("Тема, диапазоны и виды, клавиши, макросы F1–F8, CAT и телеграф, станции, кластер, фильтры и прочие настройки — одинаковые на всех ваших устройствах. Не переносится то, что относится к самому устройству: COM-порты, пути к файлам, масштаб интерфейса. Журнал синхронизируется отдельно, скриптом выше: он остаётся как был."))
+    if (!vm.settingsSyncOn) return
+    SwitchRow(tr("Передавать и учётные записи внешних сервисов"), vm.settingsSyncCreds) { vm.changeSettingsSyncCreds(it) }
+    Text(
+        tr("Внимание: логины, пароли и ключи QRZ.ru, QRZ.com, HamQTH, QRZCQ, LoTW, eQSL, Club Log, DX-кластера и сетевого входа трансивера будут храниться в вашей Google Таблице в облаке Google, а не только на ваших устройствах. Любой, у кого есть доступ к этой таблице или адрес её скрипта, увидит их открытым текстом. Включайте, только если таблица — ваша личная и никому не открыта. Без этого переключателя учётные записи остаются только на устройстве, и на каждом их нужно ввести самому."),
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (vm.settingsSyncCreds) MaterialTheme.colorScheme.error else x.muted,
+        fontWeight = if (vm.settingsSyncCreds) FontWeight.Bold else null,
+    )
+    Text(tr("Как получить второй адрес (токен) синхронизации"), style = MaterialTheme.typography.titleSmall)
+    val steps = listOf(
+        tr("Создайте НОВУЮ Google Таблицу, например «QSO-LOG настройки». Не используйте таблицу журнала: у неё уже есть свой скрипт, его не трогайте."),
+        tr("В новой таблице: «Расширения → Apps Script». Сотрите всё в редакторе и вставьте код второго скрипта — кнопка «Скопировать код скрипта настроек» ниже."),
+        tr("«Сохранить», затем «Начать развёртывание → Новое развёртывание», тип «Веб-приложение»: «Запуск от имени: я», «У кого есть доступ: все». Разрешите доступ своему аккаунту («Дополнительные настройки → Перейти»)."),
+        tr("Скопируйте «URL веб-приложения» (…/exec) — это и есть токен синхронизации настроек — и вставьте в поле ниже. Он отличается от адреса скрипта журнала."),
+        tr("Введите этот же адрес на других устройствах и включите там синхронизацию настроек. Первое устройство отправит свои настройки, остальные их получат и попросят перезапуск."),
+    )
+    steps.forEachIndexed { i, s ->
+        Row {
+            Text("${i + 1}.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(24.dp))
+            Text(s, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+    ActionButton(tr("Скопировать код скрипта настроек"), Icons.Filled.ContentCopy) {
+        clipboard.setText(AnnotatedString(ru.r3xed.qsolog.data.SettingsSync.SCRIPT))
+        vm.say(tr("Код скрипта настроек скопирован: вставьте его в «Расширения → Apps Script» новой таблицы"))
+    }
+    var url by remember { mutableStateOf(vm.settingsSyncUrl) }
+    val bad = url.isNotBlank() && (!SheetSync.isScriptUrl(url) || url == vm.sheetUrl)
+    OutlinedTextField(
+        value = url,
+        onValueChange = { url = it.trim(); vm.changeSettingsSyncUrl(url) },
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        label = { Text(tr("Адрес скрипта настроек (…/exec)")) },
+        placeholder = { Text("https://script.google.com/macros/s/…/exec", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        singleLine = true,
+        isError = bad,
+        supportingText = if (bad) { { Text(if (url == vm.sheetUrl) tr("Это адрес скрипта журнала: для настроек нужен второй скрипт в другой таблице") else tr("Нужен «URL веб-приложения» из развёртывания скрипта, а не ссылка на таблицу")) } } else null,
+        trailingIcon = {
+            IconButton(onClick = { clipboard.getText()?.text?.trim()?.let { url = it; vm.changeSettingsSyncUrl(it) } }) { Icon(Icons.Filled.ContentPaste, tr("Вставить из буфера")) }
+        },
+        shape = RoundedCornerShape(12.dp),
+    )
+    Button(
+        onClick = vm::syncSettings,
+        enabled = SheetSync.isScriptUrl(url) && !bad && !vm.settingsSyncing,
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        if (vm.settingsSyncing) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+        else Icon(Icons.Filled.Sync, null)
+        Spacer(Modifier.width(8.dp))
+        Text(if (vm.settingsSyncing) tr("Синхронизация…") else tr("Синхронизировать настройки"), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+    }
+    if (vm.settingsSyncStatus.isNotBlank()) {
+        Text(
+            vm.settingsSyncStatus, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+            color = if (vm.settingsSyncOk == false) MaterialTheme.colorScheme.error else if (vm.settingsSyncOk == true) x.ok else x.muted,
+        )
+    }
+    Note(tr("Настройки синхронизируются вместе с журналом (кнопка «Синхронизировать» и Ctrl+R) и при запуске программы. Если настройки менялись на двух устройствах, побеждает то, что позже записано в таблицу. Полученные настройки вступают в силу после перезапуска QSO-LOG."))
+}
+
 
 @Composable
 internal fun Section(text: String) {
@@ -1298,6 +1376,8 @@ private fun CatSettings(vm: AppViewModel) {
     SwitchRow(tr("S-метр — в RST отправленный"), c.sMeterToRst) { vm.changeCat(c.copy(sMeterToRst = it)) }
     SwitchRow(tr("Кнопки диапазона и вида в карточке перестраивают трансивер"), c.control) { vm.changeCat(c.copy(control = it)) }
 
+    TransverterSettings(c, vm::changeCat)
+
     Section(tr("Для JTDX, WSJT-X и других программ"))
     SwitchRow(tr("Делиться трансивером: сервер Hamlib rigctld"), c.serve) { vm.changeCat(c.copy(serve = it)) }
     if (c.serve) {
@@ -1345,4 +1425,61 @@ internal fun DeviceList(devices: List<ru.r3xed.qsolog.data.CatDevice>, chosen: S
             Text(d.title, style = MaterialTheme.typography.bodyLarge)
         }
     }
+}
+
+/**
+ * "Трансвертеры": the radio's IF range and the real band it is on the air (28–30 MHz → 432 MHz). The log, the scale
+ * and the cluster see the real frequency; tuning from the log goes to the radio as its IF.
+ */
+@Composable
+internal fun TransverterSettings(c: ru.r3xed.qsolog.cat.CatConfig, change: (ru.r3xed.qsolog.cat.CatConfig) -> Unit) {
+    Section(tr("Трансвертеры"))
+    fun mhz(hz: Long) = ru.r3xed.qsolog.cat.CatFormat.mhz(hz)
+    fun hz(s: String): Long? = s.replace(',', '.').trim().toDoubleOrNull()?.takeIf { it > 0 && it < 300_000 }?.let { Math.round(it * 1_000_000) }
+    c.transverters.forEachIndexed { i, t ->
+        fun upd(n: ru.r3xed.qsolog.cat.Transverter) = change(c.copy(transverters = c.transverters.toMutableList().also { it[i] = n }))
+        androidx.compose.foundation.layout.Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, LocalExtra.current.line, RoundedCornerShape(12.dp)).padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    SwitchRow(tr("%s–%s МГц → %s МГц", mhz(t.rigFromHz), mhz(t.rigToHz), mhz(t.realFromHz)), t.enabled) { upd(t.copy(enabled = it)) }
+                }
+                IconButton(onClick = { change(c.copy(transverters = c.transverters.filterIndexed { j, _ -> j != i })) }) { Icon(androidx.compose.material.icons.Icons.Filled.Delete, tr("Убрать")) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TrvField(tr("Трансивер от, МГц"), mhz(t.rigFromHz), Modifier.weight(1f)) { v -> hz(v)?.let { f -> upd(t.copy(rigFromHz = f, rigToHz = maxOf(t.rigToHz, f + 1))) } }
+                TrvField(tr("до, МГц"), mhz(t.rigToHz), Modifier.weight(1f)) { v -> hz(v)?.takeIf { it > t.rigFromHz }?.let { upd(t.copy(rigToHz = it)) } }
+                TrvField(tr("В эфире от, МГц"), mhz(t.realFromHz), Modifier.weight(1f)) { v -> hz(v)?.let { upd(t.copy(loHz = it - t.rigFromHz)) } }
+            }
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(
+            ru.r3xed.qsolog.cat.Transverter(true, 28_000_000, 30_000_000, 404_000_000),
+            ru.r3xed.qsolog.cat.Transverter(true, 144_000_000, 146_000_000, 1_152_000_000),
+            ru.r3xed.qsolog.cat.Transverter(true, 28_000_000, 30_000_000, 116_000_000),
+        ).forEach { t ->
+            androidx.compose.material3.OutlinedButton(onClick = { change(c.copy(transverters = c.transverters + t)) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) {
+                Text("+ ${mhz(t.rigFromHz).substringBefore('.')} → ${mhz(t.realFromHz).substringBefore('.')}", maxLines = 1)
+            }
+        }
+    }
+    Note(tr("Трансивер работает на ПЧ трансвертера (например, 28 МГц), а в журнал, на шкалу и в кластер идёт частота в эфире: 28,150 → 432,150 МГц, диапазон 70cm. Частота из журнала или со спота уходит на трансивер пересчитанной обратно. Укажите, какой участок трансивера и с какой частоты эфира начинается: 28–30 МГц → 432 МГц, 144–146 МГц → 1296 МГц. Выключите трансвертер переключателем, когда работаете на ПЧ-диапазоне напрямую. Если частоту читает и WSJT-X через сервер rigctld QSO-LOG, сдвиг трансвертера в WSJT-X не задавайте: он уже учтён."))
+}
+
+@Composable
+private fun TrvField(label: String, value: String, modifier: Modifier, onDone: (String) -> Unit) {
+    var text by remember(value) { mutableStateOf(value) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { v -> text = v.filter { it.isDigit() || it == '.' || it == ',' }.take(10) },
+        modifier = modifier.then(Modifier.onFocusChanged { f -> if (!f.isFocused && text != value) onDone(text) }),
+        label = { Text(label, maxLines = 1) }, singleLine = true,
+        textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone(text) }),
+        shape = RoundedCornerShape(12.dp),
+    )
 }

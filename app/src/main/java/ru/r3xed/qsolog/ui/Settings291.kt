@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -180,7 +179,7 @@ internal fun DxAlertSettings(vm: AppViewModel) {
 }
 
 @Composable
-private fun SwitchRow(text: String, on: Boolean, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(text: String, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LocalExtra.current.field)
             .toggleable(value = on, role = Role.Switch, onValueChange = onChange)

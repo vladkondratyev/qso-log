@@ -33,6 +33,8 @@ data class QrzInfo(
     val source: String = "",
     /** The station's photo on the callbook (a web address), shown in the card while it is filled; never saved. */
     val photo: String = "",
+    /** The island of the IOTA programme, "EU-133" (ADIF IOTA): QRZ.com, HamQTH and QRZCQ give it when they know it. */
+    val iota: String = "",
 ) {
     val fullName get() = listOf(name, surname).filter { it.isNotBlank() }.joinToString(" ")
 
@@ -203,5 +205,15 @@ class QrzClient(private val credentials: () -> Pair<String, String>) {
         error.contains("password", true) -> tr("Неверный логин или пароль QRZ.ru")
         error.contains("expired", true) -> tr("Сессия QRZ.ru истекла")
         else -> "QRZ.ru: $error"
+    }
+}
+
+/** IOTA references: "EU-133", "AS-007"; "eu 133" or "EU133" are tidied, anything else is not one. */
+object Iota {
+    private val RE = Regex("""^\s*(AF|AN|AS|EU|NA|OC|SA)\s*[-\s]?\s*(\d{1,3})\s*$""", RegexOption.IGNORE_CASE)
+
+    fun normalize(s: String?): String {
+        val m = RE.find(s.orEmpty()) ?: return ""
+        return m.groupValues[1].uppercase() + "-" + m.groupValues[2].padStart(3, '0')
     }
 }

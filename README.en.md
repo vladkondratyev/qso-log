@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.9.2 | [QSO-LOG-2.9.2.apk](../../releases/tag/v2.9.2) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.2 | [QSO-LOG-2.9.2-macos-arm64.dmg](../../releases/tag/desktop-v2.9.2) |
-| macOS 11 or newer, Intel | 2.9.2 | [QSO-LOG-2.9.2-macos-x64.dmg](../../releases/tag/desktop-v2.9.2) |
-| Windows 10 and 11, 64-bit | 2.9.2 | [QSO-LOG-2.9.2-windows-x64.zip](../../releases/tag/desktop-v2.9.2) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.2 | [QSO-LOG-2.9.2-linux-amd64.deb](../../releases/tag/desktop-v2.9.2) |
+| Android 8.0 or newer | 2.9.3 | [QSO-LOG-2.9.3.apk](../../releases/tag/v2.9.3) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.3 | [QSO-LOG-2.9.3-macos-arm64.dmg](../../releases/tag/desktop-v2.9.3) |
+| macOS 11 or newer, Intel | 2.9.3 | [QSO-LOG-2.9.3-macos-x64.dmg](../../releases/tag/desktop-v2.9.3) |
+| Windows 10 and 11, 64-bit | 2.9.3 | [QSO-LOG-2.9.3-windows-x64.zip](../../releases/tag/desktop-v2.9.3) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.3 | [QSO-LOG-2.9.3-linux-amd64.deb](../../releases/tag/desktop-v2.9.3) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -117,6 +117,12 @@ and save.
 <img src="docs/screenshots/02-card.png" width="200" alt="Saved QSO">
 <img src="docs/screenshots/55-keypad-compact.png" width="200" alt="Built-in compact keyboard in the card">
 </p>
+
+**Dupes (since 2.9.3).** The callsign field is coloured as you type: red — this station is in the log on this band in
+this mode group (CW / phone / digital), orange — the same band, another mode, green — worked, but only on other bands.
+A line under the field says which, and "Worked before" shows a bands × CW / PH / DIGI grid with the counts, like N1MM's
+Previous QSOs. The key left of 1 (Ё on the Russian layout, `~` with Shift) wipes the callsign. The station's **IOTA**
+field is under "All ADIF fields → Station", filled from QRZ.com, HamQTH and QRZCQ.
 
 ### Built-in keyboard
 
@@ -238,6 +244,12 @@ description changes only VFO A / VFO B (before, the frequency went only from the
 <img src="docs/screenshots/desktop-29-rig-tx.png" width="440" alt="The panel on transmit on the computer">
 </p>
 
+### Transverters
+
+Since 2.9.3: "CAT → Transverters". Set the radio's range and the frequency on the air it starts at: 28–30 MHz → 432 MHz
+or 144–146 MHz → 1296 MHz. A radio in transverter mode reports the IF; the log, the scale and the cluster get the
+frequency on the air (28.150 → 432.150, the 70cm band), and a spot's frequency goes to the radio converted back.
+
 ## CW from the F1–F8 keys
 
 As in N1MM, QSO-LOG sends stored CW messages by keying the transmitter with the DTR or RTS line of a USB adapter
@@ -278,6 +290,10 @@ pause commands, so they are left out of the messages.
 <img src="docs/screenshots/75-cw-settings.png" width="200" alt="CW settings">
 <img src="docs/screenshots/desktop-28-cw.png" width="440" alt="Messages F1–F8 on the computer">
 </p>
+
+Since 2.9.3 the computer has a **PTT lead** and a **PTT tail** (30 ms by default; PTT used to stay on for 0.7 s after a
+message), and PTT can go to a **COM port of its own** and its DTR/RTS line. F1–F8 have two sets: **Everyday** and
+**Contest**; the contest set works in the contest mode, they switch by themselves.
 
 ## Digital modes — WSJT-X, JTDX, MSHV
 
@@ -802,6 +818,15 @@ sign-in is needed in the app:
 The first sync merges the logs; the same QSO from two devices becomes one row. Later edits win, rows edited in the sheet
 come back to the devices, and a deletion on one device deletes on the others. The script address works like a password.
 
+### Settings sync
+
+Since 2.9.3: "Log → Program settings sync". It needs a **second address**: a script of its own in a table of its own;
+the log's script stays as it is. Create a new Google Table, paste the settings script ("Copy the settings script") into
+"Extensions → Apps Script", deploy it as a web app ("Execute as: me", "Who has access: anyone") and paste its …/exec
+address on every device. Ports, file paths and the scale stay on each device. "Also sync the accounts of outside services"
+adds the logins, passwords and keys — **they are then kept in your Google Table in the cloud**, not only on your devices.
+Received settings work after a restart.
+
 ## Reference and calculators
 
 ⋮ menu → "Reference and calculators", offline: Russian band plan, IARU Region 1 plan and activity frequencies, Morse (tap a sign to hear it; Russian letters show the Latin letter with the same signal, W/В, and the Russian chant used to learn them; digits and signs have chants too),
@@ -875,6 +900,9 @@ the device model — no log, callsign or passwords; you send it yourself (a GitH
 
 All `*DEMO` callsigns in the screenshots are made up.
 
+**Custom theme (since 2.9.3).** "Interface → Theme → Custom": a light or dark base, five main colours and ten more under
+"More"; separately, a **contrast outline of the active input field** in any theme.
+
 ## On the computer
 
 The desktop version does everything the Android one does, CAT included (a COM port or Hamlib rigctld). Since 2.0.0
@@ -891,6 +919,13 @@ Esc again brings the usual rows back.
 Differences from the phone: voice notes are WAV (M4A on the phone); "Share" copies the QSO to the clipboard; export,
 import and the reference are also in the File menu.
 
+### Log as a table
+
+Since 2.9.3: "View → Log as a table". The whole log as a compact table over the window: pick the columns, click a header
+to sort, search, filter and group by band, mode, date, station, country or region above it. A new QSO opens as a compact
+card over the table. The Cabrillo report writes the full header (CATEGORY-POWER, -ASSISTED, -TRANSMITTER, GRID-LOCATOR,
+CLUB, OPERATORS, NAME, ADDRESS, EMAIL).
+
 ## Installation
 
 Install a new version over the old one; the log and settings are kept.
@@ -902,21 +937,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.9.2-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.9.2), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.9.3-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.9.3), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.9.2-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.2), unpack the
+Download `QSO-LOG-2.9.3-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.3), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.9.2-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.2) and install it:
+Download `QSO-LOG-2.9.3-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.3) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.9.2-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.9.3-linux-amd64.deb
 ```
 
 ## Where the data is kept

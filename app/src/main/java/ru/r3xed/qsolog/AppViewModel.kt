@@ -112,6 +112,7 @@ enum class ThemeMode(private val ru: String) {
     SYSTEM("Как в системе"), // no-tr
     LIGHT("Светлая"), // no-tr
     DARK("Тёмная"), // no-tr
+    CUSTOM("Своя тема"), // no-tr
     ;
 
     val label: String get() = tr(ru)
@@ -607,7 +608,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Region and RDA (QRZ.ru site), region and zones (QRZ.com) into ADIF STATE / CNTY / CQZ / ITUZ unless the card has them. */
     private fun withQrzExtras(adif: Map<String, String>, info: QrzInfo): Map<String, String> =
-        adif + listOf("STATE" to info.region, "CNTY" to info.rda, "CQZ" to info.cqZone, "ITUZ" to info.ituZone)
+        adif + listOf("STATE" to info.region, "CNTY" to info.rda, "CQZ" to info.cqZone, "ITUZ" to info.ituZone, "IOTA" to info.iota)
             .filter { (k, v) -> v.isNotBlank() && adif[k].isNullOrBlank() }
 
     var screen by mutableStateOf<Screen>(Screen.Log)
@@ -738,7 +739,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         location = settings.station["MY_CNTY"].orEmpty().replace("-", "").uppercase(),
         operators = settings.station["OPERATOR"].orEmpty(),
         createdBy = "QSO-LOG " + BuildConfig.VERSION_NAME,
-    )
+        categoryPower = Cabrillo.powerCategory(settings.power),
+        gridLocator = settings.myLocator,
+        name = settings.station["MY_NAME"].orEmpty(),
+        address = listOf(settings.station["MY_STREET"], settings.station["MY_CITY"], settings.station["MY_COUNTRY"])
+            .mapNotNull { it?.trim()?.ifBlank { null } }.joinToString("\n"),
+    ).withExtras(prefs.contestExtras)
 
     /** Contacts entered in contest mode among [only] (or the whole log): the report dialog then offers to take only them. */
     fun hasContestQsos(only: Set<Long>?): Boolean = allQsos.any { (only == null || it.id in only) && ContestMode.isContest(it.adif) }
@@ -756,6 +762,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.contestFormat = h.format.name
         prefs.contestCode = h.contest
         prefs.contestOperator = h.categoryOperator
+        prefs.contestExtras = h.extras()
         pendingContest = h to PendingExport(ExportFormat.CONTEST, contestTarget?.only, onlyNew, mark, contestOnly, contestRef.takeIf { contestOnly })
         contestTarget = null
         val code = h.contest.uppercase().ifBlank { "LOG" }.replace('/', '-')
@@ -952,6 +959,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setTheme(mode: ThemeMode) {
         themeMode = mode
         prefs.theme = mode.name.lowercase()
+    }
+
+    /** The colours of "Своя" (see [ru.r3xed.qsolog.data.CustomTheme]). */
+    var customTheme by mutableStateOf(ru.r3xed.qsolog.data.CustomTheme.decode(prefs.customTheme)); private set
+
+    fun changeCustomTheme(t: ru.r3xed.qsolog.data.CustomTheme) {
+        customTheme = t
+        prefs.customTheme = t.encode()
+    }
+
+    /** "Контрастная обводка активного поля": a thick bright outline around the field with the cursor, in any theme. */
+    var focusRing by mutableStateOf(prefs.focusRing); private set
+
+    fun changeFocusRing(on: Boolean) {
+        focusRing = on
+        prefs.focusRing = on
     }
 
     /** Result of "Проверить обновления" in the about block of the settings. */
@@ -1509,7 +1532,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setCall(raw: String) {
-        val call = raw.uppercase().filter { it.isLetterOrDigit() || it == '/' }
+        // Ё wipes the callsign (KeyAction.CLEAR_CALL): the letter it may still type is no part of a callsign.
+        val call = raw.uppercase().filter { (it.isLetterOrDigit() || it == '/') && it != 'Ё' && it != 'Ë' }
         val f = form
         if (call != f.call) cardFromLog = false
         form = if (f.infoFromQrz || (f.name.isBlank() && f.qth.isBlank() && locatorFree(f))) {
@@ -1675,6 +1699,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         is javax.net.ssl.SSLException -> tr("Ошибка защищённого соединения: %s", e.message)
         else -> tr("Нет связи с QRZ.ru: %s %s", e.javaClass.simpleName, e.message.orEmpty()).trim()
     }
+
+    /** The callsign of the card against the log: a repeat on this band and mode, this band only, or a new band. */
+    val dupe: ru.r3xed.qsolog.data.Dupe
+        get() = if (form.call.length < 3) ru.r3xed.qsolog.data.Dupe.NEW else history.dupe(form.band, form.mode)
 
     private fun loadHistory(call: String) {
         val id = form.id
@@ -2277,6 +2305,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 sheetOk = true
                 sheetStatus = tr("Синхронизировано в %s: отправлено %s, получено %s", time, res.sent, res.received)
                 reload()
+                syncSettings()
                 _messages.send(Message(tr("Журнал синхронизирован: отправлено %s, получено %s", res.sent, res.received)))
             }.onFailure { e ->
                 sheetOk = false
@@ -2284,6 +2313,100 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _messages.send(Message(sheetStatus))
             }
             prefs.sheetStatus = sheetStatus
+        }
+    }
+
+    // ---------- the settings through a Google Table of their own (a second script; the log's stays as it was) ----------
+
+    var settingsSyncOn by mutableStateOf(prefs.settingsSyncOn); private set
+    /** The accounts of outside services go to the table too: they are then kept in Google's cloud, not only here. */
+    var settingsSyncCreds by mutableStateOf(prefs.settingsSyncCreds); private set
+    var settingsSyncUrl by mutableStateOf(prefs.settingsSyncUrl); private set
+    var settingsSyncStatus by mutableStateOf(prefs.settingsSyncStatus); private set
+    var settingsSyncing by mutableStateOf(false); private set
+    var settingsSyncOk by mutableStateOf<Boolean?>(null); private set
+    /** Settings were taken from the table: they work after the program starts again. */
+    var settingsSyncRestart by mutableStateOf(false); private set
+
+    fun changeSettingsSync(on: Boolean) {
+        settingsSyncOn = on
+        prefs.settingsSyncOn = on
+        if (on) syncSettings()
+    }
+
+    fun changeSettingsSyncCreds(on: Boolean) {
+        settingsSyncCreds = on
+        prefs.settingsSyncCreds = on
+        // What goes has changed: the next exchange sends it.
+        prefs.settingsSyncHash = ""
+    }
+
+    fun changeSettingsSyncUrl(url: String) {
+        val u = url.trim()
+        if (u == settingsSyncUrl) return
+        settingsSyncUrl = u
+        prefs.settingsSyncUrl = u
+        // Another table: what it holds is taken (or this device's settings sent, if it is empty).
+        prefs.settingsSyncStamp = ""
+        prefs.settingsSyncHash = ""
+        settingsSyncStatus = ""
+        prefs.settingsSyncStatus = ""
+        settingsSyncOk = null
+    }
+
+    /**
+     * One exchange with the settings table: the settings another device wrote there since the last time are taken
+     * (they work after a restart), otherwise this device's are sent if they changed. With the log's sync and on start.
+     */
+    fun syncSettings() {
+        if (!settingsSyncOn || settingsSyncing) return
+        val url = settingsSyncUrl
+        if (!SheetSync.isScriptUrl(url)) {
+            settingsSyncOk = false
+            settingsSyncStatus = tr("Вставьте адрес веб-приложения второго скрипта (для настроек): https://script.google.com/macros/s/…/exec")
+            return
+        }
+        settingsSyncing = true
+        viewModelScope.launch {
+            val creds = settingsSyncCreds
+            val r = runCatching {
+                withContext(Dispatchers.IO) {
+                    val remote = ru.r3xed.qsolog.data.SettingsSync.fetch(url)
+                    val local = ru.r3xed.qsolog.data.SettingsSync.outgoing(prefs.syncSnapshot(), creds)
+                    val state = ru.r3xed.qsolog.data.SettingsSync.State(prefs.settingsSyncStamp, prefs.settingsSyncHash)
+                    when (val step = ru.r3xed.qsolog.data.SettingsSync.plan(remote, local, state, prefs.settingsSyncDevice)) {
+                        is ru.r3xed.qsolog.data.SettingsSync.Step.Take -> {
+                            val got = ru.r3xed.qsolog.data.SettingsSync.incoming(step.settings, creds)
+                            prefs.applySync(got)
+                            prefs.settingsSyncStamp = step.stamp
+                            prefs.settingsSyncHash = ru.r3xed.qsolog.data.SettingsSync.hash(ru.r3xed.qsolog.data.SettingsSync.outgoing(prefs.syncSnapshot(), creds))
+                            -got.size
+                        }
+                        ru.r3xed.qsolog.data.SettingsSync.Step.Send -> {
+                            prefs.settingsSyncStamp = ru.r3xed.qsolog.data.SettingsSync.send(url, prefs.settingsSyncDevice, local)
+                            prefs.settingsSyncHash = ru.r3xed.qsolog.data.SettingsSync.hash(local)
+                            local.size
+                        }
+                        ru.r3xed.qsolog.data.SettingsSync.Step.Nothing -> 0
+                    }
+                }
+            }
+            settingsSyncing = false
+            val time = TIME_FMT.format(LocalDateTime.now(ZoneOffset.UTC)) + " UTC"
+            r.onSuccess { n ->
+                settingsSyncOk = true
+                settingsSyncStatus = when {
+                    n < 0 -> tr("%s: получены настройки с другого устройства (%s). Перезапустите QSO-LOG, чтобы они вступили в силу.", time, -n)
+                    n > 0 -> tr("%s: настройки отправлены в таблицу (%s)", time, n)
+                    else -> tr("%s: настройки совпадают с таблицей", time)
+                }
+                if (n < 0) { settingsSyncRestart = true; _messages.send(Message(settingsSyncStatus)) }
+            }.onFailure { e ->
+                settingsSyncOk = false
+                settingsSyncStatus = tr("Настройки не синхронизированы в %s: %s", time, e.message ?: e.javaClass.simpleName)
+                _messages.send(Message(settingsSyncStatus))
+            }
+            prefs.settingsSyncStatus = settingsSyncStatus
         }
     }
 
@@ -3080,7 +3203,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         cwConfig = c
         prefs.cw = c
         keyer?.wpm = c.wpm
-        if (c.copy(wpm = old.wpm, messages = old.messages) != old) restartCw()
+        if (c.copy(wpm = old.wpm, messages = old.messages, contestMessages = old.contestMessages) != old) restartCw()
         // The hand keyer counts its dots from the speed: a new speed, a new keyer at the next key.
         else if (c.wpm != old.wpm) closeCwHand(keepTape = true)
     }
@@ -3101,7 +3224,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         k = if (c.via == ru.r3xed.qsolog.cw.CwVia.CWDAEMON) {
             val daemon = ru.r3xed.qsolog.cw.CwDaemon(c.daemon, onState, c.wpm)
             if (tone == null) daemon else ru.r3xed.qsolog.cw.MirroredSender(daemon, CwKeyer({ ru.r3xed.qsolog.cw.NoLine }, {}, c.wpm, onKey = onKey))
-        } else CwKeyer({ catAndroid.openKeyLine(c) }, onState, c.wpm, c.ptt, onKey)
+        } else CwKeyer({ catAndroid.openKeyLine(c) }, onState, c.wpm, c.ptt, onKey, c.pttLeadMs, c.pttTailMs)
         keyer = k
         closeCwHand(keepTape = true)
     }
@@ -3217,10 +3340,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val cwActive: Boolean
         get() = cwConfig.enabled && form.mode == "CW" && (screen == Screen.Edit || screen == Screen.Contest)
 
+    /** The messages F1–F8 in use: the contest set while the contest mode is open, the everyday one otherwise. */
+    val cwMessages: List<String> get() = cwConfig.messagesFor(screen == Screen.Contest)
+
     fun cwText(i: Int): String {
         val f = form
         return CwMacros.expand(
-            cwConfig.messages.getOrNull(i).orEmpty(), settings.myCall.trim(), f.call, f.rstSent,
+            cwMessages.getOrNull(i).orEmpty(), settings.myCall.trim(), f.call, f.rstSent,
             f.adif[ContestMode.SENT].orEmpty(), f.name.substringBefore(' '), settings.myLocator.trim(),
         )
     }
@@ -3244,7 +3370,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The telegraph rows of the app's keypad (F1–F8, Stop, the on-screen key), while the card is in CW and the key line is on. */
     internal fun cwKeypadKeys(): ru.r3xed.qsolog.ui.CwKeys? = if (!cwActive) null else ru.r3xed.qsolog.ui.CwKeys(
-        labels = cwConfig.messages, sending = cwSending, onSend = ::sendCw, onStop = ::stopCw,
+        labels = cwMessages, sending = cwSending, onSend = ::sendCw, onStop = ::stopCw,
         screenKey = cwConfig.screenKey, onKey = ::cwScreenKey,
     )
 

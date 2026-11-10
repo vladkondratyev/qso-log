@@ -63,6 +63,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material.icons.filled.KeyboardHide
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -96,13 +98,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import ru.r3xed.qsolog.SearchLookup
+import ru.r3xed.qsolog.data.KeypadMode
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenuItem
 import ru.r3xed.qsolog.data.SheetSync
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ProvideTextStyle
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -146,6 +148,13 @@ fun LogScreen(
 ) {
     val x = LocalExtra.current
     BackHandler(enabled = vm.selecting) { vm.clearSelection() }
+    // "Своя клавиатура" is on: the search is typed on it too. [searchKeys] — its keypad is open under the list;
+    // [searchSystem] — this time the system keyboard was asked for (Cyrillic names and towns).
+    var searchKeys by remember { mutableStateOf(false) }
+    var searchSystem by remember { mutableStateOf(false) }
+    var searchCaret by remember { mutableStateOf<Int?>(null) }
+    val ownSearch = vm.keypadShown && !searchSystem
+    BackHandler(enabled = ownSearch && searchKeys && !vm.selecting) { searchKeys = false }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // imePadding: with the keyboard open (search) the list shrinks and "Добавить QSO" stays above the keyboard.
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
@@ -262,13 +271,19 @@ fun LogScreen(
             // Ctrl+F on a physical keyboard puts the cursor here; Enter opens a new card for the station found, Esc clears.
             val searchFocus = remember { FocusRequester() }
             val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-            LaunchedEffect(vm.searchFocus) { if (vm.searchFocus > 0) searchFocus.requestFocus() }
-            OutlinedTextField(
+            LaunchedEffect(vm.searchFocus) { if (vm.searchFocus > 0 && !ownSearch) searchFocus.requestFocus() }
+            LaunchedEffect(searchSystem) { if (searchSystem) searchFocus.requestFocus() }
+            if (ownSearch) KeyField(
+                tr("Поиск: позывной, имя, город"), vm.query, active = searchKeys, selected = false, isError = false,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                caret = searchCaret, onClear = { vm.search(""); searchCaret = null },
+            ) { searchKeys = true; searchCaret = null }
+            else OutlinedTextField(
                 value = vm.query,
                 onValueChange = vm::search,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                     .focusRequester(searchFocus)
-                    .onFocusChanged { vm.searchFocused = it.isFocused }
+                    .onFocusChanged { vm.searchFocused = it.isFocused; if (!it.isFocused && searchSystem && vm.query.isBlank()) searchSystem = false }
                     .onPreviewKeyEvent { e ->
                         if (e.type != KeyEventType.KeyDown || !e.fromHardware()) return@onPreviewKeyEvent false
                         when {
@@ -358,8 +373,44 @@ fun LogScreen(
                 }
             }
 
-            // At the bottom, under the thumb; holding it records a voice note.
-            AddQsoButton(vm, hasMicPermission, requestMicPermission, Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp))
+            if (ownSearch && searchKeys && !vm.selecting) {
+                // The app's keypad for the search: keys, then "hide", "system keyboard" and "new QSO" for the typed call.
+                val compact = vm.keypad == KeypadMode.COMPACT
+                HorizontalDivider(color = x.line)
+                Column(Modifier.padding(horizontal = 6.dp, vertical = if (compact) 4.dp else 6.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)) {
+                    Keypad(
+                        compact = compact,
+                        onKey = { c -> val (v, at) = typeAt(vm.query, searchCaret, c, 30); searchCaret = at; vm.search(v) },
+                        onBackspace = { val (v, at) = backspaceAt(vm.query, searchCaret); searchCaret = at; vm.search(v) },
+                        onClear = { vm.search(""); searchCaret = null },
+                        onCaret = { steps -> searchCaret = moveCaret(vm.query, searchCaret, steps) },
+                        holdMs = vm.keypadHoldMs,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        OutlinedIconButton(onClick = { searchKeys = false }, modifier = Modifier.size(keypadButtonHeight(compact)), shape = RoundedCornerShape(10.dp)) {
+                            Icon(Icons.Filled.KeyboardHide, tr("Спрятать клавиатуру"))
+                        }
+                        OutlinedIconButton(onClick = { searchKeys = false; searchSystem = true }, modifier = Modifier.size(keypadButtonHeight(compact)), shape = RoundedCornerShape(10.dp)) {
+                            Icon(Icons.Filled.Keyboard, tr("Системная клавиатура: имя, город по-русски"))
+                        }
+                        Button(
+                            onClick = {
+                                // A station of the log opens with its data; a callsign not in the log goes into the card as typed.
+                                val typed = vm.query.trim().uppercase()
+                                searchKeys = false
+                                vm.addQso()
+                                if (vm.form.call.isBlank() && Regex("[A-Z0-9/]{3,}").matches(typed)) vm.setCall(typed)
+                            },
+                            enabled = vm.query.isNotBlank(),
+                            modifier = Modifier.weight(1f).height(keypadButtonHeight(compact)), shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 6.dp),
+                        ) { Text(tr("Новая связь"), fontSize = if (compact) 16.sp else 17.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+                    }
+                }
+            } else {
+                // At the bottom, under the thumb; holding it records a voice note.
+                AddQsoButton(vm, hasMicPermission, requestMicPermission, Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp))
+            }
         }
     }
 

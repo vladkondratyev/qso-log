@@ -91,6 +91,7 @@ class HamQthBook(private val credentials: () -> Pair<String, String>) {
                 lon = (loc?.get("lon") as? Double)?.takeIf { loc["lat"] is Double },
                 region = listOf("oblast", "usState", "district").map { s(region?.get(it)) }.firstOrNull { it.isNotBlank() }.orEmpty(),
                 cqZone = s(m["cq"]), ituZone = s(m["itu"]),
+                iota = Iota.normalize(s(m["iota"])),
             )
         }
     }
@@ -183,6 +184,7 @@ class QrzCq(private val credentials: () -> Pair<String, String>) {
                 lon = lon?.takeIf { lat != null && !(lat == 0.0 && lon == 0.0) },
                 region = c["state"].orEmpty(),
                 cqZone = zone("cq"), ituZone = zone("itu"),
+                iota = Iota.normalize(c["iota"]),
             )
         }
     }
@@ -269,6 +271,7 @@ class QrzComXml(private val credentials: () -> Pair<String, String>) {
                 region = c["state"].orEmpty(),
                 cqZone = zone("cqzone"), ituZone = zone("ituzone"),
                 photo = c["image"].orEmpty().takeIf { it.startsWith("http") }.orEmpty(),
+                iota = Iota.normalize(c["iota"]),
             )
         }
     }
@@ -314,6 +317,7 @@ fun QrzInfo.fillFrom(more: QrzInfo): QrzInfo {
         region = region.ifBlank { more.region },
         cqZone = cqZone.ifBlank { more.cqZone },
         ituZone = ituZone.ifBlank { more.ituZone },
+        iota = iota.ifBlank { more.iota },
     )
 }
 

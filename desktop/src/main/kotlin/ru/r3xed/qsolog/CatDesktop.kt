@@ -125,25 +125,37 @@ object CatDesktop {
     fun openKeyLine(c: CwConfig): KeyLine {
         val name = c.device.ifBlank { ports().firstOrNull()?.key } ?: throw IOException(tr("COM-порт ключа не выбран"))
         val shared = catPort?.takeIf { it.first == name }?.second
-        val p = shared ?: SerialPort.getCommPort(name).also {
-            it.setComPortParameters(9600, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY)
-            it.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED)
-            if (!it.openPort()) throw IOException(tr("Не удалось открыть порт %s: он занят другой программой или нет доступа", name))
-            it.clearDTR()
-            it.clearRTS()
+        val p = shared ?: openLinePort(name)
+        // PTT on a port of its own (the CAT's port, or a second adapter); otherwise the key port's second line.
+        val pttName = c.pttDevice.takeIf { c.ptt && it.isNotBlank() && it != name }
+        val pttShared = pttName?.let { n -> catPort?.takeIf { it.first == n }?.second }
+        val pp = pttName?.let { n ->
+            pttShared ?: runCatching { openLinePort(n) }.getOrElse { e -> if (shared == null) p.closePort(); throw e }
         }
-        fun set(line: CwLine, on: Boolean) {
-            if (line == CwLine.DTR) { if (on) p.setDTR() else p.clearDTR() } else { if (on) p.setRTS() else p.clearRTS() }
+        fun set(port: SerialPort, line: CwLine, on: Boolean) {
+            if (line == CwLine.DTR) { if (on) port.setDTR() else port.clearDTR() } else { if (on) port.setRTS() else port.clearRTS() }
         }
-        val other = if (c.line == CwLine.DTR) CwLine.RTS else CwLine.DTR
-        set(c.line, c.invert)
+        val pttPort = pp ?: p
+        val pttLine = if (pp != null) c.pttLine else if (c.line == CwLine.DTR) CwLine.RTS else CwLine.DTR
+        set(p, c.line, c.invert)
         return object : KeyLine {
-            override fun key(down: Boolean) = set(c.line, down != c.invert)
-            override fun ptt(on: Boolean) = set(other, on)
+            override fun key(down: Boolean) = set(p, c.line, down != c.invert)
+            override fun ptt(on: Boolean) = set(pttPort, pttLine, on)
             override fun close() {
-                runCatching { set(c.line, false) }
+                runCatching { set(p, c.line, false) }
+                if (pp != null) runCatching { set(pp, pttLine, false) }
                 if (shared == null) p.closePort()
+                if (pp != null && pttShared == null) pp.closePort()
             }
         }
+    }
+
+    /** A COM port for its modem lines only (the key, PTT): both lines low. */
+    private fun openLinePort(name: String): SerialPort = SerialPort.getCommPort(name).also {
+        it.setComPortParameters(9600, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY)
+        it.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED)
+        if (!it.openPort()) throw IOException(tr("Не удалось открыть порт %s: он занят другой программой или нет доступа", name))
+        it.clearDTR()
+        it.clearRTS()
     }
 }

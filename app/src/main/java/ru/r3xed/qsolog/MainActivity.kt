@@ -258,6 +258,7 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
+                ThemeMode.CUSTOM -> vm.customTheme.dark
             }
             DisposableEffect(dark) {
                 val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
@@ -277,8 +278,10 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(cfg.keyboard, cfg.hardKeyboardHidden) {
                 vm.hardKeyboard = cfg.keyboard == AndroidConfig.KEYBOARD_QWERTY && cfg.hardKeyboardHidden == AndroidConfig.HARDKEYBOARDHIDDEN_NO
             }
-            QsoTheme(dark) {
+            QsoTheme(dark, custom = vm.customTheme.takeIf { vm.themeMode == ThemeMode.CUSTOM }, focusRing = vm.focusRing) {
                 val snackbar = remember { SnackbarHostState() }
+                // The settings table: what another device changed comes on start (it works after a restart).
+                LaunchedEffect(Unit) { vm.syncSettings() }
                 val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
                     uri?.let(vm::exportFile)
                 }
@@ -369,7 +372,7 @@ class MainActivity : ComponentActivity() {
                             }
                             if (tabs) ru.r3xed.qsolog.ui.BottomTabs(vm)
                         }
-                        if (vm.showKeys) HardwareKeysDialog(cwMessages = vm.cwConfig.messages.takeIf { vm.cwConfig.enabled }, onClose = { vm.showKeys = false })
+                        if (vm.showKeys) HardwareKeysDialog(cwMessages = vm.cwMessages.takeIf { vm.cwConfig.enabled }, onClose = { vm.showKeys = false })
                         if (vm.showRigPanel) ru.r3xed.qsolog.ui.RigPanel(vm)
                         if (vm.showKeysEditor && vm.screen == Screen.Settings) ru.r3xed.qsolog.ui.KeysEditor(vm) { vm.showKeysEditor = false }
                         if (vm.showTransfer) ru.r3xed.qsolog.ui.TransferDialog(

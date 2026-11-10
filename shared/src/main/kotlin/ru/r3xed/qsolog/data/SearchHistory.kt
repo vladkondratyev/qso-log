@@ -3,7 +3,7 @@ package ru.r3xed.qsolog.data
 import java.io.File
 
 /** ADIF fields about the station kept with a history entry (HamQTH's "approximate position" mark included). */
-val HISTORY_FIELDS = setOf("STATE", "CNTY", "CQZ", "ITUZ", "DXCC", "CONT", HamQth.POSITION_FIELD)
+val HISTORY_FIELDS = setOf("STATE", "CNTY", "CQZ", "ITUZ", "IOTA", "DXCC", "CONT", HamQth.POSITION_FIELD)
 
 /** Where the data of a looked-up station came from. Stored by [key]; shown by [title]. */
 enum class SearchSource(val key: String, val title: String) {

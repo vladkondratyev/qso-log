@@ -73,7 +73,7 @@ class CallbooksTest {
         // As in QRZ.com's XML specification, with a made-up station.
         val xml = """<?xml version="1.0" ?><QRZDatabase version="1.34"><Callsign><call>W1DEMO</call><fname>John</fname>
             <name>Demo</name><addr2>Newington</addr2><state>CT</state><country>United States</country><lat>41.714775</lat>
-            <lon>-72.727260</lon><grid>FN31pr</grid><cqzone>5</cqzone><ituzone>8</ituzone></Callsign>
+            <lon>-72.727260</lon><grid>FN31pr</grid><cqzone>5</cqzone><ituzone>8</ituzone><iota>NA-055</iota></Callsign>
             <Session><Key>2331uf894c4bd29f3923f3bacf02c532d7bd9</Key><Count>123</Count><SubExp>Wed Jan 1 12:34:03 2031</SubExp></Session></QRZDatabase>"""
         val r = QrzCq.parse(xml)
         val i = QrzComXml.toInfo(r.fields, "w1demo")!!
@@ -84,6 +84,10 @@ class CallbooksTest {
         assertEquals(41.714775, i.lat)
         assertEquals("CT", i.region)
         assertEquals("5", i.cqZone)
+        assertEquals("NA-055", i.iota)
+        assertEquals("EU-005", Iota.normalize("eu 5"))
+        assertEquals("AS-007", Iota.normalize("AS007"))
+        assertEquals("", Iota.normalize("XX-123"))
         assertTrue(QrzComXml.subscribed(r.session["SubExp"].orEmpty()))
         assertFalse(QrzComXml.subscribed("non-subscriber"))
         // Without the subscription: the name and the country only.

@@ -38,7 +38,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -223,10 +222,25 @@ fun CwSettings(vm: AppViewModel) {
     SwitchLine(tr("Звук самоконтроля через динамик"), c.sidetone) { vm.changeCw(c.copy(sidetone = it)) }
     Note(tr("Ключ можно не носить с собой: пока карточка QSO в виде CW, клавиши внешней клавиатуры работают ключом. «Прямой ключ» — ключ замкнут, пока клавиша нажата. «Ямбический A/B» — электронный ключ: по умолчанию левый Ctrl или [ — точка, правый Ctrl или ] — тире (так шлют и USB-адаптеры манипуляторов), прямой ключ — любой Ctrl; в режиме B ключ дописывает знак, начатый при сжатых манипуляторах. Клавиши можно переназначить: «Назначить» и нажмите нужную клавишу. Скорость — та же, что у сообщений. Когда в карточке начинают работать ключом, под кнопками сообщений появляется лента переданных знаков. Звук через динамик телефона или компьютера — когда не слышно самоконтроля трансивера; cwdaemon принимает только текст: ему уходят готовые буквы."))
     Section(tr("Сообщения"))
-    c.messages.forEachIndexed { i, m ->
+    var contestSet by remember { mutableStateOf(false) }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(false to tr("Повседневные"), true to tr("Контест")).forEach { (v, title) ->
+            val on = contestSet == v
+            Box(
+                Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(14.dp))
+                    .background(if (on) MaterialTheme.colorScheme.primary else LocalExtra.current.field)
+                    .selectable(selected = on, role = Role.RadioButton) { contestSet = v },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+    Note(tr("Два набора F1–F8: «Контест» работает в режиме соревнований, «Повседневные» — в обычной карточке QSO. Переключаются сами."))
+    c.messagesFor(contestSet).forEachIndexed { i, m ->
         OutlinedTextField(
             value = m,
-            onValueChange = { v -> vm.changeCw(c.copy(messages = c.messages.toMutableList().also { it[i] = v.uppercase() })) },
+            onValueChange = { v -> vm.changeCw(c.withMessage(contestSet, i, v.uppercase())) },
             modifier = Modifier.fillMaxWidth(), singleLine = true,
             label = { Text(KeyMap.label(KeyAction.entries.first { it.cwMessage == i }, false).ifEmpty { tr("Сообщение %s", i + 1) }) },
             textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp),

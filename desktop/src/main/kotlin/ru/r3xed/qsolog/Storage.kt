@@ -336,6 +336,59 @@ class Settings {
         put(key, pw)
     }
 
+    // ---------- the settings through a Google Table of their own (see ru.r3xed.qsolog.data.SettingsSync) ----------
+
+    var settingsSyncOn: Boolean
+        get() = get("settings_sync_on", "false") == "true"
+        set(v) = put("settings_sync_on", v.toString())
+    /** The accounts of outside services go to the table too (they are then kept in the cloud). */
+    var settingsSyncCreds: Boolean
+        get() = get("settings_sync_creds", "false") == "true"
+        set(v) = put("settings_sync_creds", v.toString())
+    var settingsSyncUrl: String
+        get() = get("settings_sync_url")
+        set(v) = put("settings_sync_url", v)
+    var settingsSyncStamp: String
+        get() = get("settings_sync_stamp")
+        set(v) = put("settings_sync_stamp", v)
+    var settingsSyncHash: String
+        get() = get("settings_sync_hash")
+        set(v) = put("settings_sync_hash", v)
+    var settingsSyncStatus: String
+        get() = get("settings_sync_status")
+        set(v) = put("settings_sync_status", v)
+    /** This computer's name in the table: which device wrote the settings last. */
+    val settingsSyncDevice: String
+        get() = get("settings_sync_device").ifBlank { ("pc-" + java.util.UUID.randomUUID().toString().take(8)).also { put("settings_sync_device", it) } }
+
+    /** Where each password is kept in the keychain (the online logs' keys are under their own names). */
+    private fun secretAccount(key: String) = when (key) {
+        "qrz_password" -> ACCOUNT
+        "qrz_site_password" -> SITE_ACCOUNT
+        "qrzcom_password" -> COM_ACCOUNT
+        "hamqth_password" -> HAMQTH_ACCOUNT
+        "qrzcom_xml_password" -> COM_XML_ACCOUNT
+        "qrzcq_password" -> QRZCQ_ACCOUNT
+        else -> key
+    }
+
+    /** Every setting as text, the passwords and keys too (the sync then leaves out what it must). */
+    @Synchronized
+    fun syncSnapshot(): Map<String, String> {
+        val plain = props.stringPropertyNames().associateWith { props.getProperty(it).orEmpty() }
+        val secrets = ru.r3xed.qsolog.data.SettingsSync.SECRET_KEYS.associateWith { loadPassword(secretAccount(it), it) }.filterValues { it.isNotEmpty() }
+        return plain + secrets
+    }
+
+    /** Writes the table's settings here: the plain ones to the file, the passwords to the keychain. */
+    @Synchronized
+    fun applySync(m: Map<String, String>) {
+        m.forEach { (k, v) ->
+            if (k in ru.r3xed.qsolog.data.SettingsSync.SECRET_KEYS) savePassword(v, secretAccount(k), k) else props.setProperty(k, v)
+        }
+        file.outputStream().use { props.store(it, "QSO Log") }
+    }
+
     /** CAT: the transceiver's frequency, mode and S-meter (see ru.r3xed.qsolog.cat). */
     var cat: ru.r3xed.qsolog.cat.CatConfig
         get() = ru.r3xed.qsolog.cat.CatConfig.fromMap(
@@ -555,6 +608,24 @@ class Settings {
         get() = get("hamqth_enabled", "true") == "true"
         set(v) = put("hamqth_enabled", v.toString())
 
+    /** The log as a table over the whole window (see [ru.r3xed.qsolog.ui.LogTable]). */
+    var tableMode: Boolean
+        get() = get("table_mode", "false") == "true"
+        set(v) = put("table_mode", v.toString())
+
+    /** The table's columns, in order: [ru.r3xed.qsolog.ui.TableColumn] names, comma-separated; empty — the defaults. */
+    var tableColumns: String
+        get() = get("table_columns")
+        set(v) = put("table_columns", v)
+
+    /** The table's sort ("CALL" or "-DATE": "-" — descending) and grouping (a column name, empty — none). */
+    var tableSort: String
+        get() = get("table_sort", "-DATE")
+        set(v) = put("table_sort", v)
+    var tableGroup: String
+        get() = get("table_group")
+        set(v) = put("table_group", v)
+
     /** The log shows two-line rows (Esc on «Готов к записи» switches). */
     var compactLog: Boolean
         get() = get("compact_log", "false") == "true"
@@ -588,6 +659,11 @@ class Settings {
     var contestCode: String
         get() = get("contest_code")
         set(v) = put("contest_code", v)
+    /** The other lines of the contest report's header ([ru.r3xed.qsolog.data.Cabrillo.Header.extras]). */
+    var contestExtras: String
+        get() = get("contest_extras")
+        set(v) = put("contest_extras", v)
+
     var contestOperator: String
         get() = get("contest_operator", "SINGLE-OP")
         set(v) = put("contest_operator", v)
@@ -637,6 +713,16 @@ class Settings {
     var theme: String
         get() = get("theme", "system")
         set(v) = put("theme", v)
+
+    /** The colours of the user's own theme ([ru.r3xed.qsolog.data.CustomTheme.encode]). */
+    var customTheme: String
+        get() = get("custom_theme", "")
+        set(v) = put("custom_theme", v)
+
+    /** The contrast outline of the input field with the cursor. */
+    var focusRing: Boolean
+        get() = get("focus_ring", "false") == "true"
+        set(v) = put("focus_ring", v.toString())
 
     private fun splitSet(s: String) = s.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 

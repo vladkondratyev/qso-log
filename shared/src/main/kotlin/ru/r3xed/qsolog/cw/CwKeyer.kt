@@ -3,7 +3,6 @@ package ru.r3xed.qsolog.cw
 import ru.r3xed.qsolog.morse.MorseCode
 import ru.r3xed.qsolog.tr
 import java.io.Closeable
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.LockSupport
 
@@ -54,19 +53,45 @@ data class CwConfig(
     val sidetone: Boolean = true,
     /** The key on the app's own keypad (the phone): a straight key or paddles under F1–F8; OFF — none. */
     val screenKey: CwKeyMode = CwKeyMode.OFF,
+    /** The messages F1–F8 of the contest mode; [messages] are the everyday ones. */
+    val contestMessages: List<String> = DEFAULT_CONTEST_MESSAGES,
+    /** PTT goes on this long before the first sign (the radio switches to transmit). */
+    val pttLeadMs: Int = 30,
+    /** PTT goes off this long after the last sign of a message (0 — at once). */
+    val pttTailMs: Int = 30,
+    /** PTT on a port of its own (the computer): blank — the second line of the key's port. */
+    val pttDevice: String = "",
+    /** The line of [pttDevice] that keys PTT. */
+    val pttLine: CwLine = CwLine.RTS,
 ) {
+    /** The messages F1–F8 in use: the contest set in the contest mode, the everyday one otherwise. */
+    fun messagesFor(contest: Boolean): List<String> = if (contest) contestMessages else messages
+
+    /** [messagesFor] with message [i] set to [text]. */
+    fun withMessage(contest: Boolean, i: Int, text: String): CwConfig =
+        if (contest) copy(contestMessages = contestMessages.toMutableList().also { it[i] = text })
+        else copy(messages = messages.toMutableList().also { it[i] = text })
+
     fun toMap(): Map<String, String> = mapOf(
         "cw_enabled" to enabled.toString(), "cw_via" to via.name, "cw_daemon" to daemon, "cw_device" to device, "cw_line" to line.name, "cw_invert" to invert.toString(),
         "cw_ptt" to ptt.toString(), "cw_wpm" to wpm.toString(), "cw_key_mode" to keyMode.name, "cw_sidetone" to sidetone.toString(),
-        "cw_screen_key" to screenKey.name,
-    ) + messages.mapIndexed { i, m -> "cw_msg${i + 1}" to m }
+        "cw_screen_key" to screenKey.name, "cw_ptt_lead" to pttLeadMs.toString(), "cw_ptt_tail" to pttTailMs.toString(),
+        "cw_ptt_device" to pttDevice, "cw_ptt_line" to pttLine.name,
+    ) + messages.mapIndexed { i, m -> "cw_msg${i + 1}" to m } + contestMessages.mapIndexed { i, m -> "cw_cmsg${i + 1}" to m }
 
     companion object {
         /** As N1MM's: CQ, exchange, thanks, my call, his call, the exchange again, "?", "AGN?". */
-        val DEFAULT_MESSAGES = listOf(
+        val DEFAULT_CONTEST_MESSAGES = listOf(
             "CQ {MYCALL} {MYCALL} TEST", "{CALL} {RST} {NR}", "TU {MYCALL}", "{MYCALL}",
             "{CALL}", "{RST} {NR} {NR}", "?", "AGN?",
         )
+
+        /** An everyday QSO: CQ, the report with the name, thanks and 73, my call, his call, the report again, "?", "AGN?". */
+        val DEFAULT_MESSAGES = listOf(
+            "CQ CQ DE {MYCALL} {MYCALL} K", "{CALL} DE {MYCALL} UR RST {RST} {RST} BK", "TNX FER QSO 73 {CALL} DE {MYCALL} SK", "{MYCALL}",
+            "{CALL}", "UR RST {RST} {RST}", "?", "AGN?",
+        )
+        const val MAX_PTT_MS = 1000
         const val MIN_WPM = 10
         const val MAX_WPM = 50
 
@@ -81,7 +106,20 @@ data class CwConfig(
                 invert = m["cw_invert"]?.toBooleanStrictOrNull() ?: d.invert,
                 ptt = m["cw_ptt"]?.toBooleanStrictOrNull() ?: d.ptt,
                 wpm = m["cw_wpm"]?.toIntOrNull()?.coerceIn(MIN_WPM, MAX_WPM) ?: d.wpm,
-                messages = DEFAULT_MESSAGES.indices.map { i -> m["cw_msg${i + 1}"] ?: DEFAULT_MESSAGES[i] },
+                // Before 2.9.3 there was one set, made for contests: it becomes the contest set, and stays the everyday
+                // one only when it was changed (the untouched one gives way to the new everyday defaults).
+                messages = run {
+                    val old = DEFAULT_MESSAGES.indices.map { i -> m["cw_msg${i + 1}"] }
+                    val fresh = m["cw_cmsg1"] == null && old.withIndex().all { (i, v) -> v == null || v == DEFAULT_CONTEST_MESSAGES[i] }
+                    if (fresh) DEFAULT_MESSAGES else old.mapIndexed { i, v -> v ?: DEFAULT_MESSAGES[i] }
+                },
+                contestMessages = DEFAULT_CONTEST_MESSAGES.indices.map { i ->
+                    m["cw_cmsg${i + 1}"] ?: m["cw_msg${i + 1}"] ?: DEFAULT_CONTEST_MESSAGES[i]
+                },
+                pttLeadMs = m["cw_ptt_lead"]?.toIntOrNull()?.coerceIn(0, MAX_PTT_MS) ?: d.pttLeadMs,
+                pttTailMs = m["cw_ptt_tail"]?.toIntOrNull()?.coerceIn(0, MAX_PTT_MS) ?: d.pttTailMs,
+                pttDevice = m["cw_ptt_device"] ?: d.pttDevice,
+                pttLine = m["cw_ptt_line"]?.let { v -> CwLine.entries.firstOrNull { it.name == v } } ?: d.pttLine,
                 keyMode = m["cw_key_mode"]?.let { v -> CwKeyMode.entries.firstOrNull { it.name == v } } ?: d.keyMode,
                 sidetone = m["cw_sidetone"]?.toBooleanStrictOrNull() ?: d.sidetone,
                 screenKey = m["cw_screen_key"]?.let { v -> CwKeyMode.entries.firstOrNull { it.name == v } } ?: d.screenKey,
@@ -189,13 +227,20 @@ class CwKeyer(
     private val usePtt: Boolean = false,
     /** Every key down and up, for the speaker's self-monitoring tone. */
     private val onKey: (Boolean) -> Unit = {},
+    /** PTT before the first sign, ms. */
+    private val pttLeadMs: Int = 30,
+    /** PTT after the last sign of a message, ms. */
+    private val pttTailMs: Int = 30,
 ) : CwSender {
-    private val queue = LinkedBlockingQueue<String>()
+    private val queue = java.util.concurrent.LinkedBlockingDeque<String>()
     @Volatile private var abort = false
     @Volatile private var running = true
     private var line: KeyLine? = null
     private val lineLock = Any()
-    /** PTT is on: it stays on between the letters typed one by one, and goes off after [PTT_HANG_MS] of silence. */
+    /**
+     * PTT is on. After a message it goes off [pttTailMs] later, unless the next message is waiting; after keying by
+     * hand it stays on for [HAND_HANG_MS] of silence, so the radio does not switch between the letters.
+     */
     @Volatile private var pttOn = false
     @Volatile private var lastKeyAt = 0L
     @Volatile private var handDown = false
@@ -249,10 +294,10 @@ class CwKeyer(
     private fun loop() {
         try {
             while (running) {
-                val text = queue.poll(if (pttOn) 100 else 500, TimeUnit.MILLISECONDS)
+                val text = queue.poll(if (pttOn) 20 else 500, TimeUnit.MILLISECONDS)
                 if (text == null) {
                     // Nothing more to send for a while (and no key held): the radio goes back to receive.
-                    if (pttOn && !handDown && System.currentTimeMillis() - lastKeyAt > PTT_HANG_MS) {
+                    if (pttOn && !handDown && System.currentTimeMillis() - lastKeyAt > HAND_HANG_MS) {
                         runCatching { synchronized(lineLock) { line }?.ptt(false) }
                         pttOn = false
                     }
@@ -261,9 +306,19 @@ class CwKeyer(
                 abort = false
                 try {
                     sending = true
-                    play(line(), text)
+                    val l = line()
+                    play(l, text)
                     sending = false
                     onState(CwState.Idle)
+                    // The message is out: PTT lets the radio go after its tail, unless the next one comes in time.
+                    if (usePtt && pttOn && !handDown) {
+                        val next = if (pttTailMs > 0) queue.poll(pttTailMs.toLong(), TimeUnit.MILLISECONDS) else queue.poll()
+                        if (next != null) queue.offerFirst(next)
+                        else if (!handDown) {
+                            runCatching { l.ptt(false) }
+                            pttOn = false
+                        }
+                    }
                 } catch (e: InterruptedException) {
                     break
                 } catch (e: Exception) {
@@ -294,7 +349,7 @@ class CwKeyer(
         if (usePtt && !pttOn) {
             l.ptt(true)
             pttOn = true
-            t += 30_000_000 // the radio switches to transmit
+            t += pttLeadMs.coerceAtLeast(0) * 1_000_000L // the radio switches to transmit
         }
         try {
             text.forEachIndexed { i, ch ->
@@ -328,8 +383,8 @@ class CwKeyer(
     }
 }
 
-/** PTT stays on this long after the last element, so letters typed one by one do not switch the radio each time. */
-private const val PTT_HANG_MS = 700L
+/** After keying by hand PTT stays on this long, so the radio does not switch between the letters keyed one by one. */
+private const val HAND_HANG_MS = 700L
 
 /**
  * Keying by hand from the card: the keyboard (or the phone's screen) is a straight key or the paddles of an iambic

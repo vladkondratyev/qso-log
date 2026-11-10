@@ -46,7 +46,32 @@ val Qso.approxPosition get() = adif[HamQth.POSITION_FIELD] == HamQth.POSITION_RE
  * How many times we worked a station, the most recent contact, and the most recent one on each band
  * ([byBand], low to high frequency).
  */
-data class CallHistory(val count: Int, val last: Qso?, val byBand: List<Qso> = emptyList()) {
+data class CallHistory(val count: Int, val last: Qso?, val byBand: List<Qso> = emptyList(), val all: List<Qso> = emptyList()) {
+    /** How the card's [band] and [mode] stand against the earlier contacts: see [Dupe]. */
+    fun dupe(band: String, mode: String): Dupe {
+        if (all.isEmpty()) return Dupe.NEW
+        val onBand = all.filter { it.band.equals(band, ignoreCase = true) }
+        val group = ModeGroup.of(mode)
+        return when {
+            band.isBlank() -> Dupe.WORKED
+            onBand.any { ModeGroup.of(it.mode) == group } -> Dupe.DUPE
+            onBand.isNotEmpty() -> Dupe.BAND
+            else -> Dupe.WORKED
+        }
+    }
+
+    /**
+     * Previous QSOs as a table, as in N1MM: the bands worked (and [band] of the card, even if new) low to high, and
+     * how many contacts in each mode group on each.
+     */
+    fun grid(band: String = ""): List<Pair<String, Map<ModeGroup, Int>>> {
+        val bands = (all.map { it.band.lowercase() }.filter { it.isNotBlank() } + listOfNotNull(band.lowercase().ifBlank { null })).distinct()
+            .sortedWith(compareBy({ BANDS.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } }, { it }))
+        return bands.map { b ->
+            b to all.filter { it.band.equals(b, ignoreCase = true) }.groupingBy { ModeGroup.of(it.mode) }.eachCount()
+        }
+    }
+
     companion object {
         /** From the station's contacts, newest first. */
         fun of(newestFirst: List<Qso>) = CallHistory(
@@ -54,7 +79,39 @@ data class CallHistory(val count: Int, val last: Qso?, val byBand: List<Qso> = e
             newestFirst.firstOrNull(),
             newestFirst.filter { it.band.isNotBlank() }.distinctBy { it.band.lowercase() }
                 .sortedBy { q -> BANDS.indexOf(q.band.lowercase()).let { if (it < 0) Int.MAX_VALUE else it } },
+            newestFirst,
         )
+    }
+}
+
+/**
+ * A callsign typed in the card against the log: [NEW] — never worked; [WORKED] — worked, but only on other bands (a new
+ * band); [BAND] — worked on this band in another mode group; [DUPE] — worked on this band in this mode group (a repeat).
+ */
+enum class Dupe {
+    NEW, WORKED, BAND, DUPE;
+
+    /** The line under the callsign field; null for a new station. */
+    fun note(band: String, mode: String): String? = when (this) {
+        NEW -> null
+        WORKED -> ru.r3xed.qsolog.tr("Новый диапазон: на %s ещё не работали", band.ifBlank { "?" })
+        BAND -> ru.r3xed.qsolog.tr("На %s уже работали, но другим видом", band)
+        DUPE -> ru.r3xed.qsolog.tr("Повтор: %s %s уже есть в журнале", band, ModeGroup.of(mode).title)
+    }
+}
+
+/** The mode groups of awards and contests: telegraph, voice, digital. */
+enum class ModeGroup(val title: String) {
+    CW("CW"), PHONE("PH"), DIGI("DIGI");
+
+    companion object {
+        private val PHONE_MODES = setOf("SSB", "USB", "LSB", "AM", "FM", "C4FM", "DMR", "DSTAR", "DIGITALVOICE", "PH", "PHONE")
+
+        fun of(mode: String): ModeGroup = when (val m = mode.trim().uppercase()) {
+            "CW" -> CW
+            in PHONE_MODES -> PHONE
+            else -> if (m.isEmpty()) PHONE else DIGI
+        }
     }
 }
 

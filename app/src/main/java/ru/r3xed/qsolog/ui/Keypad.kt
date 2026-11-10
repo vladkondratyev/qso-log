@@ -89,18 +89,23 @@ internal fun KeyField(
     big: Boolean = false,
     caret: Int? = null,
     onClear: (() -> Unit)? = null,
+    /** The field's colour for a repeated callsign (see [dupeTint]); null — the usual one. */
+    tint: androidx.compose.ui.graphics.Color? = null,
     onClick: () -> Unit,
 ) {
     val x = LocalExtra.current
     val c = MaterialTheme.colorScheme
     val border = when {
         isError -> c.error
+        tint != null -> tint
         active -> c.primary
         else -> x.line
     }
     Row(
         modifier.clip(RoundedCornerShape(if (big) 16.dp else 12.dp))
-            .border(if (active || isError) 2.dp else 1.dp, border, RoundedCornerShape(if (big) 16.dp else 12.dp))
+            .then(if (tint != null) Modifier.background(tint.copy(alpha = 0.14f)) else Modifier)
+            .border(if (active || isError || tint != null) (if (tint != null) 3.dp else 2.dp) else 1.dp, border, RoundedCornerShape(if (big) 16.dp else 12.dp))
+            .focusRing(active, RoundedCornerShape(if (big) 16.dp else 12.dp))
             .clickable(onClickLabel = label, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {

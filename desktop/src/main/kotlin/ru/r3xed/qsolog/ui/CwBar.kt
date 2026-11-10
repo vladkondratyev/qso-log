@@ -80,7 +80,7 @@ fun CwBar(vm: AppState, modifier: Modifier = Modifier) {
             if (st is CwState.Sending) IconButton(onClick = vm::stopCw) { Icon(Icons.Filled.Stop, tr("Остановить передачу"), tint = MaterialTheme.colorScheme.error) }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            vm.cwConfig.messages.forEachIndexed { i, m ->
+            vm.cwMessages.forEachIndexed { i, m ->
                 if (m.isBlank()) return@forEachIndexed
                 Text(
                     cwButton(i, m), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1,

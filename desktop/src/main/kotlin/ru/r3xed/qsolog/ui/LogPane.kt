@@ -84,7 +84,6 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -488,7 +487,7 @@ private fun StationLine(vm: AppState, color: androidx.compose.ui.graphics.Color)
 
 /** "Станция": with two or more callsigns of one's own, the log shows the contacts of one of them or all. */
 @Composable
-private fun StationFilterChip(vm: AppState) {
+internal fun StationFilterChip(vm: AppState) {
     val x = LocalExtra.current
     var open by remember { mutableStateOf(false) }
     val selected = vm.stationFilter != null
@@ -780,7 +779,7 @@ private fun MenuText(text: String, key: String) {
 
 /** The activation in progress ("Выезд"): its reference, how many contacts, and "Завершить" (with the ADIF export). */
 @Composable
-private fun ActivationBanner(vm: AppState) {
+internal fun ActivationBanner(vm: AppState) {
     val a = vm.activation ?: return
     var ask by remember { mutableStateOf(false) }
     Row(
@@ -814,7 +813,7 @@ private fun ActivationBanner(vm: AppState) {
  * the search, the station and the filter saved under a name.
  */
 @Composable
-private fun LogFilterChip(vm: AppState) {
+internal fun LogFilterChip(vm: AppState) {
     val x = LocalExtra.current
     var open by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }

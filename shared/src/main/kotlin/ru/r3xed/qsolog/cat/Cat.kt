@@ -178,7 +178,15 @@ data class CatConfig(
     val rts: Boolean? = null,
     /** OmniRig's radio: 1 or 2. */
     val omniRig: Int = 1,
+    /** Transverters: the radio's IF range shown and logged as the real band (see [Transverter]). */
+    val transverters: List<Transverter> = emptyList(),
 ) {
+    /** The real frequency of what the radio reports: through the first switched-on transverter whose IF it is in. */
+    fun realHz(rigHz: Long): Long = transverters.firstOrNull { it.enabled && it.coversRig(rigHz) }?.let { rigHz + it.loHz } ?: rigHz
+
+    /** What the radio is tuned to for the real frequency [hz]: its IF when a switched-on transverter covers [hz]. */
+    fun rigHz(hz: Long): Long = transverters.firstOrNull { it.enabled && it.coversReal(hz) }?.let { hz - it.loHz } ?: hz
+
     val model get() = Rigs.byName(rig)
     val protocol get() = model.protocol
 
@@ -199,6 +207,7 @@ data class CatConfig(
         "cat_serve" to serve.toString(), "cat_serve_port" to servePort.toString(), "cat_serve_lan" to serveLan.toString(),
         "cat_icom_lan" to icomLan.toString(), "cat_lan_user" to lanUser, LAN_PASSWORD to lanPassword,
         "cat_rts" to (rts?.toString() ?: "auto"), "cat_omnirig" to omniRig.toString(),
+        "cat_transverters" to transverters.joinToString("|") { it.encode() },
     )
 
     companion object {
@@ -226,6 +235,7 @@ data class CatConfig(
                 lanPassword = m[LAN_PASSWORD] ?: d.lanPassword,
                 rts = m["cat_rts"]?.toBooleanStrictOrNull(),
                 omniRig = m["cat_omnirig"]?.toIntOrNull()?.takeIf { it == 1 || it == 2 } ?: d.omniRig,
+                transverters = m["cat_transverters"].orEmpty().split('|').mapNotNull { Transverter.decode(it) },
             )
         }
 
@@ -424,4 +434,35 @@ sealed interface CatCommand {
     data class Mode(val mode: RadioMode) : CatCommand
     /** Transmit on or off: for programs that key the radio through QSO-LOG (JTDX, WSJT-X via the rigctld server). */
     data class Ptt(val on: Boolean) : CatCommand
+}
+
+/**
+ * A transverter: the radio works on its IF ([rigFromHz]..[rigToHz], 28–30 MHz) and the air on the real band — the IF
+ * plus the local oscillator [loHz] (404 MHz: 28 MHz is 432 MHz). The log, the scale and the cluster see the real
+ * frequency; a frequency set from the log or a spot goes to the radio as its IF.
+ */
+data class Transverter(
+    val enabled: Boolean = true,
+    val rigFromHz: Long = 28_000_000,
+    val rigToHz: Long = 30_000_000,
+    val loHz: Long = 404_000_000,
+) {
+    fun coversRig(hz: Long) = hz in rigFromHz..rigToHz
+    fun coversReal(hz: Long) = hz - loHz in rigFromHz..rigToHz
+
+    /** The real band's start, MHz: what the user types ("28 → 432"). */
+    val realFromHz: Long get() = rigFromHz + loHz
+
+    fun encode() = "${if (enabled) 1 else 0};$rigFromHz;$rigToHz;$loHz"
+
+    companion object {
+        fun decode(s: String): Transverter? {
+            val p = s.split(';')
+            if (p.size != 4) return null
+            val from = p[1].toLongOrNull() ?: return null
+            val to = p[2].toLongOrNull() ?: return null
+            val lo = p[3].toLongOrNull() ?: return null
+            return Transverter(p[0] == "1", from, to, lo).takeIf { to > from }
+        }
+    }
 }

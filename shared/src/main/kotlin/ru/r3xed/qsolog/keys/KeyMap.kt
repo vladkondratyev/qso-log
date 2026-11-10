@@ -87,6 +87,8 @@ enum class KeyAction(val scope: KeyScope, vararg defaults: Chord) {
     LOG_ENTER(KeyScope.CARD, c("Enter")),
     SPACE_NEXT(KeyScope.CARD, c("Space")),
     CLEAR_CARD(KeyScope.CARD, c("W", alt = true), c("Esc", ctrl = true)),
+    /** The key left of 1 — Ё on the Russian layout: under the left hand while the right one is on Enter. */
+    CLEAR_CALL(KeyScope.CARD, c("`"), c("`", shift = true)),
     CLOSE_CARD(KeyScope.CARD, c("Esc")),
     DELETE_SAVED(KeyScope.CARD, c("D", ctrl = true)),
     FOCUS_CALL(KeyScope.CARD, c("F2")),
@@ -142,6 +144,7 @@ enum class KeyAction(val scope: KeyScope, vararg defaults: Chord) {
             LOG_ENTER -> tr("из любого поля — записать (новая карточка — записать и открыть следующую)")
             SPACE_NEXT -> tr("по кругу: позывной → RST отправлен → RST принят → позывной (у контест-связи: позывной ↔ код принят)")
             CLEAR_CARD -> tr("очистить новую карточку: курсор — в позывной")
+            CLEAR_CALL -> tr("стереть позывной (клавиша Ё): курсор — в позывной")
             CLOSE_CARD -> tr("закрыть карточку (с изменениями — спросит, Enter — закрыть)")
             DELETE_SAVED -> tr("удалить сохранённую связь (Enter — подтвердить)")
             FOCUS_CALL -> tr("к позывному")
@@ -171,6 +174,9 @@ enum class KeyAction(val scope: KeyScope, vararg defaults: Chord) {
  * key event into a [Chord] and asks [hit].
  */
 object KeyMap {
+    /** Keys that type no callsign character and may wipe the callsign without Ctrl: Ё (` and ~ with Shift), \\ and § of some layouts. */
+    val WIPE_KEYS = setOf("`", "\\", "§")
+
     /** The actions the user changed; an empty list — the action has no key. */
     @Volatile var custom: Map<KeyAction, List<Chord>> = emptyMap()
 
@@ -187,7 +193,7 @@ object KeyMap {
 
     /** Why [chord] cannot be [a]'s key, or null when it can. */
     fun refusal(a: KeyAction, chord: Chord): String? = when {
-        chord.types && a.scope != KeyScope.LOG && a.scope != KeyScope.HISTORY ->
+        chord.types && a.scope != KeyScope.LOG && a.scope != KeyScope.HISTORY && !(a == KeyAction.CLEAR_CALL && chord.key in WIPE_KEYS) ->
             tr("Буква или цифра без Ctrl или Alt нужна для набора текста: добавьте Ctrl или Alt")
         chord.key == "Tab" && !chord.ctrl && !chord.alt -> tr("Tab переходит по полям — выберите другую клавишу")
         else -> null

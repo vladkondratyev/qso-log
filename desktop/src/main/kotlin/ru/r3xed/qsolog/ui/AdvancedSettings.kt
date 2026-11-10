@@ -37,7 +37,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -151,8 +150,42 @@ fun CwSettings(vm: AppState) {
                 }
             }
         }
-        SwitchLine(tr("Вторая линия — PTT на время передачи"), c.ptt) { vm.changeCw(c.copy(ptt = it)) }
         SwitchLine(tr("Инвертировать линию ключа"), c.invert) { vm.changeCw(c.copy(invert = it)) }
+        SwitchLine(tr("PTT на время передачи"), c.ptt) { vm.changeCw(c.copy(ptt = it)) }
+        if (c.ptt) {
+            Section(tr("Порт PTT"))
+            val keyPort = c.device.ifBlank { devices.firstOrNull()?.key.orEmpty() }
+            val pttChoices = listOf(ru.r3xed.qsolog.CatDevice("", tr("Вторая линия порта ключа (%s)", if (c.line == CwLine.DTR) "RTS" else "DTR"))) +
+                devices.filter { it.key != keyPort }
+            DeviceList(pttChoices, c.pttDevice.takeIf { d -> pttChoices.any { it.key == d } }.orEmpty(), "") { vm.changeCw(c.copy(pttDevice = it)) }
+            if (c.pttDevice.isNotBlank() && c.pttDevice != keyPort) {
+                Section(tr("Линия PTT"))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CwLine.entries.forEach { l ->
+                        val on = c.pttLine == l
+                        Box(
+                            Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp))
+                                .background(if (on) MaterialTheme.colorScheme.primary else LocalExtra.current.field)
+                                .selectable(selected = on, role = Role.RadioButton) { vm.changeCw(c.copy(pttLine = l)) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(l.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                }
+            }
+            Section(tr("Опережение PTT: %s мс", c.pttLeadMs))
+            Slider(
+                value = c.pttLeadMs.toFloat(), onValueChange = { vm.changeCw(c.copy(pttLeadMs = (it / 5).toInt() * 5)) },
+                valueRange = 0f..300f,
+            )
+            Section(tr("Задержка отпускания PTT: %s мс", c.pttTailMs))
+            Slider(
+                value = c.pttTailMs.toFloat(), onValueChange = { vm.changeCw(c.copy(pttTailMs = (it / 10).toInt() * 10)) },
+                valueRange = 0f..CwConfig.MAX_PTT_MS.toFloat(),
+            )
+            Note(tr("Опережение — сколько PTT включён до первого знака: трансиверу нужно время перейти на передачу (обычно 20–50 мс). Задержка отпускания — сколько PTT держится после последнего знака сообщения F1–F8; 0 — приём сразу. Если следующее сообщение нажато раньше, PTT не отпускается. После работы ключом с клавиатуры PTT держится 0,7 с, чтобы трансивер не переключался между буквами. PTT можно вывести на отдельный порт: CAT — через один COM-порт, ключ и PTT — через другой, или PTT — линией порта CAT (если трансивер не держит на ней RTS)."))
+        }
     }
     Section(tr("Скорость: %s WPM", c.wpm))
     Slider(
@@ -210,10 +243,25 @@ fun CwSettings(vm: AppState) {
     SwitchLine(tr("Звук самоконтроля через динамик"), c.sidetone) { vm.changeCw(c.copy(sidetone = it)) }
     Note(tr("Ключ можно не носить с собой: пока карточка QSO в виде CW, клавиши внешней клавиатуры работают ключом. «Прямой ключ» — ключ замкнут, пока клавиша нажата. «Ямбический A/B» — электронный ключ: по умолчанию левый Ctrl или [ — точка, правый Ctrl или ] — тире (так шлют и USB-адаптеры манипуляторов), прямой ключ — любой Ctrl; в режиме B ключ дописывает знак, начатый при сжатых манипуляторах. Клавиши можно переназначить: «Назначить» и нажмите нужную клавишу. Скорость — та же, что у сообщений. Когда в карточке начинают работать ключом, под кнопками сообщений появляется лента переданных знаков. Звук через динамик телефона или компьютера — когда не слышно самоконтроля трансивера; cwdaemon принимает только текст: ему уходят готовые буквы."))
     Section(tr("Сообщения"))
-    c.messages.forEachIndexed { i, m ->
+    var contestSet by remember { mutableStateOf(false) }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(false to tr("Повседневные"), true to tr("Контест")).forEach { (v, title) ->
+            val on = contestSet == v
+            Box(
+                Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(14.dp))
+                    .background(if (on) MaterialTheme.colorScheme.primary else LocalExtra.current.field)
+                    .selectable(selected = on, role = Role.RadioButton) { contestSet = v },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+    Note(tr("Два набора F1–F8: «Контест» работает в режиме соревнований, «Повседневные» — в обычной карточке QSO. Переключаются сами."))
+    c.messagesFor(contestSet).forEachIndexed { i, m ->
         OutlinedTextField(
             value = m,
-            onValueChange = { v -> vm.changeCw(c.copy(messages = c.messages.toMutableList().also { it[i] = v.uppercase() })) },
+            onValueChange = { v -> vm.changeCw(c.withMessage(contestSet, i, v.uppercase())) },
             modifier = Modifier.fillMaxWidth(), singleLine = true,
             label = { Text(KeyMap.label(KeyAction.entries.first { it.cwMessage == i }, false).ifEmpty { tr("Сообщение %s", i + 1) }) },
             textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp),

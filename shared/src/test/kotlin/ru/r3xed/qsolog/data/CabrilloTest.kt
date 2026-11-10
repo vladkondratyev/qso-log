@@ -107,4 +107,20 @@ class CabrilloTest {
         assertEquals("LO56aa", ContestMode.previousLocator("RA9DEMO", listOf(old, inContest), null))
         assertEquals(null, ContestMode.previousLocator("UA1DEMO", listOf(old), null))
     }
+
+    @Test
+    fun fullHeader() {
+        val q = Qso(call = "R0DEMO", timeUtc = 0, band = "20m", mode = "CW", freqMhz = "14.025", rstSent = "599", rstRcvd = "599")
+        val h = Cabrillo.Header(
+            Cabrillo.Format.CABRILLO, "CQ-WW-CW", "UA3DEMO", categoryPower = Cabrillo.powerCategory("100"), gridLocator = "KO85TS",
+            name = "Ivan Demo", address = "Lenina 1\nMoscow", email = "demo@example.org", club = "Demo Club",
+        )
+        val text = Cabrillo.export(listOf(q), h)
+        listOf("CATEGORY-POWER: LOW", "CATEGORY-ASSISTED: NON-ASSISTED", "CATEGORY-TRANSMITTER: ONE", "OPERATORS: UA3DEMO",
+            "NAME: Ivan Demo", "ADDRESS: Lenina 1", "ADDRESS: Moscow", "EMAIL: demo@example.org", "CLUB: Demo Club", "GRID-LOCATOR: KO85ts",
+        ).forEach { assertTrue(it in text, it) }
+        assertEquals(h, h.copy(name = "", club = "x").withExtras(h.extras()))
+        assertEquals("QRP", Cabrillo.powerCategory("5"))
+        assertEquals("HIGH", Cabrillo.powerCategory("500 W"))
+    }
 }

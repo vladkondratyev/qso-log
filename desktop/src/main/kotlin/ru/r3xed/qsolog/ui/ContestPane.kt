@@ -43,7 +43,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -163,6 +162,7 @@ fun ContestPane(vm: AppState) {
                 // VHF: the callsign → the number → the locator → the callsign.
                 hit(KeyAction.SPACE_NEXT) && focused == Target.RCVD && grids -> { locFocus.requestFocus(); true }
                 hit(KeyAction.SPACE_NEXT) -> { callFocus.requestFocus(); true }
+                hit(KeyAction.CLEAR_CALL) -> { vm.setCall(""); error = null; callFocus.requestFocus(); true }
                 hit(KeyAction.DELETE_SAVED) && !vm.form.isNew -> { confirmDelete = true; true }
                 e.key == Key.DirectionUp && focused == Target.CALL && f.isNew && f.call.isEmpty() -> {
                     if (hasPrev) prev()

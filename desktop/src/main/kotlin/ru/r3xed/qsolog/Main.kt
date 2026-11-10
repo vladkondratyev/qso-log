@@ -291,6 +291,7 @@ fun main() {
                     }
                     Separator()
                     CheckboxItem(tr("Компактный журнал"), checked = state.compactLog, onCheckedChange = { state.toggleCompactLog() })
+                    CheckboxItem(tr("Журнал таблицей"), checked = state.tableMode, onCheckedChange = { state.toggleTableMode() })
                     Menu(tr("Колонки компактного журнала")) {
                         listOf("freq" to tr("Частота"), "rst" to "RST", "name" to tr("Имя и QTH"), "km" to tr("Расстояние")).forEach { (k, t) ->
                             CheckboxItem(t, checked = k in state.compactColumns, onCheckedChange = { state.toggleCompactColumn(k) })
@@ -332,8 +333,9 @@ fun main() {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
+                ThemeMode.CUSTOM -> state.customTheme.dark
             }
-            QsoTheme(dark, state.uiScale) { key(state.language) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest, saveExport)) } }
+            QsoTheme(dark, state.uiScale, custom = state.customTheme.takeIf { state.themeMode == ThemeMode.CUSTOM }, focusRing = state.focusRing) { key(state.language) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest, saveExport)) } }
         }
     }
 }
@@ -365,6 +367,7 @@ fun paletteCommands(state: AppState, files: Exports): List<Pair<String, () -> Un
     tr("Сделать копию журнала") to { state.backupNow() },
     tr("Открыть папку копий") to state::openBackupFolder,
     tr("Компактный журнал") to state::toggleCompactLog,
+    tr("Журнал таблицей") to state::toggleTableMode,
     tr("Крупнее") to state::zoomIn,
     tr("Мельче") to state::zoomOut,
     tr("Обычный размер (100%)") to state::zoomReset,
@@ -400,13 +403,26 @@ fun App(state: AppState, files: Exports) {
             if (r == SnackbarResult.ActionPerformed) m.undo?.invoke()
         }
     }
+    // The settings table: what another device changed comes on start (it works after a restart).
+    LaunchedEffect(Unit) { state.syncSettings() }
     // Surface sets the default text colour from the theme, so text is light grey in the dark theme.
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
-            Row(Modifier.weight(1f).fillMaxWidth()) {
-                LogPane(state, NEW_SHORTCUT, files.exportSelected, Modifier.width(460.dp * ru.r3xed.qsolog.ui.LocalTextBoost.current).fillMaxHeight())
-                VerticalDivider(color = LocalExtra.current.line)
+            // «Журнал таблицей»: the table over the whole window; a contact opens as a card over it, other screens take its place.
+            val table = state.tableMode && state.pane in setOf(Pane.Empty, Pane.Edit, Pane.Contest)
+            if (table) Box(Modifier.weight(1f).fillMaxWidth()) {
+                ru.r3xed.qsolog.ui.LogTable(state, NEW_SHORTCUT, Modifier.fillMaxSize())
+                when (state.pane) {
+                    Pane.Edit -> ru.r3xed.qsolog.ui.TableCardOverlay { key(state.editSession) { EditPane(state) } }
+                    Pane.Contest -> ru.r3xed.qsolog.ui.TableCardOverlay { key(state.editSession) { ContestPane(state) } }
+                    else -> {}
+                }
+            } else Row(Modifier.weight(1f).fillMaxWidth()) {
+                if (!state.tableMode) {
+                    LogPane(state, NEW_SHORTCUT, files.exportSelected, Modifier.width(460.dp * ru.r3xed.qsolog.ui.LocalTextBoost.current).fillMaxHeight())
+                    VerticalDivider(color = LocalExtra.current.line)
+                }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     when (state.pane) {
                         Pane.Empty -> EmptyPane(state)
@@ -476,7 +492,7 @@ fun App(state: AppState, files: Exports) {
                     onConfirm = state::upload,
                 )
             }
-            if (state.showKeys) KeysDialog(state.cwConfig.messages.takeIf { state.cwConfig.enabled }, onClose = { state.showKeys = false })
+            if (state.showKeys) KeysDialog(state.cwMessages.takeIf { state.cwConfig.enabled }, onClose = { state.showKeys = false })
             if (state.showRigPanel) ru.r3xed.qsolog.ui.RigPanel(state)
             if (state.showTransfer) TransferDialog(
                 total = state.total,

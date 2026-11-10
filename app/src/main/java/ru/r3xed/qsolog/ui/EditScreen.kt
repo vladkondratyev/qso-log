@@ -92,7 +92,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -283,6 +282,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             hit(KeyAction.CLOSE_CARD) -> { close(); true }
             hit(KeyAction.DELETE_SAVED) && !form.isNew -> { confirmDelete = true; true }
             hit(KeyAction.FOCUS_CALL) -> { callFocus.requestFocus(); true }
+            hit(KeyAction.CLEAR_CALL) -> { error = null; vm.setCall(""); if (keypad) activate(KeyTarget.CALL) else callFocus.requestFocus(); true }
             hit(KeyAction.FOCUS_FREQ) -> { freqFocus.requestFocus(); true }
             hit(KeyAction.FOCUS_RST_SENT) -> { rstFocus.requestFocus(); true }
             hit(KeyAction.FOCUS_RST_RCVD) -> { rstRcvdFocus.requestFocus(); true }
@@ -327,11 +327,14 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
             val head: @Composable ColumnScope.() -> Unit = {
                 // --- callsign ---
                 // IntrinsicSize.Min: the play button takes the height of the field; top padding skips the floating label.
+                val dupe = vm.dupe
+                val tint = dupeTint(dupe)
                 Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (keypad) KeyField(
                         tr("Позывной корреспондента"), f.call, active == KeyTarget.CALL, replace && active == KeyTarget.CALL,
                         error == CALL_ERROR, Modifier.weight(1f), big = true, caret = caret,
                         onClear = { setValue(KeyTarget.CALL, ""); caret = null; replace = false; active = KeyTarget.CALL },
+                        tint = tint,
                     ) { activate(KeyTarget.CALL) }
                     else OutlinedTextField(
                         value = f.call,
@@ -342,6 +345,11 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                         supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
                         // ⌫ wipes the whole callsign, the cursor stays in the field.
                         trailingIcon = if (f.call.isNotEmpty()) { { ClearButton { error = null; vm.setCall(""); callFocus.requestFocus() } } } else null,
+                        // A repeat, this band in another mode, a new band: the field takes the colour (see [dupeTint]).
+                        colors = if (tint != null) OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = tint, focusedBorderColor = tint,
+                            unfocusedContainerColor = tint.copy(alpha = 0.14f), focusedContainerColor = tint.copy(alpha = 0.14f),
+                        ) else OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
                         textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 1.sp),
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
@@ -353,7 +361,6 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                         ),
                         // "Далее" goes to what is usually typed next: the frequency, or the report if it is already there.
                         keyboardActions = KeyboardActions(onNext = { if (f.freq.isBlank()) freqFocus.requestFocus() else rstFocus.requestFocus() }),
-                        colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
                     )
                     if (f.audio.isNotBlank()) {
                         val context = LocalContext.current
@@ -369,6 +376,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                     }
                 }
                 if (keypad && error == CALL_ERROR) Text(CALL_ERROR, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                else if (tint != null) dupe.note(f.band, f.mode)?.let { Text(it, color = tint, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) }
                 // With a physical keyboard a saved card takes the cursor too, so its keys work at once.
                 if (!keypad && (f.isNew || vm.hardKeyboard || vm.openedByKeys)) LaunchedEffect(Unit) { callFocus.requestFocus() }
                 // Callsigns from the log that start with what is typed: one tap instead of the rest.
@@ -713,15 +721,18 @@ private fun StationCard(vm: AppViewModel) {
                     )
                 }
             }
-            // RDA district from the QRZ.ru site page (ADIF CNTY).
+            // RDA district from the QRZ.ru site page (ADIF CNTY) and the IOTA island, in one row.
             val rda = f.adif["CNTY"].orEmpty()
-            if (rda.isNotBlank()) {
+            val iota = f.adif["IOTA"].orEmpty()
+            if (rda.isNotBlank() || iota.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                    Text("RDA", fontSize = 18.sp, color = ink, modifier = Modifier.padding(end = 10.dp))
-                    Text(
-                        rda, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = ink,
-                        modifier = Modifier.border(2.dp, ink.copy(alpha = 0.5f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 2.dp),
-                    )
+                    listOf("RDA" to rda, "IOTA" to iota).filter { it.second.isNotBlank() }.forEach { (label, value) ->
+                        Text(label, fontSize = 18.sp, color = ink, modifier = Modifier.padding(end = 10.dp))
+                        Text(
+                            value, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = ink,
+                            modifier = Modifier.padding(end = 14.dp).border(2.dp, ink.copy(alpha = 0.5f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 2.dp),
+                        )
+                    }
                 }
             }
           }
@@ -827,10 +838,8 @@ private fun HistoryCard(vm: AppViewModel) {
             )
             val det = listOf(last.band, last.mode).filter { it.isNotBlank() }.joinToString(" ")
             if (det.isNotBlank()) Text(det, fontSize = 17.sp, color = x.hlInk)
-            // The last contact on each band: is this one a new band for the station, and when was it worked there.
-            if (h.byBand.size > 1 || (h.byBand.size == 1 && !h.byBand[0].band.equals(vm.form.band, ignoreCase = true))) {
-                BandChips(h.byBand, ink = x.hlInk, chip = x.hlBorder.copy(alpha = 0.22f), current = vm.form.band, modifier = Modifier.padding(top = 6.dp))
-            }
+            // Where the station was worked: bands × CW / PH / DIGI, the card's band and mode outlined (N1MM's "Previous QSOs").
+            BandModeGrid(h, vm.form.band, vm.form.mode, ink = x.hlInk, chip = x.hlBorder.copy(alpha = 0.22f), modifier = Modifier.padding(top = 6.dp))
         }
     }
 }
