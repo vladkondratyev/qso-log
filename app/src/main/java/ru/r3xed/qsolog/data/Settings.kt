@@ -28,6 +28,10 @@ class Settings(context: Context) {
     fun text(key: String, def: String = ""): String = prefs.getString(key, def) ?: def
     fun putText(key: String, value: String) = prefs.edit().putString(key, value).apply()
 
+    /** This phone's HAMLOG connection (see [Hamlog]): encrypted, written at once (the old refresh token is spent), never synced. */
+    fun hamlogLink(): String = secret.getString("hamlog_link", "") ?: ""
+    fun saveHamlogLink(l: Hamlog.Link?) { secret.edit().putString("hamlog_link", l?.encode().orEmpty()).commit() }
+
     fun loadPublic() = StationSettings(
         myCall = prefs.getString("my_call", "") ?: "",
         myLocator = prefs.getString("my_locator", "") ?: "",

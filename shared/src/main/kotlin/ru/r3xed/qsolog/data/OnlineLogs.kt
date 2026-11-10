@@ -22,6 +22,8 @@ enum class OnlineLog(val title: String, val statusField: String, val dateField: 
     QRZCOM("QRZ.com", "QRZCOM_QSO_UPLOAD_STATUS", "QRZCOM_QSO_UPLOAD_DATE"),
     EQSL("eQSL", "EQSL_QSL_SENT", "EQSL_QSLSDATE"),
     CLUBLOG("Club Log", "CLUBLOG_QSO_UPLOAD_STATUS", "CLUBLOG_QSO_UPLOAD_DATE"),
+    /** HAMLOG.online: ADIF has no fields of its own for it, so the mark is ours (see [Hamlog]). */
+    HAMLOG("HAMLOG", "APP_QSOLOG_HAMLOG_QSO_UPLOAD_STATUS", "APP_QSOLOG_HAMLOG_QSO_UPLOAD_DATE"),
     ;
 
     /** "2026-09-27 10:15" (UTC): when the contact was sent or exported. */
@@ -59,7 +61,7 @@ enum class OnlineLog(val title: String, val statusField: String, val dateField: 
         private val SHOW_DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
         /** Every field the upload marks (and the eQSL confirmations) use; the card shows them in their own block. */
-        val FIELDS: Set<String> = entries.flatMap { listOf(it.statusField, it.dateField, it.timeField) }.toSet() + Eqsl.RCVD_FIELDS + Lotw.RCVD_FIELDS
+        val FIELDS: Set<String> = entries.flatMap { listOf(it.statusField, it.dateField, it.timeField) }.toSet() + Hamlog.ID_FIELD + Eqsl.RCVD_FIELDS + Lotw.RCVD_FIELDS
     }
 }
 
@@ -92,6 +94,13 @@ data class OnlineConfig(
     val lotwSince: String = "",
     /** Passwords of the LoTW certificates by callsign ("UA3DEMO\tpassword" per line): one certificate per callsign. */
     val lotwP12Passwords: String = "",
+    /**
+     * HAMLOG is connected on this device (the tokens are kept apart: [Hamlog.Link]); [hamlogCalls] — the callsigns the
+     * user allowed, [hamlogAuto] — each new contact goes at once. All three stay on this device (never synced).
+     */
+    val hamlogOn: Boolean = false,
+    val hamlogCalls: String = "",
+    val hamlogAuto: Boolean = false,
 ) {
     fun lotwPasswordFor(call: String): String? = lotwP12Passwords.lines().firstOrNull { it.substringBefore('\t').equals(call, ignoreCase = true) }?.substringAfter('\t', "")
 
@@ -106,6 +115,7 @@ data class OnlineConfig(
         OnlineLog.CLUBLOG -> if (clublogEmail.isBlank() || clublogPassword.isBlank() || clublogAppKey.isBlank() || myCall.isBlank())
             tr("Укажите e-mail, пароль и ключ приложения Club Log и свой позывной") else null
         OnlineLog.EQSL -> if (eqslUser.isBlank() || eqslPassword.isBlank()) tr("Укажите логин и пароль eQSL") else null
+        OnlineLog.HAMLOG -> if (!hamlogOn) tr("Подключите HAMLOG: Настройки → Онлайн-журналы → «Подключить HAMLOG»") else null
         OnlineLog.LOTW -> null
     }
 
@@ -113,6 +123,7 @@ data class OnlineConfig(
         "clublog_email" to clublogEmail, "lotw_location" to lotwLocation, "tqsl_path" to tqslPath,
         "eqsl_user" to eqslUser, "eqsl_nickname" to eqslNickname,
         "lotw_user" to lotwUser, "lotw_cqz" to lotwCqz, "lotw_ituz" to lotwItuz, "lotw_since" to lotwSince,
+        "hamlog_on" to hamlogOn.toString(), "hamlog_calls" to hamlogCalls, "hamlog_auto" to hamlogAuto.toString(),
     )
     fun secretMap(): Map<String, String> = mapOf(
         "qrzcom_key" to qrzcomKey, "clublog_password" to clublogPassword, "clublog_key" to clublogAppKey, "eqsl_password" to eqslPassword,
@@ -123,7 +134,8 @@ data class OnlineConfig(
     val lotwSyncProblem: String? get() = if (lotwUser.isBlank() || lotwPassword.isBlank()) tr("Укажите логин и пароль сайта LoTW") else null
 
     companion object {
-        val PUBLIC_KEYS = listOf("clublog_email", "lotw_location", "tqsl_path", "eqsl_user", "eqsl_nickname", "lotw_user", "lotw_cqz", "lotw_ituz", "lotw_since")
+        val PUBLIC_KEYS = listOf("clublog_email", "lotw_location", "tqsl_path", "eqsl_user", "eqsl_nickname", "lotw_user", "lotw_cqz", "lotw_ituz", "lotw_since",
+            "hamlog_on", "hamlog_calls", "hamlog_auto")
         val SECRET_KEYS = listOf("qrzcom_key", "clublog_password", "clublog_key", "eqsl_password", "lotw_password", "lotw_p12_password", "lotw_p12_passwords")
 
         fun from(m: Map<String, String?>) = OnlineConfig(
@@ -134,12 +146,13 @@ data class OnlineConfig(
             lotwP12Password = m["lotw_p12_password"].orEmpty(), lotwUser = m["lotw_user"].orEmpty(), lotwPassword = m["lotw_password"].orEmpty(),
             lotwCqz = m["lotw_cqz"].orEmpty(), lotwItuz = m["lotw_ituz"].orEmpty(), lotwSince = m["lotw_since"].orEmpty(),
             lotwP12Passwords = m["lotw_p12_passwords"].orEmpty(),
+            hamlogOn = m["hamlog_on"] == "true", hamlogCalls = m["hamlog_calls"].orEmpty(), hamlogAuto = m["hamlog_auto"] == "true",
         )
     }
 }
 
 /** Result of one upload: how many went, how many the service already had, and what failed (null = all fine). */
-data class UploadResult(val sent: List<Qso>, val duplicates: Int, val error: String?)
+data class UploadResult(val sent: List<Qso>, val duplicates: Int, val error: String?, val rejected: List<Qso> = emptyList())
 
 /** Uploads with several callsigns of one's own ("Мои станции"). */
 object UploadCalls {

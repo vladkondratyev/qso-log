@@ -62,7 +62,7 @@ fun TransferDialog(
                 Choice(tr("ЕРМАК / Cabrillo"), tr("отчёт для соревнований"), Icons.Filled.FileUpload) { onExport(ExportFormat.CONTEST) }
                 Choice(tr("Часть журнала…"), tr("выбрать по датам, диапазонам и видам, потом «Экспорт»"), Icons.Filled.FilterList, onSelect)
                 Text(tr("Онлайн-журналы"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
-                Choice("LoTW · eQSL · Club Log · QRZ.com", tr("выгрузить новые связи"), Icons.Filled.CloudUpload, onUpload)
+                Choice("LoTW · eQSL · Club Log · QRZ.com · HAMLOG", tr("выгрузить новые связи"), Icons.Filled.CloudUpload, onUpload)
                 Choice(tr("Карточки eQSL"), tr("загрузить полученные: отметки в журнале и связи, которых в нём нет"), Icons.Filled.CloudDownload, onEqslInbox)
                 Choice(tr("Подтверждения LoTW"), tr("отметить подтверждённые связи: в журнале они станут зелёными"), Icons.Filled.CloudDownload, onLotwSync)
                 Text(tr("Импорт в журнал"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))

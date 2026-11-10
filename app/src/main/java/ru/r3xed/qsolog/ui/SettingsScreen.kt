@@ -620,13 +620,17 @@ fun SettingsScreen(
                         DxAlertSettings(vm)
                     }
 
-                    SettingsBlock(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com"), onlineSummary(vm.online, s.myCall, lotwReady = true)) {
+                    SettingsBlock(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com, HAMLOG"), onlineSummary(vm.online, s.myCall, lotwReady = true)) {
                         val pickP12 = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::importLotwP12) }
+                        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                         OnlineSettings(
                             vm.online, vm::changeOnline, computer = false,
                             lotwCerts = vm.lotwCerts.map { it.callsign to ru.r3xed.qsolog.data.Lotw.describe(it) },
                             onPickP12 = { pickP12.launch(arrayOf("application/x-pkcs12", "application/octet-stream", "*/*")) },
                             onForgetP12 = vm::forgetLotwCert,
+                            hamlogCode = vm.hamlogCode, hamlogBusy = vm.hamlogBusy,
+                            onHamlogConnect = vm::connectHamlog, onHamlogCancel = vm::cancelHamlog,
+                            onHamlogOpen = { runCatching { uriHandler.openUri(it) } }, onHamlogDisconnect = vm::disconnectHamlog,
                         )
                     }
                     Spacer(Modifier.height(24.dp))

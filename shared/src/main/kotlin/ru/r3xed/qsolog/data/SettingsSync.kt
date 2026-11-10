@@ -34,7 +34,8 @@ object SettingsSync {
         "cw_ptt_device", "tqsl_path", "start_apps", "start_apps_return", "backup_last", "last_band", "last_freq",
         "last_mode", "last_power", "contest_serial", "settings", "secret_fallback",
     )
-    private val LOCAL_PREFIXES = listOf("sheet_", "settings_sync_", "window_")
+    // "hamlog_": the HAMLOG connection is this device's own (single-use tokens: two devices sharing them would revoke it).
+    private val LOCAL_PREFIXES = listOf("sheet_", "settings_sync_", "window_", "hamlog_")
 
     /** A key that stays on this device: its port, its paths, its scale, the sync's own state. */
     fun isLocal(key: String) = key in LOCAL_KEYS || LOCAL_PREFIXES.any { key.startsWith(it) }

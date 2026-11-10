@@ -9,8 +9,12 @@ import java.net.URLEncoder
 object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
-    /** Points of this release (2.9.3: the users' requests; the table and PTT are the computer's, the search keypad the phone's). */
+    /**
+     * Points of this release: 2.9.4 — HAMLOG.online first, then 2.9.3 again (the users' requests; the table and PTT
+     * are the computer's, the search keypad the phone's).
+     */
     fun items(desktop: Boolean): List<String> = listOfNotNull(
+        tr("HAMLOG.online: связи уходят в облачный журнал HAMLOG — по кнопке из журнала или сразу после записи. Подключение — кодом на сайте HAMLOG (Настройки → Онлайн-журналы), без паролей."),
         tr("Поле позывного подсвечивается: красным — повтор на этом диапазоне и виде, оранжевым — диапазон тот же, вид другой, зелёным — новый диапазон. «Уже работали» — сеткой «диапазоны × CW / PH / DIGI»."),
         if (desktop) tr("«Журнал таблицей» (меню «Вид»): весь журнал компактной таблицей, свои колонки, сортировка по щелчку, группировка и фильтры; новое QSO — карточкой поверх таблицы.")
         else tr("Своя клавиатура работает и в поиске по журналу."),

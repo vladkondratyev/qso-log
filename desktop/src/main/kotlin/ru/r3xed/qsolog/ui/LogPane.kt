@@ -604,7 +604,7 @@ private fun SelectionBar(state: AppState, onExport: () -> Unit) {
                 DropdownMenuItem(text = { Text("ADIF (.adi)", fontSize = 17.sp) }, onClick = { menu = false; onExport() })
                 DropdownMenuItem(text = { Text("CSV", fontSize = 17.sp) }, onClick = { menu = false; state.openExport(ExportFormat.CSV, selectedOnly = true) })
                 DropdownMenuItem(text = { Text(tr("ЕРМАК / Cabrillo"), fontSize = 17.sp) }, onClick = { menu = false; state.openExport(ExportFormat.CONTEST, selectedOnly = true) })
-                DropdownMenuItem(text = { Text("LoTW · eQSL · Club Log · QRZ.com", fontSize = 17.sp) }, onClick = { menu = false; state.openUpload(selectedOnly = true) })
+                DropdownMenuItem(text = { Text("LoTW · eQSL · Club Log · QRZ.com · HAMLOG", fontSize = 17.sp) }, onClick = { menu = false; state.openUpload(selectedOnly = true) })
                 HorizontalDivider()
                 DropdownMenuItem(text = { Text(tr("Печать QSL-наклеек"), fontSize = 17.sp) }, onClick = { menu = false; state.printQslLabels() })
                 DropdownMenuItem(text = { Text(tr("Отметить: QSL отправлены"), fontSize = 17.sp) }, onClick = { menu = false; state.markQslSent() })

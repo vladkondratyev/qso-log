@@ -310,7 +310,7 @@ fun main() {
                 }
                 Menu(tr("Сервис")) {
                     Item(tr("DX-кластер"), onClick = state::openDxCluster)
-                    Item(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com…"), onClick = { state.openUpload(selectedOnly = false) })
+                    Item(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com, HAMLOG…"), onClick = { state.openUpload(selectedOnly = false) })
                     Item(tr("Подтверждения LoTW"), onClick = state::syncLotw)
                     // Shown once the table is set up in the settings; the sync runs only when asked.
                     if (ru.r3xed.qsolog.data.SheetSync.isScriptUrl(state.sheetUrl)) {
@@ -359,7 +359,7 @@ fun paletteCommands(state: AppState, files: Exports): List<Pair<String, () -> Un
     tr("Импорт лога из ADIF…") to files.importAdif,
     tr("Экспорт лога в CSV…") to files.exportCsv,
     tr("Экспорт в ЕРМАК / Cabrillo…") to { state.openContestExport(selectedOnly = false) },
-    tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com…") to { state.openUpload(selectedOnly = false) },
+    tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com, HAMLOG…") to { state.openUpload(selectedOnly = false) },
     tr("Подтверждения LoTW") to state::syncLotw,
     tr("Выбрать часть журнала…") to { state.showSelect = true },
     tr("Печать QSL-наклеек") to state::printQslLabels,

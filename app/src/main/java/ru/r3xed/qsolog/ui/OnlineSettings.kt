@@ -40,6 +40,7 @@ fun onlineSummary(c: OnlineConfig, myCall: String, lotwReady: Boolean): String =
     "eQSL".takeIf { c.problem(OnlineLog.EQSL, myCall) == null },
     "Club Log".takeIf { c.problem(OnlineLog.CLUBLOG, myCall) == null },
     "QRZ.com".takeIf { c.problem(OnlineLog.QRZCOM, myCall) == null },
+    "HAMLOG".takeIf { c.hamlogOn },
 ).joinToString(", ").ifBlank { tr("учётные записи не указаны") }
 
 /**
@@ -59,6 +60,13 @@ fun OnlineSettings(
     lotwCerts: List<Pair<String, String>> = emptyList(),
     onPickP12: () -> Unit = {},
     onForgetP12: (String) -> Unit = {},
+    /** HAMLOG being connected: the code to type on the site (null — not now), [hamlogBusy] — asking the server. */
+    hamlogCode: ru.r3xed.qsolog.data.Hamlog.DeviceCode? = null,
+    hamlogBusy: Boolean = false,
+    onHamlogConnect: () -> Unit = {},
+    onHamlogCancel: () -> Unit = {},
+    onHamlogOpen: (String) -> Unit = {},
+    onHamlogDisconnect: () -> Unit = {},
 ) {
     val lotwCert = lotwCerts.firstOrNull()?.second
     Note(tr("Здесь — только учётные записи. Выгрузка — из журнала: ⋮ → «Экспорт и импорт» → «Онлайн-журналы», или «Экспорт» у выбранных записей. Отметка о выгрузке с датой и временем видна в карточке каждой связи, и в следующий раз уходят только новые связи."))
@@ -105,6 +113,33 @@ fun OnlineSettings(
     Section("QRZ.com Logbook")
     SecretField(tr("API-ключ журнала QRZ.com"), c.qrzcomKey) { onChange(c.copy(qrzcomKey = it.trim())) }
     Note(tr("Ключ: qrz.com → My Logbook → Settings → «API Access Key». Нужна подписка QRZ.com, дающая доступ к API журнала. Это QRZ.com, не QRZ.ru."))
+    Section("HAMLOG")
+    when {
+        c.hamlogOn -> {
+            Text(
+                tr("Подключено: %s", c.hamlogCalls.ifBlank { tr("позывные — как выбрано на сайте") }),
+                style = MaterialTheme.typography.titleSmall, color = LocalExtra.current.ok,
+            )
+            SwitchRow(tr("Отправлять каждую новую связь сразу"), c.hamlogAuto) { onChange(c.copy(hamlogAuto = it)) }
+            Note(tr("Новая связь уходит в HAMLOG сразу после записи. Без интернета она ждёт и уйдёт со следующей. Старые связи — из журнала: ⋮ → «Экспорт и импорт» → «Онлайн-журналы» → HAMLOG."))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onHamlogDisconnect) { Text(tr("Отключить HAMLOG"), color = MaterialTheme.colorScheme.error) }
+            }
+        }
+        hamlogCode != null -> {
+            Text(tr("Код для HAMLOG:"), style = MaterialTheme.typography.bodyLarge)
+            Text(hamlogCode.userCode, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
+            Note(tr("Откройте страницу HAMLOG (код уже подставлен), войдите через WWPass, выберите позывные и подтвердите. Программа подключится сама, как только вы подтвердите. Адрес для ввода вручную: %s", hamlogCode.uri))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                ActionButton(tr("Открыть страницу HAMLOG"), null) { onHamlogOpen(hamlogCode.uriComplete) }
+                TextButton(onClick = onHamlogCancel) { Text(tr("Отмена")) }
+            }
+        }
+        else -> {
+            ActionButton(if (hamlogBusy) tr("Запрашиваю код…") else tr("Подключить HAMLOG"), null) { if (!hamlogBusy) onHamlogConnect() }
+            Note(tr("hamlog.online — облачный журнал и дипломы. Пароль здесь не нужен: программа покажет код, вы подтвердите его на сайте HAMLOG (вход через WWPass). Каждое устройство подключается отдельно."))
+        }
+    }
 }
 
 /** A key or a password: hidden, with an eye to show it. */

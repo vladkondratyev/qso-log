@@ -21,7 +21,7 @@ object SettingsIndex {
         Entry("Запускать вместе с QSO-LOG", SettingsPage.HARDWARE, "автозапуск программы запуск start apps"),
         Entry("Данные о корреспонденте", SettingsPage.SOURCES, "qrz.ru qrz.com hamqth qrzcq справочник логин пароль имя фото прошлой связи callbook"),
         Entry("DX-кластер", SettingsPage.SOURCES, "кластер cluster dxspider сервер споты уведомления watch список ожидания"),
-        Entry("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com", SettingsPage.SOURCES, "lotw eqsl club log qrz.com сертификат p12 tqsl выгрузка upload certificate"),
+        Entry("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com, HAMLOG", SettingsPage.SOURCES, "lotw eqsl club log qrz.com hamlog хамлог сертификат p12 tqsl выгрузка upload certificate"),
     )
 
     /** The blocks whose title or words contain every word of [query] (either language). */

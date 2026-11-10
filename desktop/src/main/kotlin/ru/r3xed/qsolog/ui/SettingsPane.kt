@@ -601,7 +601,7 @@ fun SettingsPane(
                         DxAlertSettings(vm)
                     }
 
-                    SettingsBlock(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com"), onlineSummary(vm.online, s.myCall, lotwReady = vm.uploadProblem(ru.r3xed.qsolog.data.OnlineLog.LOTW) == null)) {
+                    SettingsBlock(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com, HAMLOG"), onlineSummary(vm.online, s.myCall, lotwReady = vm.uploadProblem(ru.r3xed.qsolog.data.OnlineLog.LOTW) == null)) {
                         OnlineSettings(
                             vm.online, vm::changeOnline, computer = true, tqslFound = vm.tqslExecutable(),
                             lotwCerts = vm.lotwCerts.map { it.callsign to ru.r3xed.qsolog.data.Lotw.describe(it) },
@@ -615,6 +615,9 @@ fun SettingsPane(
                                 if (name != null && dir != null) vm.importLotwP12(java.io.File(dir, name))
                             },
                             onForgetP12 = vm::forgetLotwCert,
+                            hamlogCode = vm.hamlogCode, hamlogBusy = vm.hamlogBusy,
+                            onHamlogConnect = vm::connectHamlog, onHamlogCancel = vm::cancelHamlog,
+                            onHamlogOpen = { ru.r3xed.qsolog.openUrl(it) }, onHamlogDisconnect = vm::disconnectHamlog,
                         )
                     }
                     Spacer(Modifier.height(24.dp))

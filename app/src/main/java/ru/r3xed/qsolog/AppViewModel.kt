@@ -186,6 +186,9 @@ sealed interface Screen {
 val MAP_LAYER_SOURCE = mapOf("muf" to "kc2g", "drap" to "drap", "aurora" to "aurora", "heard" to "psk")
 
 /** User-Agent for the online logbooks: they ask programs to name themselves. */
+/** The new contacts waiting for HAMLOG (numbers, comma-separated); this device's own. */
+private const val HAMLOG_QUEUE = "hamlog_queue"
+
 private val ONLINE_AGENT = "QSO-LOG/" + BuildConfig.VERSION_NAME + " (Android)"
 
 /** Records the online-logbook upload is for; null = the whole log. */
@@ -1128,7 +1131,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) { voice.cleanup(keep = db.audioFiles()) }
         checkUpdateAtStart()
         // The online logbooks' keys and passwords: from the encrypted file, off the main thread.
-        viewModelScope.launch { online = withContext(Dispatchers.IO) { prefs.loadOnline() }; loadLotwCert() }
+        viewModelScope.launch { online = withContext(Dispatchers.IO) { prefs.loadOnline() }; loadLotwCert(); sendHamlogQueue() }
         // After the constructor: the backup copy when due, the cluster for notifications in the background.
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             checkBackup()
@@ -1843,7 +1846,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         saveJob = viewModelScope.launch {
             lastSavedId = withContext(Dispatchers.IO) { db.save(finalQso) }
             reload()
-            if (f.isNew) newSavedTick++
+            if (f.isNew) { newSavedTick++; queueHamlog(listOfNotNull(lastSavedId)) }
             val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
             if (!quiet) _messages.send(Message((if (f.isNew) tr("Связь с %s записана", f.call) else tr("Изменения сохранены")) + note))
         }
@@ -2790,6 +2793,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (added.isEmpty()) return
         reload()
+        queueHamlog(added.map { it.id })
         // The log shows the new contact on top, as after saving a card (a new day's group would start above the view).
         newSavedTick++
         say(if (added.size == 1) tr("Связь с %s из %s записана", added[0].call, from) else tr("Из %s записано связей: %s", from, added.size))
@@ -3600,6 +3604,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val account = when (log) {
             OnlineLog.LOTW -> lotwCert?.callsign.orEmpty()
             OnlineLog.EQSL -> c.eqslUser
+            // HAMLOG takes every callsign the user allowed on the site: each contact goes under its own.
+            OnlineLog.HAMLOG -> ""
             else -> call
         }
         val (list, otherCall) = ru.r3xed.qsolog.data.UploadCalls.forAccount(uploadCandidates(log, target.only, onlyNew), account)
@@ -3613,6 +3619,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 OnlineLog.QRZCOM -> OnlineLogs.uploadQrzCom(c.qrzcomKey, list, ONLINE_AGENT)
                 OnlineLog.CLUBLOG -> OnlineLogs.uploadClubLog(c.clublogEmail, c.clublogPassword, call, c.clublogAppKey, list, ONLINE_AGENT)
                 OnlineLog.EQSL -> OnlineLogs.uploadEqsl(c.eqslUser, c.eqslPassword, c.eqslNickname, list, ONLINE_AGENT)
+                OnlineLog.HAMLOG -> hamlog.upload(list, call)
                 OnlineLog.LOTW -> ru.r3xed.qsolog.data.UploadCalls.byLocator(list, settings.myLocator) { loc, part ->
                     ru.r3xed.qsolog.data.Lotw.send(lotwCert!!, ru.r3xed.qsolog.data.Lotw.Station(loc, c.lotwCqz, c.lotwItuz), part, ONLINE_AGENT)
                 }
@@ -3629,6 +3636,104 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (otherCall > 0) append(tr(", пропущено связей другого позывного: %s", otherCall))
                 r.error?.let { append(". ").append(it) }
             })
+        }
+    }
+
+    // ---------- HAMLOG: connected by a code on the site, then each new contact can go at once ----------
+
+    private val hamlog = ru.r3xed.qsolog.data.Hamlog.Session({ prefs.hamlogLink() }, { link ->
+        prefs.saveHamlogLink(link)
+        // The connection is gone (revoked, expired): the settings show "Подключить" again.
+        if (link == null && online.hamlogOn) changeOnline(online.copy(hamlogOn = false, hamlogCalls = ""))
+    }, ONLINE_AGENT)
+
+    /** The code shown in the settings while HAMLOG waits for the user's confirmation on the site. */
+    var hamlogCode by mutableStateOf<ru.r3xed.qsolog.data.Hamlog.DeviceCode?>(null); private set
+    var hamlogBusy by mutableStateOf(false); private set
+    private var hamlogJob: Job? = null
+
+    fun connectHamlog() {
+        hamlogJob?.cancel()
+        hamlogBusy = true
+        hamlogJob = viewModelScope.launch {
+            val d = try {
+                ru.r3xed.qsolog.data.Hamlog.start("Android " + android.os.Build.MODEL, ONLINE_AGENT)
+            } catch (e: Exception) {
+                hamlogBusy = false
+                say(e.message ?: e.javaClass.simpleName)
+                return@launch
+            }
+            hamlogBusy = false
+            hamlogCode = d
+            var interval = d.intervalSec
+            while (System.currentTimeMillis() < d.expiresAt) {
+                delay(interval * 1000L)
+                when (val r = ru.r3xed.qsolog.data.Hamlog.poll(d, interval, ONLINE_AGENT)) {
+                    is ru.r3xed.qsolog.data.Hamlog.Poll.Wait -> interval = r.intervalSec
+                    is ru.r3xed.qsolog.data.Hamlog.Poll.Done -> {
+                        withContext(Dispatchers.IO) { prefs.saveHamlogLink(r.link) }
+                        changeOnline(online.copy(hamlogOn = true, hamlogCalls = r.link.calls.joinToString(", ")))
+                        hamlogCode = null
+                        say(tr("HAMLOG подключён: %s", r.link.calls.joinToString(", ").ifBlank { "OK" }))
+                        return@launch
+                    }
+                    is ru.r3xed.qsolog.data.Hamlog.Poll.Failed -> {
+                        hamlogCode = null
+                        say(r.message)
+                        return@launch
+                    }
+                }
+            }
+            hamlogCode = null
+            say(tr("Код HAMLOG устарел: подключите заново"))
+        }
+    }
+
+    fun cancelHamlog() {
+        hamlogJob?.cancel()
+        hamlogCode = null
+        hamlogBusy = false
+    }
+
+    /** Disconnects on HAMLOG's side too (when it can be reached) and forgets the tokens. */
+    fun disconnectHamlog() {
+        cancelHamlog()
+        changeOnline(online.copy(hamlogOn = false, hamlogCalls = "", hamlogAuto = false))
+        prefs.putText(HAMLOG_QUEUE, "")
+        viewModelScope.launch {
+            val access = runCatching { hamlog.access() }.getOrNull()
+            if (access != null) ru.r3xed.qsolog.data.Hamlog.revoke(access, ONLINE_AGENT)
+            withContext(Dispatchers.IO) { prefs.saveHamlogLink(null) }
+        }
+        say(tr("HAMLOG отключён"))
+    }
+
+    private var hamlogSending = false
+
+    /** New contacts ([ids]) wait in the queue and go when "Отправлять каждую новую связь сразу" is on. */
+    private fun queueHamlog(ids: List<Long>) {
+        if (!online.hamlogOn || !online.hamlogAuto || ids.isEmpty()) return
+        prefs.putText(HAMLOG_QUEUE, (ru.r3xed.qsolog.data.Hamlog.parseQueue(prefs.text(HAMLOG_QUEUE)) + ids).distinct().joinToString(","))
+        sendHamlogQueue()
+    }
+
+    /** Sends what waits (at start too); a failure keeps the contacts for the next new one, quietly unless it needs the user. */
+    fun sendHamlogQueue() {
+        if (hamlogSending || !online.hamlogOn || !online.hamlogAuto) return
+        val ids = ru.r3xed.qsolog.data.Hamlog.parseQueue(prefs.text(HAMLOG_QUEUE))
+        if (ids.isEmpty()) return
+        hamlogSending = true
+        viewModelScope.launch {
+            try {
+                val r = ru.r3xed.qsolog.data.Hamlog.sendQueue(hamlog, ids, { db.get(it) }, { db.save(it) }, settings.myCall)
+                // Contacts queued while this was sending stay too.
+                val now = ru.r3xed.qsolog.data.Hamlog.parseQueue(prefs.text(HAMLOG_QUEUE))
+                prefs.putText(HAMLOG_QUEUE, (r.left + now.filter { it !in ids }).distinct().joinToString(","))
+                if (r.sent > 0) reload()
+                if (r.rejected.isNotEmpty() || !online.hamlogOn) say(r.error ?: tr("HAMLOG не принял связи: %s", r.rejected.joinToString(", ") { it.call }))
+            } finally {
+                hamlogSending = false
+            }
         }
     }
 

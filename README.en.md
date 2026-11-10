@@ -16,7 +16,7 @@ callsigns, exchange numbers — go out from the F1–F8 keys, and from the keybo
 and MSHV. The app looks up the other station's name and city on QRZ.ru,
 QRZ.com, HamQTH or QRZCQ, works out the distance and draws the path on a map. You can attach a voice note to a QSO. Contest mode
 gives fast entry with exchange numbers, and the log exports to Cabrillo and to ЕРМАК, the Russian contest format.
-A dashboard shows the log in charts. The log exports to ADIF and CSV and uploads to LoTW (directly, without TQSL), eQSL, Club Log and QRZ.com, and several devices can keep one log through
+A dashboard shows the log in charts. The log exports to ADIF and CSV and uploads to LoTW (directly, without TQSL), eQSL, Club Log, QRZ.com and HAMLOG, and several devices can keep one log through
 your own Google Sheet. Buttons and text are large, so you can log on the air; with an external keyboard you can log
 without touching the screen at all.
 
@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.9.3 | [QSO-LOG-2.9.3.apk](../../releases/tag/v2.9.3) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.3 | [QSO-LOG-2.9.3-macos-arm64.dmg](../../releases/tag/desktop-v2.9.3) |
-| macOS 11 or newer, Intel | 2.9.3 | [QSO-LOG-2.9.3-macos-x64.dmg](../../releases/tag/desktop-v2.9.3) |
-| Windows 10 and 11, 64-bit | 2.9.3 | [QSO-LOG-2.9.3-windows-x64.zip](../../releases/tag/desktop-v2.9.3) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.3 | [QSO-LOG-2.9.3-linux-amd64.deb](../../releases/tag/desktop-v2.9.3) |
+| Android 8.0 or newer | 2.9.4 | [QSO-LOG-2.9.4.apk](../../releases/tag/v2.9.4) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.4 | [QSO-LOG-2.9.4-macos-arm64.dmg](../../releases/tag/desktop-v2.9.4) |
+| macOS 11 or newer, Intel | 2.9.4 | [QSO-LOG-2.9.4-macos-x64.dmg](../../releases/tag/desktop-v2.9.4) |
+| Windows 10 and 11, 64-bit | 2.9.4 | [QSO-LOG-2.9.4-windows-x64.zip](../../releases/tag/desktop-v2.9.4) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.4 | [QSO-LOG-2.9.4-linux-amd64.deb](../../releases/tag/desktop-v2.9.4) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -60,7 +60,7 @@ is switched in Settings and changes at once.
 - [Voice notes](#voice-notes)
 - [Distance and maps](#distance-and-maps)
 - [Export and import](#export-and-import)
-- [Online logbooks: LoTW, eQSL, Club Log, QRZ.com](#online-logbooks-lotw-eqsl-club-log-qrzcom)
+- [Online logbooks: LoTW, eQSL, Club Log, QRZ.com, HAMLOG](#online-logbooks-lotw-eqsl-club-log-qrzcom-hamlog)
 - [Sync through a Google Sheet](#sync-through-a-google-sheet)
 - [Reference and calculators](#reference-and-calculators)
 - [Settings](#settings)
@@ -767,7 +767,7 @@ and whether to mark them as exported. The marks are shown
 at the bottom of the card, and coloured dots next to the time in the log: blue ADIF, green CSV, orange contest report.
 Every QSO has a permanent GUID (ADIF `APP_QSOLOG_UID`), so duplicates are skipped on import.
 
-## Online logbooks: LoTW, eQSL, Club Log, QRZ.com
+## Online logbooks: LoTW, eQSL, Club Log, QRZ.com, HAMLOG
 
 Since 2.3.0 QSOs go to LoTW (ARRL), Club Log and the QRZ.com logbook, since 2.6.0 to eQSL too: ⋮ → "Export and import" → "Online logbooks",
 or "Export" on picked records. The dialog asks which logbook, only new QSOs (the default) or all, and whether to mark
@@ -779,6 +779,13 @@ them. The mark with date and time shows in the QSO card; take it off and the QSO
   (Help Desk → "Request an API key"). The callsign comes from "My station".
 - **eQSL** needs the eQSL login (callsign) and password, and the QTH Nickname if the callsign has several profiles.
   Duplicates count as "already there".
+- **HAMLOG** (since 2.9.4) — the cloud log and awards of [hamlog.online](https://hamlog.online). No passwords: Settings →
+  "Online logbooks" → **"Connect HAMLOG"** — the app shows a code, "Open the HAMLOG page" opens the site with the code
+  filled in; sign in with WWPass, pick the callsigns and confirm, and the app connects by itself. QSOs go under the
+  callsign of the card ("My callsign", `/P` included) if it is allowed on the site. **"Send each new QSO right away"**
+  sends a QSO as soon as it is saved; without internet it waits and goes with the next one. QSOs HAMLOG already has are
+  not duplicated. Each device is connected separately, and the connection is not part of the settings sync.
+  "Disconnect HAMLOG" revokes the app's access.
 - **LoTW without TQSL** (since 2.7.0) — as in RUMlog and SDR-Control: load your `.p12` certificate file in the settings
   (in TQSL on a computer: Callsign Certificates → your callsign → "Save the callsign certificate"), and the QSOs are
   signed right in QSO-LOG and go to LoTW at a tap — from the phone and the computer. The callsign and country come from
@@ -797,7 +804,7 @@ and no more than 30 minutes apart, it gets the "eQSL received" mark with the car
 want and press "Add to the log" — they become new QSOs (the received RST taken from the card). Downloading again
 duplicates nothing.
 
-The accounts are in Settings → "Callbooks and online logs" → **"Online logbooks: LoTW, eQSL, Club Log, QRZ.com"**. The password and keys are stored
+The accounts are in Settings → "Callbooks and online logs" → **"Online logbooks: LoTW, eQSL, Club Log, QRZ.com, HAMLOG"**. The password and keys are stored
 encrypted (Android's keystore on the phone, the system keychain on the computer).
 
 <p>
@@ -937,21 +944,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.9.3-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.9.3), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.9.4-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.9.4), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.9.3-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.3), unpack the
+Download `QSO-LOG-2.9.4-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.4), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.9.3-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.3) and install it:
+Download `QSO-LOG-2.9.4-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.4) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.9.3-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.9.4-linux-amd64.deb
 ```
 
 ## Where the data is kept

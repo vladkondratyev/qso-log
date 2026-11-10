@@ -314,6 +314,12 @@ class Settings {
     /** Plain text settings of 2.9.1 (filters, backups, activation, cluster alerts): one key each. */
     fun text(key: String, def: String = ""): String = get(key, def)
     fun putText(key: String, value: String) = put(key, value)
+
+    /** This computer's HAMLOG connection (see ru.r3xed.qsolog.data.Hamlog): in the keychain, never in the settings sync. */
+    @Synchronized
+    fun hamlogLink(): String = loadPassword(account = "hamlog_link", key = "hamlog_link")
+    @Synchronized
+    fun saveHamlogLink(l: ru.r3xed.qsolog.data.Hamlog.Link?) = savePassword(l?.encode().orEmpty(), account = "hamlog_link", key = "hamlog_link")
     private fun put(key: String, value: String) {
         props.setProperty(key, value)
         file.outputStream().use { props.store(it, "QSO Log") }

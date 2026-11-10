@@ -75,7 +75,7 @@ fun UploadDialog(
                     if (selected != null) tr("Выбрано записей: %s", selected) else tr("Весь журнал: %s записей", total),
                     style = MaterialTheme.typography.bodyLarge,
                 )
-                // Two rows of two: the names fit on a phone.
+                // Rows of two: the names fit on a phone.
                 OnlineLog.entries.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         pair.forEach { item ->
@@ -93,6 +93,7 @@ fun UploadDialog(
                                 )
                             }
                         }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
                 if (log == OnlineLog.LOTW) Text(lotwNote, style = MaterialTheme.typography.bodyMedium, color = x.muted)
