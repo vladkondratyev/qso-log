@@ -78,6 +78,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MoreVert
@@ -206,6 +207,12 @@ fun LogScreen(
                             onClick = { menu = false; vm.openPropagation() },
                         )
                         HistoryMenuItem(vm) { menu = false; vm.openHistory() }
+                        DropdownMenuItem(
+                            text = { Text(tr("Дозаполнить данные корреспондентов"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.Filled.PersonSearch, null) },
+                            enabled = vm.fillProgress == null,
+                            onClick = { menu = false; vm.fillMissing() },
+                        )
                         HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text(tr("Экспорт и импорт…"), fontSize = 18.sp) },
@@ -267,6 +274,7 @@ fun LogScreen(
 
             // "Выезд": the activation in progress, its count and the button that ends it.
             ActivationBanner(vm)
+            FillBanner(vm)
 
             // Ctrl+F on a physical keyboard puts the cursor here; Enter opens a new card for the station found, Esc clears.
             val searchFocus = remember { FocusRequester() }
@@ -688,12 +696,17 @@ private fun SelectionBar(vm: AppViewModel) {
         IconButton(onClick = vm::selectAllShown, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.SelectAll, tr("Выбрать все"), Modifier.size(28.dp))
         }
+        // The picked records go after a question; the message after it offers to undo.
+        IconButton(onClick = { vm.askDeleteLog() }, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Filled.Delete, tr("Удалить выбранные"), Modifier.size(28.dp), tint = MaterialTheme.colorScheme.error)
+        }
         // Export of the picked records: ADIF, CSV or a contest report (ЕРМАК / Cabrillo), each via its dialog.
         var menu by remember { mutableStateOf(false) }
         Box {
-            Button(onClick = { menu = true }, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp)) {
+            // Narrow padding: with the bin the row is full on a 411 dp phone.
+            Button(onClick = { menu = true }, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(52.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)) {
                 Icon(Icons.Filled.FileUpload, null)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(4.dp))
                 Text(tr("Экспорт"), fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -712,6 +725,11 @@ private fun SelectionBar(vm: AppViewModel) {
                     text = { Text(tr("Отметить: QSL отправлены"), fontSize = 17.sp) },
                     leadingIcon = { Icon(Icons.Filled.MarkEmailRead, null) },
                     onClick = { menu = false; vm.markQslSent() },
+                )
+                DropdownMenuItem(
+                    text = { Text(tr("Дозаполнить данные корреспондентов"), fontSize = 17.sp) },
+                    leadingIcon = { Icon(Icons.Filled.PersonSearch, null) },
+                    onClick = { menu = false; vm.fillMissing() },
                 )
             }
         }
@@ -748,6 +766,7 @@ private fun QsoRow(
                 shape,
             )
             .border(if (selected || cursor) 2.dp else 1.dp, if (selected || cursor) MaterialTheme.colorScheme.primary else x.line, shape)
+            .hamlogStripe(qso.onHamlog(), x.hamlog, inset = 5.dp)
             .combinedClickable(
                 onClick = onClick,
                 onLongClickLabel = tr("Выбрать запись"),
@@ -802,7 +821,7 @@ private fun QsoRow(
         val meta = listOfNotNull(
             qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null },
             qso.mode.ifBlank { null },
-            if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent} / ${qso.rstRcvd}" else null,
+            if (ru.r3xed.qsolog.data.Swl.isSwl(qso)) "SWL " + ru.r3xed.qsolog.data.Swl.summary(qso) else if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent} / ${qso.rstRcvd}" else null,
             // Contest numbers: sent / received.
             if (ContestMode.isContest(qso.adif)) "№ ${qso.adif[ContestMode.SENT].orEmpty()} / ${qso.adif[ContestMode.RCVD].orEmpty().ifBlank { "—" }}" else null,
         ).joinToString("  ·  ")

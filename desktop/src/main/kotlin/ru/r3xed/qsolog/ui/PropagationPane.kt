@@ -317,7 +317,7 @@ private fun Heat(rows: List<Pair<String, IntArray>>) {
                 cells.forEach { n ->
                     Box(
                         Modifier.weight(1f).height(26.dp).padding(1.dp).clip(RoundedCornerShape(4.dp))
-                            .background(if (n == 0) x.field else accent.copy(alpha = 0.2f + 0.8f * n / max)),
+                            .background(if (n == 0) x.field else accent.copy(alpha = (0.2f + 0.8f * n / max).coerceIn(0f, 1f))),
                         contentAlignment = Alignment.Center,
                     ) { if (n > 0) Text("$n", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (n * 2 > max) Color.White else MaterialTheme.colorScheme.onSurface) }
                 }

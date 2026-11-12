@@ -171,7 +171,9 @@ fun SettingsScreen(
                         // Several stations: the list on top, the fields below are the one in work.
                         StationList(vm.stations, vm.activeStationId, vm::switchStation, vm::addStation)
                         if (many) SettingField(tr("Название станции (Дом, Выезд, Клуб)"), vm.activeStation.title, vm::renameStation)
-                        SettingField(tr("Мой позывной"), s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
+                        val swl = ru.r3xed.qsolog.data.Swl.isSwl(s.station)
+                        SettingField(if (swl) tr("Номер наблюдателя (например R3A-1234)") else tr("Мой позывной"), s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
+                        StationSwlSwitch(swl) { vm.updateSettings(s.copy(station = ru.r3xed.qsolog.data.Swl.station(s.station, it))) }
                         val auto = vm.activeStation.autoLocator
                         if (auto) {
                             AutoLocatorLine(s.myLocator, vm.locatorFixAt) { vm.refreshLocation(force = true) }
@@ -342,23 +344,8 @@ fun SettingsScreen(
                         if (vm.themeMode == ThemeMode.CUSTOM) CustomThemeEditor(vm.customTheme, vm::changeCustomTheme)
                         FocusRingSwitch(vm.focusRing, vm::changeFocusRing)
                         Text(tr("Масштаб интерфейса"), style = MaterialTheme.typography.titleSmall)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ru.r3xed.qsolog.data.UiScale.PHONE.forEach { sc ->
-                                val on = vm.uiScale == sc
-                                Box(
-                                    Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
-                                        .background(if (on) MaterialTheme.colorScheme.primary else x.field)
-                                        .selectable(selected = on, role = Role.RadioButton) { vm.changeUiScale(sc) },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        sc.label, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                                        color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    )
-                                }
-                            }
-                        }
-                        Note(tr("70% и 50% — компактный вид: кнопки, поля и отступы меньше, текст уменьшается мягче, карточка связи раскладывается в две колонки. С клавиатуры: Ctrl + и Ctrl − (Ctrl 0 — 100%)."))
+                        ScalePicker(vm.uiScale, vm::changeUiScale)
+                        Note(tr("От 50% до 150% с шагом 10%: меньше 100% — компактный вид (кнопки, поля и отступы меньше, текст уменьшается мягче, при 50–60% карточка связи раскладывается в две колонки), больше 100% — всё крупнее. С клавиатуры: Ctrl + и Ctrl − (Ctrl 0 — 100%)."))
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field)
                                 .toggleable(value = vm.keepScreenOn, role = Role.Switch, onValueChange = vm::changeKeepScreenOn)

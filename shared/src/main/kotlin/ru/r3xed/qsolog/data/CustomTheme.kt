@@ -42,6 +42,7 @@ data class CustomTheme(val dark: Boolean = false, val colors: Map<Role, Long> = 
         OK("ok", "Успех, новый диапазон"), // no-tr
         ERROR("error", "Ошибка, повтор"), // no-tr
         FOCUS("focus", "Контрастная обводка поля ввода"), // no-tr
+        HAMLOG("hamlog", "Полоска «выгружено в HAMLOG»"), // no-tr
     }
 
     companion object {
@@ -53,6 +54,7 @@ data class CustomTheme(val dark: Boolean = false, val colors: Map<Role, Long> = 
             Role.LINE to 0xFFDCE2E9, Role.MUTED to 0xFF4A5A6D, Role.FIELD to 0xFFF1F4F7, Role.ON_ACCENT to 0xFFFFFFFF,
             Role.GROUP_TEXT to 0xFF06324D, Role.HIGHLIGHT to 0xFFFFF1C9, Role.HIGHLIGHT_LINE to 0xFFE0A800,
             Role.HIGHLIGHT_TEXT to 0xFF4A3700, Role.OK to 0xFF1E7B45, Role.ERROR to 0xFFB3261E, Role.FOCUS to 0xFFFF6D00,
+            Role.HAMLOG to 0xFF7B4FB0,
         )
 
         /** The app's dark theme. */
@@ -61,6 +63,7 @@ data class CustomTheme(val dark: Boolean = false, val colors: Map<Role, Long> = 
             Role.LINE to 0xFF26323D, Role.MUTED to 0xFFA6B5C4, Role.FIELD to 0xFF1C2630, Role.ON_ACCENT to 0xFF06121B,
             Role.GROUP_TEXT to 0xFFD3E8F5, Role.HIGHLIGHT to 0xFF3A2F0B, Role.HIGHLIGHT_LINE to 0xFFE0A800,
             Role.HIGHLIGHT_TEXT to 0xFFFFE08A, Role.OK to 0xFF6BD49A, Role.ERROR to 0xFFFF8A80, Role.FOCUS to 0xFFFFC400,
+            Role.HAMLOG to 0xFFC39BEF,
         )
 
         fun base(dark: Boolean) = CustomTheme(dark, if (dark) DARK else LIGHT)

@@ -1,5 +1,8 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.Modifier
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
@@ -33,6 +36,8 @@ data class Extra(
     val hl: Color, val hlBorder: Color, val hlInk: Color,
     val ok: Color, val okBg: Color,
     val muted: Color, val field: Color, val line: Color,
+    /** The stripe at the left of a log row uploaded to HAMLOG.online. */
+    val hamlog: Color = Color(0xFF7B4FB0),
 )
 
 val LocalExtra = staticCompositionLocalOf {
@@ -65,11 +70,13 @@ private val LightExtra = Extra(
     hl = Color(0xFFFFF1C9), hlBorder = Color(0xFFE0A800), hlInk = Color(0xFF4A3700),
     ok = Color(0xFF1E7B45), okBg = Color(0xFFE2F4E9),
     muted = Color(0xFF4A5A6D), field = Color(0xFFF1F4F7), line = Color(0xFFDCE2E9),
+    hamlog = Color(0xFF7B4FB0),
 )
 private val DarkExtra = Extra(
     hl = Color(0xFF3A2F0B), hlBorder = Color(0xFFE0A800), hlInk = Color(0xFFFFE08A),
     ok = Color(0xFF6BD49A), okBg = Color(0xFF12301F),
     muted = Color(0xFFA6B5C4), field = Color(0xFF1C2630), line = Color(0xFF26323D),
+    hamlog = Color(0xFFC39BEF),
 )
 
 private val base = Typography()
@@ -139,6 +146,7 @@ private fun customScheme(t: ru.r3xed.qsolog.data.CustomTheme): Pair<androidx.com
         hl = c(ThemeRole.HIGHLIGHT), hlBorder = c(ThemeRole.HIGHLIGHT_LINE), hlInk = c(ThemeRole.HIGHLIGHT_TEXT),
         ok = ok, okBg = ok.copy(alpha = 0.16f).compositeOver(bg),
         muted = muted, field = field, line = line,
+        hamlog = c(ThemeRole.HAMLOG),
     )
     return scheme to extra
 }
@@ -153,3 +161,17 @@ internal fun themeColors(dark: Boolean, custom: ru.r3xed.qsolog.data.CustomTheme
 fun focusRingColor(dark: Boolean, custom: ru.r3xed.qsolog.data.CustomTheme?): Color =
     Color((custom?.get(ru.r3xed.qsolog.data.CustomTheme.Role.FOCUS) ?: (if (dark) ru.r3xed.qsolog.data.CustomTheme.DARK else ru.r3xed.qsolog.data.CustomTheme.LIGHT)
         .getValue(ru.r3xed.qsolog.data.CustomTheme.Role.FOCUS)).toInt())
+
+/**
+ * The mark of a contact uploaded to HAMLOG.online: a stripe of [LocalExtra]'s hamlog colour along the left edge of the
+ * row, [inset] from it — seen together with the light green of a LoTW confirmation. Comes after the row's background.
+ */
+fun Modifier.hamlogStripe(on: Boolean, color: Color, inset: androidx.compose.ui.unit.Dp = 0.dp): Modifier =
+    if (!on) this else drawBehind {
+        val w = 4.dp.toPx()
+        val i = inset.toPx()
+        drawRoundRect(color, androidx.compose.ui.geometry.Offset(i, i), androidx.compose.ui.geometry.Size(w, size.height - 2 * i), androidx.compose.ui.geometry.CornerRadius(w / 2))
+    }
+
+/** Uploaded to HAMLOG.online (the mark of [ru.r3xed.qsolog.data.OnlineLog.HAMLOG]). */
+fun ru.r3xed.qsolog.data.Qso.onHamlog(): Boolean = ru.r3xed.qsolog.data.OnlineLog.HAMLOG.isSent(this)

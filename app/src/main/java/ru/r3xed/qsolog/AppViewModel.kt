@@ -1119,6 +1119,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (prefs.whatsNewSeen != BuildConfig.VERSION_NAME) {
             if (firstInstall) prefs.whatsNewSeen = BuildConfig.VERSION_NAME else showWhatsNew = true
         }
+        viewModelScope.launch { retryPendingLookups() }
         prefs.launchCount = prefs.launchCount + 1
         showRecordHint = prefs.launchCount <= 5
         reload()
@@ -1758,10 +1759,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Fills the saved contact's empty fields from QRZ.ru; returns what to tell the user. */
-    private suspend fun fillFromQrz(qso: Qso): String = try {
+    private suspend fun fillFromQrz(qso: Qso, outcome: (Boolean?) -> Unit = {}): String = try {
         val info = qrzLookup(qso.call)
         if (info == null) {
             withContext(Dispatchers.IO) { db.save(qso.copy(pendingLookup = false)) }
+            outcome(false)
             tr("На QRZ.ru позывного %s нет", qso.call)
         } else {
             val pos = info.position
@@ -1784,14 +1786,88 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 updatedAt = System.currentTimeMillis(),
             )
             withContext(Dispatchers.IO) { db.save(updated) }
+            outcome(true)
             tr("Данные %s получены с QRZ.ru", qso.call)
         }
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e
     } catch (e: QrzException) {
+        outcome(null)
         e.message ?: tr("Ошибка QRZ.ru")
     } catch (e: Exception) {
+        outcome(null)
         networkError(e)
+    }
+
+    /** «Дозаполнить данные корреспондентов»: how far it has gone (done, of all); null — not running. */
+    var fillProgress by mutableStateOf<Pair<Int, Int>?>(null); private set
+    private var fillJob: Job? = null
+
+    /** The contacts of [from] without the station's name or QTH, or marked as not looked up when saved. */
+    private fun lackingInfo(from: List<Qso>) = from.filter { it.pendingLookup || it.name.isBlank() || it.qth.isBlank() }
+
+    /**
+     * «Дозаполнить данные корреспондентов»: the empty name, QTH, country and locator of the picked contacts (none
+     * picked — the whole log) from the callbooks, one after another. What is already filled stays. It stops at the
+     * first error (no internet), so it can simply be run again once the internet is back.
+     */
+    fun fillMissing() {
+        if (fillJob?.isActive == true) return
+        if (!hasQrzAccount) return say(tr("Укажите учётную запись справочника (QRZ.ru, QRZ.com, HamQTH) в настройках"))
+        val list = lackingInfo(if (selecting) allQsos.filter { it.id in selected } else allQsos)
+        if (list.isEmpty()) return say(tr("У всех связей есть имя и QTH"))
+        fillJob = viewModelScope.launch {
+            var filled = 0
+            var stopped: String? = null
+            try {
+                for ((i, q) in list.withIndex()) {
+                    fillProgress = i to list.size
+                    refreshing = refreshing + q.id
+                    var ok: Boolean? = false
+                    val msg = try { fillFromQrz(q) { ok = it } } finally { refreshing = refreshing - q.id }
+                    if (ok == null) { stopped = msg; break }
+                    if (ok == true) filled++
+                    if ((i + 1) % 10 == 0) reload()
+                    delay(FILL_PAUSE_MS)
+                }
+            } finally {
+                fillProgress = null
+                reload()
+            }
+            say(stopped?.let { tr("Дозаполнено связей: %s из %s. Остановлено: %s", filled, list.size, it) } ?: tr("Дозаполнено связей: %s из %s", filled, list.size))
+        }
+    }
+
+    fun stopFillMissing() {
+        fillJob?.cancel()
+        fillJob = null
+        fillProgress = null
+        say(tr("Дозаполнение остановлено"))
+    }
+
+    /**
+     * Contacts saved while the callbooks did not answer are looked up again by themselves every few minutes, so they
+     * get the name and QTH once the internet is back; the first failure waits for the next round.
+     */
+    private suspend fun retryPendingLookups() {
+        while (true) {
+            delay(RETRY_LOOKUP_MS)
+            if (fillJob?.isActive == true || !hasQrzAccount) continue
+            val pending = allQsos.filter { it.pendingLookup && it.id !in refreshing }
+            var done = 0
+            for (q in pending) {
+                var ok: Boolean? = false
+                refreshing = refreshing + q.id
+                try { fillFromQrz(q) { ok = it } } finally { refreshing = refreshing - q.id }
+                if (ok == null) break
+                done++
+                delay(FILL_PAUSE_MS)
+            }
+            if (done > 0) {
+                reload()
+                say(tr("Данные корреспондентов получены для связей: %s", done))
+            }
+        }
     }
 
     /** Returns an error message, or null when saved. */
@@ -1846,7 +1922,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         saveJob = viewModelScope.launch {
             lastSavedId = withContext(Dispatchers.IO) { db.save(finalQso) }
             reload()
-            if (f.isNew) { newSavedTick++; queueHamlog(listOfNotNull(lastSavedId)) }
+            if (f.isNew) { newSavedTick++; queueHamlog(listOfNotNull(lastSavedId?.takeIf { !ru.r3xed.qsolog.data.Swl.isSwl(finalQso) })) }
             val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
             if (!quiet) _messages.send(Message((if (f.isNew) tr("Связь с %s записана", f.call) else tr("Изменения сохранены")) + note))
         }
@@ -2793,7 +2869,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (added.isEmpty()) return
         reload()
-        queueHamlog(added.map { it.id })
+        queueHamlog(added.filter { !ru.r3xed.qsolog.data.Swl.isSwl(it) }.map { it.id })
         // The log shows the new contact on top, as after saving a card (a new day's group would start above the view).
         newSavedTick++
         say(if (added.size == 1) tr("Связь с %s из %s записана", added[0].call, from) else tr("Из %s записано связей: %s", from, added.size))
@@ -3584,7 +3660,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The contacts an upload to [log] takes: the picked ones or the whole log, without those already sent when [onlyNew]. */
     fun uploadCandidates(log: OnlineLog, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
-        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !log.isSent(it)) }
+        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !log.isSent(it)) && !ru.r3xed.qsolog.data.Swl.isSwl(it) }
 
     /** What is missing in the settings for [log], or null when it can be uploaded. */
     fun uploadProblem(log: OnlineLog): String? = online.problem(log, settings.myCall)
@@ -4051,3 +4127,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 }
+/** A pause between two callbook lookups of «Дозаполнить данные корреспондентов», not to hammer the callbooks. */
+private const val FILL_PAUSE_MS = 400L
+
+/** How often contacts saved without the callbook's answer are looked up again. */
+private const val RETRY_LOOKUP_MS = 2 * 60_000L

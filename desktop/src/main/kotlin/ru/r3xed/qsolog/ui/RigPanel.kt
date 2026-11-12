@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -127,8 +128,12 @@ fun RigPanel(vm: AppState) {
             val hz = rig.freqHz ?: 0L
             // While the radio has not yet answered a command, the panel shows where it was sent.
             var target by remember { mutableStateOf<Long?>(null) }
-            LaunchedEffect(target) { if (target != null) { delay(1500); target = null } }
-            val shown = target ?: hz
+            // The radio answered: the panel shows where it stands and counts the next step from there, so at the edge of
+            // its range (the radio's own limits) the number stays at the edge instead of running on.
+            LaunchedEffect(hz) { target = null }
+            LaunchedEffect(target) { if (target != null) { delay(700); target = null } }
+            val shown = hz
+            val base = target ?: hz
             fun tune(to: Long) {
                 if (to <= 0) return
                 target = to
@@ -142,6 +147,8 @@ fun RigPanel(vm: AppState) {
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(x.field)
                     // The mouse wheel turns the dial too: a notch is a step.
                     .onPointerEvent(PointerEventType.Scroll) { ev ->
+                        // Over a digit the wheel tunes by that digit (FreqDigits took it).
+                        if (ev.changes.any { it.isConsumed }) return@onPointerEvent
                         val dy = ev.changes.firstOrNull()?.scrollDelta?.y ?: 0f
                         if (dy != 0f) {
                             val base = target ?: vm.catRig?.freqHz ?: return@onPointerEvent
@@ -164,24 +171,24 @@ fun RigPanel(vm: AppState) {
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(CatFormat.khz(shown), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 40.sp, maxLines = 1)
+                    FreqDigits(shown) { d -> tune(base + d) }
                     Text(
-                        listOfNotNull(tr("кГц"), rig.radioMode, if (rig.tx == true) "TX" else rig.sDb?.let { CatFormat.sMeter(it) }).joinToString(" · ") + " · " + tr("тяните мышью влево-вправо или крутите колесо"),
+                        listOfNotNull(tr("кГц"), rig.radioMode, if (rig.tx == true) "TX" else rig.sDb?.let { CatFormat.sMeter(it) }).joinToString(" · ") + " · " + tr("цифра: щелчок — выше, правой — ниже, колесо — тем же разрядом"),
                         style = MaterialTheme.typography.bodyMedium, color = x.muted, textAlign = TextAlign.Center,
                     )
                 }
             }
             // Receive: the S-meter; transmit: power, SWR, ALC. Then the band with the needle; a tap on it tunes there.
             RigMeters(rig)
-            BandScaleBar(shown, ::tune, ticks = 6)
+            BandScaleBar(shown, ::tune, ticks = 6, keepPlace = true)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalIconButton(onClick = { tune((shown / step - 1) * step) }, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Remove, tr("Ниже на шаг")) }
+                FilledTonalIconButton(onClick = { tune((base / step - 1) * step) }, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Remove, tr("Ниже на шаг")) }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TUNE_STEPS.forEach { s ->
                         PanelChip(stepLabel(s), s == step, Modifier.weight(1f), small = true) { vm.changeTuneStep(s) }
                     }
                 }
-                FilledTonalIconButton(onClick = { tune((shown / step + 1) * step) }, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Add, tr("Выше на шаг")) }
+                FilledTonalIconButton(onClick = { tune((base / step + 1) * step) }, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Add, tr("Выше на шаг")) }
             }
             var typed by remember { mutableStateOf("") }
             val typedHz = freqMhz(typed)?.takeIf { bandForFreq(it) != null }?.let { Math.round(it * 1_000_000) }
@@ -236,5 +243,43 @@ private fun PanelChip(text: String, on: Boolean, modifier: Modifier = Modifier, 
     ) {
         Text(text, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = if (small) 13.sp else 16.sp, maxLines = 1,
             color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/**
+ * The frequency, each digit a control: a click raises the frequency by one of that digit's place (on the hundreds of Hz,
+ * by 100 Hz), the right button lowers it, the mouse wheel over a digit turns by that place. [onStep] gets the change in Hz.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+private fun FreqDigits(hz: Long, onStep: (Long) -> Unit) {
+    val text = CatFormat.khz(hz)
+    // The place of each character in Hz, counted from the right: the three after the point are 1, 10 and 100 Hz.
+    val places = LongArray(text.length)
+    var p = 1L
+    for (i in text.indices.reversed()) if (text[i].isDigit()) { places[i] = p; p *= 10 }
+    Row {
+        text.forEachIndexed { i, ch ->
+            val place = places[i]
+            var hover by remember { mutableStateOf(false) }
+            val m = if (place == 0L) Modifier else Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (hover) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else androidx.compose.ui.graphics.Color.Transparent)
+                .onPointerEvent(PointerEventType.Enter) { hover = true }
+                .onPointerEvent(PointerEventType.Exit) { hover = false }
+                .onPointerEvent(PointerEventType.Press) { ev ->
+                    onStep(if (ev.buttons.isSecondaryPressed) -place else place)
+                    ev.changes.forEach { it.consume() }
+                }
+                .onPointerEvent(PointerEventType.Scroll) { ev ->
+                    val dy = ev.changes.firstOrNull()?.scrollDelta?.y ?: 0f
+                    if (dy != 0f) onStep(if (dy < 0) place else -place)
+                    ev.changes.forEach { it.consume() }
+                }
+            Text(
+                ch.toString(), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 40.sp, maxLines = 1,
+                modifier = m,
+            )
+        }
     }
 }

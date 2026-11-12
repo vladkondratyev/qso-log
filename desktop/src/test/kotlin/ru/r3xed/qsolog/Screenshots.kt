@@ -179,6 +179,26 @@ fun main(args: Array<String>) {
             shot("22-contests", 1000)
             state.changeContestMode(false)
 
+            // 2.9.3: the whole log as a table; a new card over it, the callsign coloured as a dupe on this band.
+            state.toggleTableMode()
+            shot("38-table", 1500)
+            state.newQso()
+            state.setCall("DL1DEMO")
+            shot("39-table-card", 2500)
+            state.closeEditor()
+            state.newQso()
+            state.setCall("R9DEMO")
+            shot("40-table-dupe", 2500)
+            state.closeEditor()
+            state.toggleTableMode()
+
+            // 2.9.1–2.9.2: awards counted from the log; band conditions seen from the station's QTH (live services).
+            state.openAwards()
+            shot("41-awards", 1500)
+            state.openPropagation()
+            shot("42-propagation", 12000)
+            state.pane = Pane.Empty
+
             state.openDashboard()
             shot("16-dashboard", 2000)
             scrollRight(60)
@@ -318,7 +338,7 @@ private fun fakeWsjtxLogged(port: Int, call: String, grid: String, hz: Long, mod
 /** The made-up transceiver is on the FT8 frequency in data mode (for the main picture), else on 14.195 USB. */
 @Volatile private var rigOnFt8 = false
 /** Where the app tuned the made-up transceiver; null — where [rigOnFt8] says. */
-@Volatile private var rigFreq: Long? = null
+@Volatile internal var rigFreq: Long? = null
 @Volatile private var rigMode: String? = null
 /** The made-up transceiver transmits: the panel shows power, SWR and ALC. */
 @Volatile private var rigTx = false
@@ -353,7 +373,7 @@ private fun fakeCluster(): java.net.ServerSocket {
     return server
 }
 
-private fun fakeRigctld(): java.net.ServerSocket {
+internal fun fakeRigctld(): java.net.ServerSocket {
     val server = runCatching { java.net.ServerSocket(4532, 5, java.net.InetAddress.getLoopbackAddress()) }.getOrElse { java.net.ServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress()) }
     Thread {
         while (true) {

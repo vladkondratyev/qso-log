@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.9.4 | [QSO-LOG-2.9.4.apk](../../releases/tag/v2.9.4) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.4 | [QSO-LOG-2.9.4-macos-arm64.dmg](../../releases/tag/desktop-v2.9.4) |
-| macOS 11 or newer, Intel | 2.9.4 | [QSO-LOG-2.9.4-macos-x64.dmg](../../releases/tag/desktop-v2.9.4) |
-| Windows 10 and 11, 64-bit | 2.9.4 | [QSO-LOG-2.9.4-windows-x64.zip](../../releases/tag/desktop-v2.9.4) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.4 | [QSO-LOG-2.9.4-linux-amd64.deb](../../releases/tag/desktop-v2.9.4) |
+| Android 8.0 or newer | 2.9.5 | [QSO-LOG-2.9.5.apk](../../releases/tag/v2.9.5) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.5 | [QSO-LOG-2.9.5-macos-arm64.dmg](../../releases/tag/desktop-v2.9.5) |
+| macOS 11 or newer, Intel | 2.9.5 | [QSO-LOG-2.9.5-macos-x64.dmg](../../releases/tag/desktop-v2.9.5) |
+| Windows 10 and 11, 64-bit | 2.9.5 | [QSO-LOG-2.9.5-windows-x64.zip](../../releases/tag/desktop-v2.9.5) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.5 | [QSO-LOG-2.9.5-linux-amd64.deb](../../releases/tag/desktop-v2.9.5) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -160,7 +160,10 @@ never change. The card and the log show a line "TRX 14 195.000 · USB · S8".
 **The transceiver panel** (since 2.2.0) opens with a tap on that line, from the ⋮ menu or with **Ctrl+T**, the same on
 the phone and the computer. It has a large frequency you drag left or right like a tuning knob (a finger or the mouse),
 turn with the mouse wheel or step with ± by 10 Hz, 100 Hz, 1 or 10 kHz; a field for a frequency ("14195" or "7.074");
-band and mode buttons. A band takes the transceiver back to where it last was on it (the first time — to the CW, SSB
+band and mode buttons. Since 2.9.5 on the computer a click on a digit of the frequency goes up by that digit, a
+right-click goes down, the wheel over a digit tunes by it; the panel shows the frequency the radio actually went to (at
+the edge of its range the number stays), and outside the amateur bands the scale turns grey instead of disappearing.
+A band takes the transceiver back to where it last was on it (the first time — to the CW, SSB
 or FT8 calling frequency). SSB becomes LSB below 10 MHz and USB above; FT8 and FT4 switch data mode (USB-D) on and
 move to the mode's frequency. The band and mode buttons of a new QSO card, and a frequency typed as the callsign
 ("14025", then Enter), tune the transceiver too — this can be switched off in the CAT settings.
@@ -581,11 +584,25 @@ QSOs are skipped and the app says how many.
 <img src="docs/screenshots/desktop-35-stations.png" width="440" alt="Two stations on the computer">
 </p>
 
+### Listener (SWL)
+
+Since 2.9.5. The "Listener (SWL)" switch in "My station": the callsign field takes the listener number (`R3A-1234`) and
+the station's QSOs are logged as reports. In the card, "Heard (callsign)" is the station heard, "Worked" (in place of
+"RST rcvd") is whom it was working, "My RST" is your report; the card layout stays the same. The log shows
+"SWL 59 · with R0DEMO", ADIF gets `SWL=Y` and `APP_QSOLOG_SWL_WITH`. Reports do not go to LoTW, eQSL, Club Log, QRZ.com
+and HAMLOG; QSL labels print as SWL reports. Keep two stations, your own and the listener's, and switch under the logo.
+
 ## Log
 
 QSOs are grouped by day, newest first. A row shows callsign, time, frequency, mode, RST, distance, name and city.
 A microphone icon means the QSO has a voice note.
 
+- **Fill in stations' data** (since 2.9.5; Edit menu, ⋮ or the selection bar): for the selected QSOs or the whole log
+  the app asks the callbooks again and fills an empty name, QTH, country and locator. QSOs logged without internet are
+  also filled in by themselves, every two minutes, once the internet is back.
+- **Deleting several QSOs** (since 2.9.5): select them with a long press (on a computer ⌘/Ctrl-click, in the table also
+  Shift-click for a range) and press the bin or Delete; the message after it offers to undo.
+- QSOs uploaded to HAMLOG have a purple stripe on the left (since 2.9.5; the colour is in "Custom theme").
 - **Search** looks in callsign, name, city, locator and comment. If the callsign is not in your log, the app looks it up
   on QRZ.ru and opens a new card with what it found.
 - If the search narrows to one station you know, the bands you worked it on are shown under the search, with the last
@@ -888,10 +905,10 @@ opened twice and optionally closed with QSO-LOG; the page also opens with a long
 and from "File" → "Equipment and programs…" on the computer); **Callbooks and online logs ›** — a page with the station
 data sources and the LoTW, eQSL, Club Log and QRZ.com accounts; logbook (**automatic backup** since 2.9.1 — the whole log as ADIF daily or weekly, the last 10 copies kept; "Export and import…", "Select part of the log…",
 sync — its header says whether Google sync is on, delete all); interface (language: system, Russian, English — changes
-at once; theme; **interface scale** since 2.9.0 — 100, 70 and 50% on the phone, 100, 85 and 70% on the computer:
-smaller buttons, fields and gaps, the text shrinks less, at 50% the phone's QSO card is laid out in two columns; keys
-⌘+ / ⌘− / ⌘0 on the Mac, Ctrl + / Ctrl − / Ctrl 0 on Windows, Linux and with a keyboard on the phone, and the "View" menu
-on the computer; keep the screen on (phone); "Assign keys" — any key of an external keyboard can be replaced, added or
+at once; theme; **interface scale** since 2.9.0, from 2.9.5 50 to 150% in steps of 10% (− / + or the slider): below
+100% smaller buttons, fields and gaps, the text shrinks less, at 50–60% the phone's QSO card takes two columns; above
+100% everything is larger, the table and the card too; keys ⌘+ / ⌘− / ⌘0 on the Mac, Ctrl + / Ctrl − / Ctrl 0 on
+Windows, Linux and with a keyboard on the phone, on the computer also Ctrl with the mouse wheel and the "View" menu; keep the screen on (phone); "Assign keys" — any key of an external keyboard can be replaced, added or
 taken off). At the bottom: version, "What's new", "Report a problem" and
 "Check for updates", with "Check for a new version when the app starts" under it (on since 2.7.0): at start the app
 quietly asks GitHub and, when a new version is out, shows its new features once with an "Update" button; a closed window
@@ -944,21 +961,21 @@ installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.9.4-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.9.4), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.9.5-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.9.5), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.9.4-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.4), unpack the
+Download `QSO-LOG-2.9.5-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.5), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.9.4-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.4) and install it:
+Download `QSO-LOG-2.9.5-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.5) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.9.4-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.9.5-linux-amd64.deb
 ```
 
 ## Where the data is kept

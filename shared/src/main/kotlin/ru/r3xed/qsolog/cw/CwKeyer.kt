@@ -20,8 +20,12 @@ fun preciseWait(at: Long, stop: () -> Boolean = { false }) {
     }
 }
 
-/** How long before the moment a waiting thread stops sleeping and spins: Windows' timer is coarse, the others' fine. */
-private val SPIN_NS: Long = if (System.getProperty("os.name").orEmpty().startsWith("Windows")) 3_000_000 else 300_000
+/**
+ * How long before the moment a waiting thread stops sleeping and spins. Windows' timer ticks every 15.6 ms unless some
+ * program asks for 1 ms (a USB audio driver often does), so a sleep may end a whole tick late: with 3 ms the keying
+ * through a motherboard COM port was still not crisp (2.9.5). 20 ms covers a tick; the others' timers are fine.
+ */
+private val SPIN_NS: Long = if (System.getProperty("os.name").orEmpty().startsWith("Windows")) 20_000_000 else 300_000
 
 /** The modem line of a USB serial adapter (CP2102, CH340, FT232) that closes the key, as N1MM does. */
 enum class CwLine { DTR, RTS }
@@ -231,6 +235,8 @@ class CwKeyer(
     private val pttLeadMs: Int = 30,
     /** PTT after the last sign of a message, ms. */
     private val pttTailMs: Int = 30,
+    /** A line about how exactly each message was keyed (lateness of the switching, time the port took), for a log file. */
+    private val onTiming: (String) -> Unit = {},
 ) : CwSender {
     private val queue = java.util.concurrent.LinkedBlockingDeque<String>()
     @Volatile private var abort = false
@@ -244,7 +250,12 @@ class CwKeyer(
     @Volatile private var pttOn = false
     @Volatile private var lastKeyAt = 0L
     @Volatile private var handDown = false
-    private val thread = Thread(::loop, "CW").apply { isDaemon = true; start() }
+    // The highest priority: on Windows a thread of normal priority waits for its turn after waking.
+    private val thread = Thread(::loop, "CW").apply { isDaemon = true; priority = Thread.MAX_PRIORITY; start() }
+
+    /** The switchings of the message being sent: how late each came (ns), how long the port took to switch (ns). */
+    private val lateNs = ArrayList<Long>()
+    private val callNs = ArrayList<Long>()
 
     private fun line(): KeyLine = synchronized(lineLock) { line ?: open().also { line = it } }
 
@@ -342,7 +353,30 @@ class CwKeyer(
         }
     }
 
+    /** [key] at the moment [at]: how late it came and how long the port took go into the message's figures. */
+    private fun timed(l: KeyLine, down: Boolean, at: Long) {
+        val before = System.nanoTime()
+        key(l, down)
+        val after = System.nanoTime()
+        lateNs.add(before - at)
+        callNs.add(after - before)
+    }
+
+    /** "24 WPM, 52 switchings: late 0.1 ms on average, 0.4 at most; the port 0.02 / 0.1 ms — CQ CQ DE R3XED". */
+    private fun report(text: String) {
+        if (lateNs.isEmpty()) return
+        fun ms(ns: Double) = "%.2f".format(java.util.Locale.ROOT, ns / 1e6)
+        val line = "${java.time.LocalDateTime.now().withNano(0)} $wpm WPM, ${lateNs.size} " +
+            "переключений: опоздание ${ms(lateNs.average())} мс в среднем, ${ms(lateNs.max().toDouble())} мс наибольшее; " +
+            "порт ${ms(callNs.average())} / ${ms(callNs.max().toDouble())} мс — $text"
+        lateNs.clear()
+        callNs.clear()
+        runCatching { onTiming(line) }
+    }
+
     private fun play(l: KeyLine, text: String) {
+        lateNs.clear()
+        callNs.clear()
         var t = System.nanoTime()
         fun dot() = 1_200_000_000L / wpm.coerceIn(CwConfig.MIN_WPM, CwConfig.MAX_WPM)
         fun waitUntil(at: Long) = preciseWait(at) { abort }
@@ -363,15 +397,16 @@ class CwKeyer(
                 code.forEachIndexed { j, e ->
                     waitUntil(t)
                     if (abort) return
-                    key(l, true)
+                    timed(l, true, t)
                     t += (if (e == '-') 3 else 1) * dot()
                     waitUntil(t)
-                    key(l, false)
+                    timed(l, false, t)
                     if (j < code.length - 1) t += dot()
                 }
                 t += 3 * dot()
             }
             waitUntil(t)
+            report(text)
         } finally {
             key(l, false)
             // A stopped message lets the radio go at once; otherwise PTT hangs a moment for the next letters.

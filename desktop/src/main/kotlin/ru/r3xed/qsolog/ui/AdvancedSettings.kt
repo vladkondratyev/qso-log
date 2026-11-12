@@ -151,6 +151,9 @@ fun CwSettings(vm: AppState) {
             }
         }
         SwitchLine(tr("Инвертировать линию ключа"), c.invert) { vm.changeCw(c.copy(invert = it)) }
+        // Keying not crisp: the file says whether the switching came late or the port was slow.
+        Note(tr("Точность ключа каждой передачи записывается в файл cw-timing.txt (опоздание переключения и время, которое заняла линия порта). Если манипуляция нечёткая, пришлите этот файл разработчику."))
+        TextButton(onClick = vm::openCwTiming) { Text(tr("Открыть файл точности ключа")) }
         SwitchLine(tr("PTT на время передачи"), c.ptt) { vm.changeCw(c.copy(ptt = it)) }
         if (c.ptt) {
             Section(tr("Порт PTT"))

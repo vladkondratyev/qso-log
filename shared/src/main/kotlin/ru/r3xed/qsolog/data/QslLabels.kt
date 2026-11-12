@@ -18,7 +18,9 @@ object QslLabels {
         val labels = list.sortedWith(compareBy({ it.call }, { it.timeUtc })).joinToString("\n") { q ->
             val t = Instant.ofEpochMilli(q.timeUtc)
             val tnx = if (q.qslRcvd) "TNX QSL" else "PSE QSL"
-            val via = q.adif["QSL_VIA"]?.takeIf { it.isNotBlank() }?.let { "<div class=via>via ${esc(it.uppercase())}</div>" }.orEmpty()
+            val via = q.adif["QSL_VIA"]?.takeIf { it.isNotBlank() }?.let { "<div class=via>via ${esc(it.uppercase())}</div>" }.orEmpty() +
+                // A listener's report: whom the station was heard working.
+                if (Swl.isSwl(q)) "<div class=via>SWL report" + Swl.with(q.adif).ifBlank { null }?.let { " · heard working <b>${esc(it.uppercase())}</b>" }.orEmpty() + "</div>" else ""
             """<div class=label><div class=to>To Radio <b>${esc(q.call.uppercase())}</b></div>$via
 <table><tr><th>Date</th><th>UTC</th><th>Band</th><th>Mode</th><th>RST</th></tr>
 <tr><td>${DATE.format(t)}</td><td>${TIME.format(t)}</td><td>${esc(q.band)}</td><td>${esc(q.mode)}</td><td>${esc(q.rstSent)}</td></tr></table>

@@ -326,6 +326,19 @@ class AppState {
 
     fun toggleSelected(id: Long) {
         selected = if (id in selected) selected - id else selected + id
+        selectAnchor = id
+    }
+
+    /** The record picked last: Shift-click picks everything from it to the clicked one. */
+    private var selectAnchor: Long? = null
+
+    /** Shift-click: the records of [order] (as the log or table shows them) from the last picked one to [id] join the selection. */
+    fun selectRange(order: List<Long>, id: Long) {
+        val from = selectAnchor?.let(order::indexOf)?.takeIf { it >= 0 }
+        val to = order.indexOf(id)
+        if (from == null || to < 0) return toggleSelected(id)
+        selected = selected + order.subList(minOf(from, to), maxOf(from, to) + 1)
+        selectAnchor = id
     }
 
     /** Everything the log currently shows (the search applies). */
@@ -682,6 +695,7 @@ class AppState {
             if (firstInstall) prefs.whatsNewSeen = APP_VERSION else showWhatsNew = true
         }
         reload()
+        scope.launch { retryPendingLookups() }
         KeyMap.custom = KeyMap.decode(prefs.keymap)
         scope.launch { restartCat() }
         scope.launch { restartDigi() }
@@ -1498,10 +1512,11 @@ class AppState {
     }
 
     /** Fills the saved contact's empty fields from QRZ.ru; returns what to tell the user. */
-    private suspend fun fillFromQrz(qso: Qso): String = try {
+    private suspend fun fillFromQrz(qso: Qso, outcome: (Boolean?) -> Unit = {}): String = try {
         val info = qrzLookup(qso.call)
         if (info == null) {
             withContext(Dispatchers.IO) { db.save(qso.copy(pendingLookup = false)) }
+            outcome(false)
             tr("На QRZ.ru позывного %s нет", qso.call)
         } else {
             val pos = info.position
@@ -1524,14 +1539,88 @@ class AppState {
                 updatedAt = System.currentTimeMillis(),
             )
             withContext(Dispatchers.IO) { db.save(updated) }
+            outcome(true)
             tr("Данные %s получены с QRZ.ru", qso.call)
         }
     } catch (e: CancellationException) {
         throw e
     } catch (e: QrzException) {
+        outcome(null)
         e.message ?: tr("Ошибка QRZ.ru")
     } catch (e: Exception) {
+        outcome(null)
         networkError(e)
+    }
+
+    /** «Дозаполнить данные корреспондентов»: how far it has gone (done, of all); null — not running. */
+    var fillProgress by mutableStateOf<Pair<Int, Int>?>(null); private set
+    private var fillJob: Job? = null
+
+    /** The contacts of [from] without the station's name or QTH, or marked as not looked up when saved. */
+    private fun lackingInfo(from: List<Qso>) = from.filter { it.pendingLookup || it.name.isBlank() || it.qth.isBlank() }
+
+    /**
+     * «Дозаполнить данные корреспондентов»: the empty name, QTH, country and locator of the picked contacts (none
+     * picked — the whole log) from the callbooks, one after another. What is already filled stays. It stops at the
+     * first error (no internet), so it can simply be run again once the internet is back.
+     */
+    fun fillMissing() {
+        if (fillJob?.isActive == true) return
+        if (!hasQrzAccount) return say(tr("Укажите учётную запись справочника (QRZ.ru, QRZ.com, HamQTH) в настройках"))
+        val list = lackingInfo(if (selecting) allQsos.filter { it.id in selected } else allQsos)
+        if (list.isEmpty()) return say(tr("У всех связей есть имя и QTH"))
+        fillJob = scope.launch {
+            var filled = 0
+            var stopped: String? = null
+            try {
+                for ((i, q) in list.withIndex()) {
+                    fillProgress = i to list.size
+                    refreshing = refreshing + q.id
+                    var ok: Boolean? = false
+                    val msg = try { fillFromQrz(q) { ok = it } } finally { refreshing = refreshing - q.id }
+                    if (ok == null) { stopped = msg; break }
+                    if (ok == true) filled++
+                    if ((i + 1) % 10 == 0) reload()
+                    delay(FILL_PAUSE_MS)
+                }
+            } finally {
+                fillProgress = null
+                reload()
+            }
+            say(stopped?.let { tr("Дозаполнено связей: %s из %s. Остановлено: %s", filled, list.size, it) } ?: tr("Дозаполнено связей: %s из %s", filled, list.size))
+        }
+    }
+
+    fun stopFillMissing() {
+        fillJob?.cancel()
+        fillJob = null
+        fillProgress = null
+        say(tr("Дозаполнение остановлено"))
+    }
+
+    /**
+     * Contacts saved while the callbooks did not answer are looked up again by themselves every few minutes, so they
+     * get the name and QTH once the internet is back; the first failure waits for the next round.
+     */
+    private suspend fun retryPendingLookups() {
+        while (true) {
+            delay(RETRY_LOOKUP_MS)
+            if (fillJob?.isActive == true || !hasQrzAccount) continue
+            val pending = allQsos.filter { it.pendingLookup && it.id !in refreshing }
+            var done = 0
+            for (q in pending) {
+                var ok: Boolean? = false
+                refreshing = refreshing + q.id
+                try { fillFromQrz(q) { ok = it } } finally { refreshing = refreshing - q.id }
+                if (ok == null) break
+                done++
+                delay(FILL_PAUSE_MS)
+            }
+            if (done > 0) {
+                reload()
+                say(tr("Данные корреспондентов получены для связей: %s", done))
+            }
+        }
     }
 
     /** Returns an error message, or null when saved. [quiet]: no "Связь записана" message (the contest card says it in its own line). */
@@ -1588,7 +1677,7 @@ class AppState {
             lastSavedId = withContext(Dispatchers.IO) { db.save(finalQso) }
             reload()
             val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
-            if (f.isNew) { newSavedTick++; queueHamlog(listOfNotNull(lastSavedId)) }
+            if (f.isNew) { newSavedTick++; queueHamlog(listOfNotNull(lastSavedId?.takeIf { !ru.r3xed.qsolog.data.Swl.isSwl(finalQso) })) }
             if (!quiet) say((if (f.isNew) tr("Связь с %s записана", f.call) else tr("Изменения сохранены")) + note)
         }
         pane = editReturn
@@ -2926,9 +3015,29 @@ class AppState {
         k = if (c.via == ru.r3xed.qsolog.cw.CwVia.CWDAEMON) {
             val daemon = ru.r3xed.qsolog.cw.CwDaemon(c.daemon, onState, c.wpm)
             if (tone == null) daemon else ru.r3xed.qsolog.cw.MirroredSender(daemon, CwKeyer({ ru.r3xed.qsolog.cw.NoLine }, {}, c.wpm, onKey = onKey))
-        } else CwKeyer({ CatDesktop.openKeyLine(c) }, onState, c.wpm, c.ptt, onKey, c.pttLeadMs, c.pttTailMs)
+        } else CwKeyer({ CatDesktop.openKeyLine(c) }, onState, c.wpm, c.ptt, onKey, c.pttLeadMs, c.pttTailMs, ::logCwTiming)
         keyer = k
         closeCwHand(keepTape = true)
+    }
+
+    /**
+     * How exactly each message was keyed, into cw-timing.txt of the data folder: what a tester sends when the keying is
+     * not crisp. The file keeps about the last 200 KB.
+     */
+    private fun logCwTiming(line: String) {
+        val f = cwTimingFile
+        if (f.length() > 200_000) f.writeText(f.readLines().takeLast(500).joinToString("\n", postfix = "\n"))
+        f.appendText("${System.getProperty("os.name")} ${catOrKeyPort()}: $line\n")
+    }
+
+    private fun catOrKeyPort() = cwConfig.device.ifBlank { "?" }
+
+    val cwTimingFile: java.io.File get() = java.io.File(AppDirs.data, "cw-timing.txt")
+
+    /** Opens cw-timing.txt (or its folder, when nothing has been sent yet). */
+    fun openCwTiming() {
+        val f = cwTimingFile.takeIf { it.exists() } ?: AppDirs.data
+        runCatching { java.awt.Desktop.getDesktop().open(f) }.onFailure { say(f.absolutePath) }
     }
 
     /** The speaker's beep of the telegraph; null when switched off. */
@@ -3331,7 +3440,7 @@ class AppState {
     }
 
     fun uploadCandidates(log: ru.r3xed.qsolog.data.OnlineLog, only: Set<Long>?, onlyNew: Boolean): List<Qso> =
-        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !log.isSent(it)) }
+        allQsos.filter { (only == null || it.id in only) && (!onlyNew || !log.isSent(it)) && !ru.r3xed.qsolog.data.Swl.isSwl(it) }
 
     fun uploadProblem(log: ru.r3xed.qsolog.data.OnlineLog): String? =
         if (log == ru.r3xed.qsolog.data.OnlineLog.LOTW) (if (lotwCert != null) null else lotwProblem) else online.problem(log, settings.myCall)
@@ -3854,7 +3963,7 @@ class AppState {
         }
         if (added.isEmpty()) return
         reload()
-        queueHamlog(added.map { it.id })
+        queueHamlog(added.filter { !ru.r3xed.qsolog.data.Swl.isSwl(it) }.map { it.id })
         // The log shows the new contact on top, as after saving a card (a new day's group would start above the view).
         newSavedTick++
         say(if (added.size == 1) tr("Связь с %s из %s записана", added[0].call, from) else tr("Из %s записано связей: %s", from, added.size))
@@ -4020,3 +4129,9 @@ class AppState {
         }
     }
 }
+
+/** A pause between two callbook lookups of «Дозаполнить данные корреспондентов», not to hammer the callbooks. */
+private const val FILL_PAUSE_MS = 400L
+
+/** How often contacts saved without the callbook's answer are looked up again. */
+private const val RETRY_LOOKUP_MS = 2 * 60_000L

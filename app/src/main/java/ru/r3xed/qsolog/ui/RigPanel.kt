@@ -119,8 +119,12 @@ fun RigPanel(vm: AppViewModel) {
             val hz = rig.freqHz ?: 0L
             // While the radio has not yet answered a command, the panel shows where it was sent.
             var target by remember { mutableStateOf<Long?>(null) }
-            LaunchedEffect(target) { if (target != null) { delay(1500); target = null } }
-            val shown = target ?: hz
+            // The radio answered: the panel shows where it stands and counts the next step from there, so at the edge of
+            // its range (the radio's own limits) the number stays at the edge instead of running on.
+            LaunchedEffect(hz) { target = null }
+            LaunchedEffect(target) { if (target != null) { delay(700); target = null } }
+            val shown = hz
+            val base = target ?: hz
             fun tune(to: Long) {
                 if (to <= 0) return
                 target = to
@@ -157,15 +161,15 @@ fun RigPanel(vm: AppViewModel) {
             }
             // Receive: the S-meter; transmit: power, SWR, ALC. Then the band with the needle; a tap on it tunes there.
             RigMeters(rig)
-            BandScaleBar(shown, ::tune, ticks = 3)
+            BandScaleBar(shown, ::tune, ticks = 3, keepPlace = true)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalIconButton(onClick = { tune((shown / step - 1) * step) }, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Remove, tr("Ниже на шаг")) }
+                FilledTonalIconButton(onClick = { tune((base / step - 1) * step) }, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Remove, tr("Ниже на шаг")) }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TUNE_STEPS.forEach { s ->
                         PanelChip(stepLabel(s), s == step, Modifier.weight(1f), small = true) { vm.changeTuneStep(s) }
                     }
                 }
-                FilledTonalIconButton(onClick = { tune((shown / step + 1) * step) }, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Add, tr("Выше на шаг")) }
+                FilledTonalIconButton(onClick = { tune((base / step + 1) * step) }, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Add, tr("Выше на шаг")) }
             }
             var typed by remember { mutableStateOf("") }
             val typedHz = freqMhz(typed)?.takeIf { bandForFreq(it) != null }?.let { Math.round(it * 1_000_000) }

@@ -168,7 +168,9 @@ fun SettingsPane(
                         // Several stations: the list on top, the fields below are the one in work.
                         StationList(vm.stations, vm.activeStationId, vm::switchStation, vm::addStation)
                         if (many) SettingField(tr("Название станции (Дом, Выезд, Клуб)"), vm.activeStation.title, vm::renameStation)
-                        SettingField(tr("Мой позывной"), s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
+                        val swl = ru.r3xed.qsolog.data.Swl.isSwl(s.station)
+                        SettingField(if (swl) tr("Номер наблюдателя (например R3A-1234)") else tr("Мой позывной"), s.myCall, { vm.updateSettings(s.copy(myCall = it.uppercase().trim())) }, mono = true, caps = true)
+                        StationSwlSwitch(swl) { vm.updateSettings(s.copy(station = ru.r3xed.qsolog.data.Swl.station(s.station, it))) }
                         val locOk = s.myLocator.isBlank() || Geo.isLocator(s.myLocator)
                         SettingField(
                             tr("QTH-локатор (например KO84ab)"), s.myLocator, { vm.updateSettings(s.copy(myLocator = it.trim())) },
@@ -325,25 +327,10 @@ fun SettingsPane(
                         SwitchRow(tr("Журнал таблицей"), vm.tableMode) { vm.toggleTableMode() }
                         Note(tr("Вся история QSO — компактной таблицей на всё окно, как в классических логгерах: колонки выбираются кнопкой «Колонки», щелчок по заголовку сортирует, над таблицей — поиск, фильтры и группировка. Новое QSO открывается компактной карточкой поверх таблицы. Включается и в меню «Вид»."))
                         Text(tr("Масштаб интерфейса"), style = MaterialTheme.typography.titleSmall)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ru.r3xed.qsolog.data.UiScale.DESKTOP.forEach { sc ->
-                                val on = vm.uiScale == sc
-                                Box(
-                                    Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
-                                        .background(if (on) MaterialTheme.colorScheme.primary else x.field)
-                                        .selectable(selected = on, role = Role.RadioButton) { vm.changeUiScale(sc) },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        sc.label, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                                        color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    )
-                                }
-                            }
-                        }
+                        ScalePicker(vm.uiScale, vm::changeUiScale)
                         Note(
-                            tr("85% и 70% — компактный вид: кнопки, поля и отступы меньше, текст уменьшается мягче, в окно помещается больше журнала и карточки.") + " " +
-                                if (ru.r3xed.qsolog.IS_MAC) tr("Клавиши: ⌘+ и ⌘− (⌘0 — 100%), меню «Вид».") else tr("Клавиши: Ctrl + и Ctrl − (Ctrl 0 — 100%), меню «Вид».")
+                            tr("От 50% до 150% с шагом 10%: меньше 100% — компактный вид (кнопки, поля и отступы меньше, текст уменьшается мягче, в окно помещается больше журнала и карточки), больше 100% — всё крупнее, и таблица, и карточка.") + " " +
+                                if (ru.r3xed.qsolog.IS_MAC) tr("Клавиши: ⌘+ и ⌘− (⌘0 — 100%), ⌘ или Ctrl с колесом мыши, меню «Вид».") else tr("Клавиши: Ctrl + и Ctrl − (Ctrl 0 — 100%), Ctrl с колесом мыши, меню «Вид».")
                         )
                         KeysSettings(vm)
                     }

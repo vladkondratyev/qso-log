@@ -1488,4 +1488,4 @@ internal val EN: Map<String, String> = hashMapOf(
     "Снять все" to "Untick all",
     "Отметить все" to "Tick all",
     "Укажите адрес cwdaemon в настройках CW" to "Enter the cwdaemon address in the CW settings",
-).apply { putAll(EN_2_7); putAll(EN_2_8); putAll(EN_2_9); putAll(EN_2_9_1); putAll(EN_2_9_2); putAll(EN_2_9_3); putAll(EN_2_9_4) }
+).apply { putAll(EN_2_7); putAll(EN_2_8); putAll(EN_2_9); putAll(EN_2_9_1); putAll(EN_2_9_2); putAll(EN_2_9_3); putAll(EN_2_9_4); putAll(EN_2_9_5) }

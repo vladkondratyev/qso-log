@@ -37,6 +37,9 @@ data class BandScale(val band: String, val fromHz: Long, val toHz: Long, val par
         /** The scale of the band [hz] is on, or null outside the amateur bands the panel knows. */
         fun of(hz: Long): BandScale? = ALL.firstOrNull { hz in it.fromHz..it.toHz }
 
+        /** The band [hz] is on, or the closest one to it (the panel shows that one grey outside the bands). */
+        fun nearest(hz: Long): BandScale? = of(hz) ?: ALL.minByOrNull { minOf(Math.abs(hz - it.fromHz), Math.abs(hz - it.toHz)) }
+
         fun forBand(band: String): BandScale? = ALL.firstOrNull { it.band == band }
 
         private fun khz(v: Double) = Math.round(v * 1000)

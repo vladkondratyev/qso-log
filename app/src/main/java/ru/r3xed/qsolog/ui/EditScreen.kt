@@ -184,14 +184,15 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
         KeyTarget.CALL -> vm.form.call
         KeyTarget.FREQ -> vm.form.freq
         KeyTarget.RST_SENT -> vm.form.rstSent
-        KeyTarget.RST_RCVD -> vm.form.rstRcvd
+        KeyTarget.RST_RCVD -> if (ru.r3xed.qsolog.data.Swl.isSwl(vm.form.adif)) ru.r3xed.qsolog.data.Swl.with(vm.form.adif) else vm.form.rstRcvd
     }
     fun setValue(t: KeyTarget, v: String) {
         when (t) {
             KeyTarget.CALL -> { error = null; vm.setCall(v) }
             KeyTarget.FREQ -> vm.setFreq(v)
             KeyTarget.RST_SENT -> vm.update(vm.form.copy(rstSent = v))
-            KeyTarget.RST_RCVD -> vm.update(vm.form.copy(rstRcvd = v))
+            // A listener's report: the field is whom the heard station was working.
+            KeyTarget.RST_RCVD -> if (ru.r3xed.qsolog.data.Swl.isSwl(vm.form.adif)) vm.setAdif(ru.r3xed.qsolog.data.Swl.WITH, v.uppercase()) else vm.update(vm.form.copy(rstRcvd = v))
         }
     }
     // A second tap on the active field selects its value (the next key replaces it), as in the contest card.
@@ -331,7 +332,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                 val tint = dupeTint(dupe)
                 Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (keypad) KeyField(
-                        tr("Позывной корреспондента"), f.call, active == KeyTarget.CALL, replace && active == KeyTarget.CALL,
+                        (if (ru.r3xed.qsolog.data.Swl.isSwl(f.adif)) tr("Слышал (позывной)") else tr("Позывной корреспондента")), f.call, active == KeyTarget.CALL, replace && active == KeyTarget.CALL,
                         error == CALL_ERROR, Modifier.weight(1f), big = true, caret = caret,
                         onClear = { setValue(KeyTarget.CALL, ""); caret = null; replace = false; active = KeyTarget.CALL },
                         tint = tint,
@@ -340,7 +341,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                         value = f.call,
                         onValueChange = { error = null; vm.setCall(it) },
                         modifier = Modifier.weight(1f).focusRequester(callFocus).onFocusChanged { callFocused = it.isFocused },
-                        label = { Text(tr("Позывной корреспондента"), fontSize = 16.sp) },
+                        label = { Text((if (ru.r3xed.qsolog.data.Swl.isSwl(f.adif)) tr("Слышал (позывной)") else tr("Позывной корреспондента")), fontSize = 16.sp) },
                         isError = error == CALL_ERROR,
                         supportingText = if (error == CALL_ERROR) { { Text(CALL_ERROR) } } else null,
                         // ⌫ wipes the whole callsign, the cursor stays in the field.
@@ -446,16 +447,20 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                 // Reports: the usual values one tap away, digits keyboard unless the mode reports in dB.
                 val quick = quickReports(f.mode)
                 val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
+                val swl = ru.r3xed.qsolog.data.Swl.isSwl(f.adif)
                 Row(Modifier.bringIntoViewRequester(rstView), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (keypad) KeyField(tr("RST отправлен"), f.rstSent, active == KeyTarget.RST_SENT, replace && active == KeyTarget.RST_SENT, false, Modifier.fillMaxWidth(), caret = caret) { activate(KeyTarget.RST_SENT) }
-                        else RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus).onFocusChanged { rstSentFocused = it.isFocused }, rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                        if (keypad) KeyField(if (swl) tr("Мой RST") else tr("RST отправлен"), f.rstSent, active == KeyTarget.RST_SENT, replace && active == KeyTarget.RST_SENT, false, Modifier.fillMaxWidth(), caret = caret) { activate(KeyTarget.RST_SENT) }
+                        else RstField(if (swl) tr("Мой RST") else tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.fillMaxWidth().focusRequester(rstFocus).onFocusChanged { rstSentFocused = it.isFocused }, rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
                         QuickValues(quick, f.rstSent) { vm.update(vm.form.copy(rstSent = it)) }
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (keypad) KeyField(tr("RST принят"), f.rstRcvd, active == KeyTarget.RST_RCVD, replace && active == KeyTarget.RST_RCVD, false, Modifier.fillMaxWidth(), caret = caret) { activate(KeyTarget.RST_RCVD) }
+                        // A listener's report: in place of the received RST — whom the heard station was working.
+                        val with = ru.r3xed.qsolog.data.Swl.with(f.adif)
+                        if (keypad) KeyField(if (swl) tr("Работал с") else tr("RST принят"), if (swl) with else f.rstRcvd, active == KeyTarget.RST_RCVD, replace && active == KeyTarget.RST_RCVD, false, Modifier.fillMaxWidth(), caret = caret) { activate(KeyTarget.RST_RCVD) }
+                        else if (swl) Field(tr("Работал с"), with, { vm.setAdif(ru.r3xed.qsolog.data.Swl.WITH, it.uppercase().trim()) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, mono = true, capitalize = true, last = true)
                         else RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.fillMaxWidth().focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
-                        QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
+                        if (!swl) QuickValues(quick, f.rstRcvd) { vm.update(vm.form.copy(rstRcvd = it)) }
                     }
                 }
                 // A contest contact: the exchanged numbers right under the reports, as in the contest card.
@@ -565,7 +570,7 @@ fun EditScreen(vm: AppViewModel, hasMicPermission: () -> Boolean, requestMicPerm
                             when (next) {
                                 KeyTarget.FREQ -> tr("→ Частота")
                                 KeyTarget.RST_SENT -> tr("→ RST отправлен")
-                                KeyTarget.RST_RCVD -> tr("→ RST принят")
+                                KeyTarget.RST_RCVD -> if (ru.r3xed.qsolog.data.Swl.isSwl(vm.form.adif)) tr("→ Работал с") else tr("→ RST принят")
                                 else -> tr("Готово")
                             },
                             fontSize = if (compact) 16.sp else 17.sp, fontWeight = FontWeight.Bold, maxLines = 1,

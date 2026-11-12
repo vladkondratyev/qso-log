@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.ui.input.pointer.isShiftPressed
 import ru.r3xed.qsolog.keys.KeyAction
 import ru.r3xed.qsolog.keys.KeyMap
 import ru.r3xed.qsolog.tr
@@ -238,6 +239,7 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
 
         // "Выезд": the activation in progress, its count and the button that ends it.
         ActivationBanner(state)
+        FillBanner(state)
 
         // Ctrl+F (⌘F) puts the cursor here; Enter opens a new card for the station found, Esc clears the search.
         val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -367,7 +369,12 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
         AddQsoButton(state, shortcut, Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp))
     }
 
-    // Delete or Ctrl+D (⌘D) on the log: one dialog for the cursor's row or the picked records; Enter deletes.
+    LogDeleteDialog(state)
+}
+
+/** Delete or Ctrl+D (⌘D) on the log, or the bin of the selection bar: one dialog for the cursor's row or the picked records; Enter deletes. */
+@Composable
+internal fun LogDeleteDialog(state: AppState) {
     state.logDeleteAsk?.let { list ->
         val one = list.singleOrNull()
         AlertDialog(
@@ -569,7 +576,7 @@ private fun GroupHeader(title: String, count: Int) {
 
 /** Replaces the log header while records are picked: count, select all, export to ADIF, cancel. */
 @Composable
-private fun SelectionBar(state: AppState, onExport: () -> Unit) {
+internal fun SelectionBar(state: AppState, onExport: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 16.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -592,6 +599,12 @@ private fun SelectionBar(state: AppState, onExport: () -> Unit) {
                 Icon(Icons.Filled.SelectAll, tr("Выбрать все"), Modifier.size(28.dp))
             }
         }
+        // The picked records go after a question (Delete does the same); the message after it offers to undo.
+        Tip(tr("Удалить выбранные (Delete)")) {
+            IconButton(onClick = { state.askDeleteLog() }, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Filled.Delete, tr("Удалить выбранные (Delete)"), Modifier.size(28.dp), tint = MaterialTheme.colorScheme.error)
+            }
+        }
         // Export of the picked records: ADIF, or a contest report (ЕРМАК / Cabrillo) via its settings dialog.
         var menu by remember { mutableStateOf(false) }
         Box {
@@ -608,6 +621,7 @@ private fun SelectionBar(state: AppState, onExport: () -> Unit) {
                 HorizontalDivider()
                 DropdownMenuItem(text = { Text(tr("Печать QSL-наклеек"), fontSize = 17.sp) }, onClick = { menu = false; state.printQslLabels() })
                 DropdownMenuItem(text = { Text(tr("Отметить: QSL отправлены"), fontSize = 17.sp) }, onClick = { menu = false; state.markQslSent() })
+                DropdownMenuItem(text = { Text(tr("Дозаполнить данные корреспондентов"), fontSize = 17.sp) }, onClick = { menu = false; state.fillMissing() })
             }
         }
     }
@@ -636,12 +650,17 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
                 shape,
             )
             .border(if (highlighted) 2.dp else 1.dp, if (highlighted) MaterialTheme.colorScheme.primary else x.line, shape)
+            .hamlogStripe(qso.onHamlog(), x.hamlog, inset = 5.dp)
             .combinedClickable(
                 onClick = {
                     // ⌘-click (macOS) or Ctrl-click picks records, like a long press.
                     val mods = window.keyboardModifiers
                     val multi = if (IS_MAC) mods.isMetaPressed else mods.isCtrlPressed
-                    if (selecting || multi) state.toggleSelected(qso.id) else state.edit(qso)
+                    when {
+                        mods.isShiftPressed -> state.selectRange(state.logOrder, qso.id)
+                        selecting || multi -> state.toggleSelected(qso.id)
+                        else -> state.edit(qso)
+                    }
                 },
                 onLongClickLabel = tr("Выбрать запись"),
                 onLongClick = { state.toggleSelected(qso.id) },
@@ -695,7 +714,7 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
             val meta = listOfNotNull(
                 qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null },
                 qso.mode.ifBlank { null },
-                if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent} / ${qso.rstRcvd}" else null,
+                if (ru.r3xed.qsolog.data.Swl.isSwl(qso)) "SWL " + ru.r3xed.qsolog.data.Swl.summary(qso) else if (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank()) "${qso.rstSent} / ${qso.rstRcvd}" else null,
                 // Contest numbers: sent / received.
                 if (ContestMode.isContest(qso.adif)) "№ ${qso.adif[ContestMode.SENT].orEmpty()} / ${qso.adif[ContestMode.RCVD].orEmpty().ifBlank { "—" }}" else null,
             ).joinToString("  ·  ")
@@ -730,7 +749,7 @@ private fun RowScope.CompactRowBody(qso: Qso, state: AppState, showDate: Boolean
             val meta = listOfNotNull(
                 if ("freq" in cols) qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null } else qso.band.ifBlank { null },
                 qso.mode.ifBlank { null },
-                if ("rst" in cols && (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank())) "${qso.rstSent}/${qso.rstRcvd}" else null,
+                if ("rst" in cols && ru.r3xed.qsolog.data.Swl.isSwl(qso)) "SWL " + ru.r3xed.qsolog.data.Swl.summary(qso) else if ("rst" in cols && (qso.rstSent.isNotBlank() || qso.rstRcvd.isNotBlank())) "${qso.rstSent}/${qso.rstRcvd}" else null,
                 if (ContestMode.isContest(qso.adif)) "№ ${qso.adif[ContestMode.SENT].orEmpty()}/${qso.adif[ContestMode.RCVD].orEmpty().ifBlank { "—" }}" else null,
             ).joinToString(" · ")
             Text(meta, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))

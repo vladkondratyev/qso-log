@@ -1,5 +1,7 @@
 package ru.r3xed.qsolog
 
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isCtrlPressed
 import ru.r3xed.qsolog.keys.Chord
 import ru.r3xed.qsolog.keys.KeyAction
 import ru.r3xed.qsolog.keys.KeyMap
@@ -33,6 +35,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -130,6 +136,7 @@ private fun historyKey(state: AppState, e: androidx.compose.ui.input.key.KeyEven
     return true
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 fun main() {
     if (IS_MAC) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")
@@ -278,16 +285,21 @@ fun main() {
                     Item(tr("Снять выбор"), enabled = state.selecting, onClick = state::clearSelection)
                     Item(tr("Печать QSL-наклеек"), enabled = state.selecting, onClick = state::printQslLabels)
                     Item(tr("Отметить: QSL отправлены"), enabled = state.selecting, onClick = state::markQslSent)
+                    Item(tr("Удалить выбранные…"), enabled = state.selecting, onClick = { state.askDeleteLog() })
+                    Separator()
+                    Item(if (state.selecting) tr("Дозаполнить данные корреспондентов (выбранные)") else tr("Дозаполнить данные корреспондентов"), enabled = state.fillProgress == null, onClick = state::fillMissing)
                     Separator()
                     Item(tr("Сбросить фильтр журнала"), enabled = state.logFilter.active, onClick = { state.changeLogFilter(ru.r3xed.qsolog.data.LogFilter()) })
                 }
                 // "Масштаб интерфейса", as in a browser: ⌘+ ⌘− ⌘0 on the Mac, Ctrl elsewhere.
                 Menu(tr("Вид")) {
-                    Item(tr("Крупнее"), enabled = state.uiScale != ru.r3xed.qsolog.data.UiScale.S100, shortcut = shortcut(Key.Equals), onClick = state::zoomIn)
-                    Item(tr("Мельче"), enabled = state.uiScale != ru.r3xed.qsolog.data.UiScale.DESKTOP.last(), shortcut = shortcut(Key.Minus), onClick = state::zoomOut)
+                    Item(tr("Крупнее"), enabled = state.uiScale != ru.r3xed.qsolog.data.UiScale.STEPS.first(), shortcut = shortcut(Key.Equals), onClick = state::zoomIn)
+                    Item(tr("Мельче"), enabled = state.uiScale != ru.r3xed.qsolog.data.UiScale.STEPS.last(), shortcut = shortcut(Key.Minus), onClick = state::zoomOut)
                     Item(tr("Обычный размер (100%)"), shortcut = shortcut(Key.Zero), onClick = state::zoomReset)
-                    ru.r3xed.qsolog.data.UiScale.DESKTOP.forEach { sc ->
-                        CheckboxItem(tr("Масштаб %s", sc.label), checked = state.uiScale == sc, onCheckedChange = { state.changeUiScale(sc) })
+                    Menu(tr("Масштаб: %s", state.uiScale.label)) {
+                        ru.r3xed.qsolog.data.UiScale.STEPS.forEach { sc ->
+                            CheckboxItem(sc.label, checked = state.uiScale == sc, onCheckedChange = { state.changeUiScale(sc) })
+                        }
                     }
                     Separator()
                     CheckboxItem(tr("Компактный журнал"), checked = state.compactLog, onCheckedChange = { state.toggleCompactLog() })
@@ -335,7 +347,21 @@ fun main() {
                 ThemeMode.DARK -> true
                 ThemeMode.CUSTOM -> state.customTheme.dark
             }
-            QsoTheme(dark, state.uiScale, custom = state.customTheme.takeIf { state.themeMode == ThemeMode.CUSTOM }, focusRing = state.focusRing) { key(state.language) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest, saveExport)) } }
+            QsoTheme(dark, state.uiScale, custom = state.customTheme.takeIf { state.themeMode == ThemeMode.CUSTOM }, focusRing = state.focusRing) {
+                // Ctrl (or ⌘) with the mouse wheel: the scale, as in a browser; the lists below do not scroll then.
+                var wheel by remember { mutableStateOf(0f) }
+                androidx.compose.foundation.layout.Box(
+                    Modifier.onPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Scroll, androidx.compose.ui.input.pointer.PointerEventPass.Initial) { ev ->
+                        val m = ev.keyboardModifiers
+                        if (!(m.isCtrlPressed || m.isMetaPressed)) return@onPointerEvent
+                        val ch = ev.changes.firstOrNull() ?: return@onPointerEvent
+                        wheel += ch.scrollDelta.y
+                        ev.changes.forEach { it.consume() }
+                        // A notch of the wheel is 1; a touchpad sends many small steps — one zoom step per notch's worth.
+                        if (wheel <= -1f) { state.zoomIn(); wheel = 0f } else if (wheel >= 1f) { state.zoomOut(); wheel = 0f }
+                    },
+                ) { key(state.language) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest, saveExport)) } }
+            }
         }
     }
 }
@@ -364,6 +390,7 @@ fun paletteCommands(state: AppState, files: Exports): List<Pair<String, () -> Un
     tr("Выбрать часть журнала…") to { state.showSelect = true },
     tr("Печать QSL-наклеек") to state::printQslLabels,
     tr("Отметить: QSL отправлены") to state::markQslSent,
+    tr("Дозаполнить данные корреспондентов") to state::fillMissing,
     tr("Сделать копию журнала") to { state.backupNow() },
     tr("Открыть папку копий") to state::openBackupFolder,
     tr("Компактный журнал") to state::toggleCompactLog,
@@ -412,7 +439,7 @@ fun App(state: AppState, files: Exports) {
             // «Журнал таблицей»: the table over the whole window; a contact opens as a card over it, other screens take its place.
             val table = state.tableMode && state.pane in setOf(Pane.Empty, Pane.Edit, Pane.Contest)
             if (table) Box(Modifier.weight(1f).fillMaxWidth()) {
-                ru.r3xed.qsolog.ui.LogTable(state, NEW_SHORTCUT, Modifier.fillMaxSize())
+                ru.r3xed.qsolog.ui.LogTable(state, NEW_SHORTCUT, files.exportSelected, Modifier.fillMaxSize())
                 when (state.pane) {
                     Pane.Edit -> ru.r3xed.qsolog.ui.TableCardOverlay { key(state.editSession) { EditPane(state) } }
                     Pane.Contest -> ru.r3xed.qsolog.ui.TableCardOverlay { key(state.editSession) { ContestPane(state) } }

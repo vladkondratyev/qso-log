@@ -17,10 +17,15 @@ class GeocoderTest {
 
     @Test
     fun scaleSteps() {
-        assertEquals(UiScale.S70, UiScale.smaller(UiScale.S100, UiScale.PHONE))
-        assertEquals(UiScale.S50, UiScale.smaller(UiScale.S50, UiScale.PHONE))
-        assertEquals(UiScale.S100, UiScale.bigger(UiScale.S85, UiScale.DESKTOP))
-        assertEquals(UiScale.S100, UiScale.of(50, UiScale.DESKTOP))
+        assertEquals(UiScale.S90, UiScale.smaller(UiScale.S100))
+        assertEquals(UiScale.S50, UiScale.smaller(UiScale.S50))
+        assertEquals(UiScale.S150, UiScale.bigger(UiScale.S150))
+        assertEquals(UiScale.S110, UiScale.bigger(UiScale.S100))
+        assertEquals(UiScale.S90, UiScale.of(85))
+        assertEquals(UiScale.S50, UiScale.of(50))
+        assertEquals(UiScale.S100, UiScale.of(100))
+        assertEquals(0.65f, UiScale.S50.text, 0.001f)
+        assertEquals(1.3f, UiScale.S130.text, 0.001f)
     }
 
     @Test

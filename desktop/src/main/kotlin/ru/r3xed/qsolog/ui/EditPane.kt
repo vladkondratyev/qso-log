@@ -288,7 +288,7 @@ fun EditPane(vm: AppState) {
                     value = f.call,
                     onValueChange = vm::setCall,
                     modifier = Modifier.weight(1f).focusRequester(callFocus).onFocusChanged { callFocused = it.isFocused },
-                    label = { Text(tr("Позывной корреспондента"), fontSize = 16.sp) },
+                    label = { Text((if (ru.r3xed.qsolog.data.Swl.isSwl(f.adif)) tr("Слышал (позывной)") else tr("Позывной корреспондента")), fontSize = 16.sp) },
                     // ⌫ wipes the whole callsign, the cursor stays in the field.
                     trailingIcon = if (f.call.isNotEmpty()) { { ClearButton { vm.setCall(""); callFocus.requestFocus() } } } else null,
                     isError = error == CALL_ERROR,
@@ -353,14 +353,21 @@ fun EditPane(vm: AppState) {
             // Reports: field and the usual values one click away on the same line, digits unless the mode reports in dB.
             val quick = quickReports(f.mode)
             val rstKeyboard = if (quick.first().startsWith("-")) KeyboardType.Text else KeyboardType.Number
+            val swl = ru.r3xed.qsolog.data.Swl.isSwl(f.adif)
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                    RstField(tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.width(150.dp * LocalTextBoost.current).focusRequester(rstFocus).onFocusChanged { rstSentFocused = it.isFocused }, rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
+                    RstField(if (swl) tr("Мой RST") else tr("RST отправлен"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) }, Modifier.width(150.dp * LocalTextBoost.current).focusRequester(rstFocus).onFocusChanged { rstSentFocused = it.isFocused }, rstKeyboard, onNext = { rstRcvdFocus.requestFocus() })
                     QuickValues(quick, f.rstSent, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstSent = it)) }
                 }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                    RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(150.dp * LocalTextBoost.current).focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
-                    QuickValues(quick, f.rstRcvd, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstRcvd = it)) }
+                    // A listener's report: in place of the received RST — whom the heard station was working.
+                    if (swl) Field(
+                        tr("Работал с"), ru.r3xed.qsolog.data.Swl.with(f.adif), { vm.setAdif(ru.r3xed.qsolog.data.Swl.WITH, it.uppercase().trim()) },
+                        Modifier.weight(1f).focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, mono = true, capitalize = true, last = true,
+                    ) else {
+                        RstField(tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) }, Modifier.width(150.dp * LocalTextBoost.current).focusRequester(rstRcvdFocus).onFocusChanged { rstRcvdFocused = it.isFocused }, rstKeyboard, onNext = null)
+                        QuickValues(quick, f.rstRcvd, Modifier.weight(1f).padding(bottom = 6.dp)) { vm.update(vm.form.copy(rstRcvd = it)) }
+                    }
                 }
             }
             // A contest contact: the exchanged numbers right under the reports, as in the contest card.

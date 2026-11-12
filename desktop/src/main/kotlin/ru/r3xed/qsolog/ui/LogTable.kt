@@ -1,5 +1,9 @@
 package ru.r3xed.qsolog.ui
 
+import ru.r3xed.qsolog.data.Swl
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -132,7 +136,7 @@ enum class TableColumn(private val ru: String, val width: Int, val group: Boolea
         FREQ -> q.freqMhz
         MODE -> q.mode
         RST_SENT -> q.rstSent
-        RST_RCVD -> q.rstRcvd
+        RST_RCVD -> if (Swl.isSwl(q)) "→ " + Swl.with(q.adif) else q.rstRcvd
         NAME -> q.name
         QTH -> q.qth
         COUNTRY -> q.country
@@ -178,12 +182,12 @@ enum class TableColumn(private val ru: String, val width: Int, val group: Boolea
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun LogTable(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
+fun LogTable(state: AppState, shortcut: String, onExportSelected: () -> Unit, modifier: Modifier = Modifier) {
     val x = LocalExtra.current
     var columnsDialog by remember { mutableStateOf(false) }
     Column(modifier.background(MaterialTheme.colorScheme.background)) {
-        // --- the toolbar: search, station, filter, grouping, columns, a new QSO ---
-        Row(
+        // --- the toolbar: search, station, filter, grouping, columns, a new QSO; while records are picked — the selection bar ---
+        if (state.selecting) SelectionBar(state, onExportSelected) else Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -193,7 +197,8 @@ fun LogTable(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
             OutlinedTextField(
                 value = state.query,
                 onValueChange = state::search,
-                modifier = Modifier.widthIn(min = 220.dp, max = 360.dp).focusRequester(searchFocus)
+                // The search gives way first when the toolbar is short of room (a large scale).
+                modifier = Modifier.weight(1f, fill = false).widthIn(min = 160.dp, max = 360.dp).focusRequester(searchFocus)
                     .onFocusChanged { state.searchFocused = it.isFocused }
                     .onPreviewKeyEvent { e ->
                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -219,14 +224,15 @@ fun LogTable(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
                 Text(tr("Колонки"))
             }
             Spacer(Modifier.weight(1f))
-            Text(tr("записей: %s", state.qsos.size), color = x.muted, style = MaterialTheme.typography.bodyMedium)
+            Text(tr("записей: %s", state.qsos.size), color = x.muted, style = MaterialTheme.typography.bodyMedium, maxLines = 1, softWrap = false)
             Button(onClick = { state.addQso() }) {
                 Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(tr("Новое QSO") + if (shortcut.isNotBlank()) "  $shortcut" else "")
+                Text(tr("Новое QSO") + if (shortcut.isNotBlank()) "  $shortcut" else "", maxLines = 1, softWrap = false)
             }
         }
         ActivationBanner(state)
+        FillBanner(state)
         HorizontalDivider(color = x.line)
 
         val cols = state.tableColumns
@@ -249,6 +255,7 @@ fun LogTable(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
             }
             keys.map { it to by.getValue(it) }
         }
+        val order = remember(groups) { groups.flatMap { g -> g.second.map { it.first.id } } }
         val total = cols.sumOf { it.width } + 16
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth.value >= total
@@ -279,7 +286,7 @@ fun LogTable(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
                             }
                         }
                         items(items, key = { it.first.id }) { (q, no) ->
-                            TableRow(state, q, no, cols, wide)
+                            TableRow(state, q, no, cols, wide, order)
                         }
                     }
                 }
@@ -287,6 +294,7 @@ fun LogTable(state: AppState, shortcut: String, modifier: Modifier = Modifier) {
         }
     }
     if (columnsDialog) ColumnsDialog(state.tableColumns, state::changeTableColumns) { columnsDialog = false }
+    LogDeleteDialog(state)
 }
 
 /** A cell's width: its own, or — when the window is wider than the columns need — a share of the room in proportion. */
@@ -294,7 +302,9 @@ private fun androidx.compose.foundation.layout.RowScope.cellWidth(c: TableColumn
     if (wide) Modifier.weight(c.width.toFloat()) else Modifier.width(c.width.dp)
 
 @Composable
-private fun TableRow(state: AppState, q: Qso, no: Int, cols: List<TableColumn>, wide: Boolean) {
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+private fun TableRow(state: AppState, q: Qso, no: Int, cols: List<TableColumn>, wide: Boolean, order: List<Long>) {
+    val window = androidx.compose.ui.platform.LocalWindowInfo.current
     val x = LocalExtra.current
     val open = (state.pane == Pane.Edit || state.pane == Pane.Contest) && state.form.id == q.id
     val picked = q.id in state.selected
@@ -306,7 +316,15 @@ private fun TableRow(state: AppState, q: Qso, no: Int, cols: List<TableColumn>, 
     }
     val ink = if (open || picked) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
     Row(
-        Modifier.fillMaxWidth().background(bg).clickable { if (state.selecting) state.toggleSelected(q.id) else state.edit(q) }.padding(horizontal = 8.dp),
+        Modifier.fillMaxWidth().background(bg).hamlogStripe(q.onHamlog(), x.hamlog).clickable {
+            // ⌘-click (macOS) or Ctrl-click picks a row, Shift-click — the rows from the last picked one.
+            val mods = window.keyboardModifiers
+            when {
+                mods.isShiftPressed -> state.selectRange(order, q.id)
+                state.selecting || (if (ru.r3xed.qsolog.IS_MAC) mods.isMetaPressed else mods.isCtrlPressed) -> state.toggleSelected(q.id)
+                else -> state.edit(q)
+            }
+        }.padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         cols.forEach { c ->

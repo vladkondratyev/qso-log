@@ -1,5 +1,6 @@
 package ru.r3xed.qsolog.ui
 
+import androidx.compose.ui.draw.alpha
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -137,19 +138,23 @@ private fun ScaleLabels(labels: List<Pair<Float, String>>, size: Int = 11) {
 /**
  * The band the radio is on: its parts in colour (CW, digital, beacons, SSB, FM), the FT8 and FT4 frequencies, the
  * radio's frequency as a red needle. A tap or a drag along it tunes the radio there (to whole kHz).
- * [ticks] — about how many frequency labels fit.
+ * [ticks] — about how many frequency labels fit. [keepPlace]: outside the bands the closest band stays, grey and
+ * without the needle, so what is below the scale does not move up under the mouse (the transceiver panel).
  */
 @Composable
-fun BandScaleBar(hz: Long, onTune: (Long) -> Unit, modifier: Modifier = Modifier, ticks: Int = 4) {
-    val scale = BandScale.of(hz) ?: return
+fun BandScaleBar(hz: Long, onTune: (Long) -> Unit, modifier: Modifier = Modifier, ticks: Int = 4, keepPlace: Boolean = false) {
+    val inBand = BandScale.of(hz)
+    val scale = inBand ?: (if (keepPlace) BandScale.nearest(hz) else null) ?: return
+    val out = inBand == null
     val x = LocalExtra.current
     val pos by animateFloatAsState(scale.position(hz), tween(150), label = "needle")
-    Column(modifier) {
+    Column(modifier.then(if (out) Modifier.alpha(0.4f) else Modifier)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(scale.band, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Spacer(Modifier.width(10.dp))
+            if (out) Text(tr("вне любительских диапазонов"), fontSize = 11.sp, color = x.muted)
             // The legend: only the kinds this band has.
-            scale.parts.map { it.use }.distinct().forEach { u ->
+            else scale.parts.map { it.use }.distinct().forEach { u ->
                 Box(Modifier.size(9.dp).clip(RoundedCornerShape(2.dp)).background(bandUseColor(u)))
                 Text(" " + bandUseTitle(u) + "  ", fontSize = 11.sp, color = x.muted)
             }
@@ -177,14 +182,14 @@ fun BandScaleBar(hz: Long, onTune: (Long) -> Unit, modifier: Modifier = Modifier
             scale.parts.forEach { p ->
                 val l = size.width * scale.position(p.fromHz)
                 val r = size.width * scale.position(p.toHz)
-                drawRect(bandUseColor(p.use).copy(alpha = 0.75f), topLeft = Offset(l, barTop), size = Size(r - l, barH))
+                drawRect(if (out) x.muted.copy(alpha = 0.5f) else bandUseColor(p.use).copy(alpha = 0.75f), topLeft = Offset(l, barTop), size = Size(r - l, barH))
             }
             scale.marks.forEach { m ->
                 val mx = size.width * scale.position(m.hz)
                 drawRect(Color.White.copy(alpha = 0.9f), topLeft = Offset(mx - 1f, barTop), size = Size(2f, barH))
             }
             val nx = size.width * pos
-            drawRect(NEEDLE, topLeft = Offset(nx - 2.5f, 0f), size = Size(5f, size.height))
+            if (!out) drawRect(NEEDLE, topLeft = Offset(nx - 2.5f, 0f), size = Size(5f, size.height))
         }
         ScaleLabels(scale.ticks(ticks).map { scale.position(it) to CatFormat.mhz(it) })
     }
