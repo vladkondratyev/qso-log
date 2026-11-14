@@ -136,6 +136,43 @@ class CatTest {
     }
 
     @Test
+    fun kenwoodUsbWithDataOnIsDigital() {
+        var asked = 0
+        val radio = FakeRadio(::text) { c ->
+            when (c.toString(Charsets.US_ASCII)) {
+                "FA" -> "FA00014074000;"
+                "MD" -> "MD2;"
+                "DA" -> { asked++; "DA1;" }
+                "SM0" -> "SM00015;"
+                else -> "?;"
+            }.toByteArray()
+        }
+        val d = KenwoodDriver("TS-590S", elecraft = false)
+        val s = d.poll(CatIo(radio), RigState())
+        assertEquals("USB-D", s.radioMode)
+        assertEquals("FT8", CatModes.toLog(s.radioMode!!, "SSB"))
+        assertEquals(1, asked)
+    }
+
+    @Test
+    fun kenwoodWithoutDaIsNotAskedAgain() {
+        var asked = 0
+        val radio = FakeRadio(::text) { c ->
+            when (c.toString(Charsets.US_ASCII)) {
+                "FA" -> "FA00014195000;"
+                "MD" -> "MD2;"
+                "DA" -> { asked++; "?;" }
+                else -> "?;"
+            }.toByteArray()
+        }
+        val d = KenwoodDriver("TS-480", elecraft = false)
+        val io = CatIo(radio)
+        assertEquals("USB", d.poll(io, RigState()).radioMode)
+        d.poll(io, RigState())
+        assertEquals(1, asked)
+    }
+
+    @Test
     fun elecraftAnswersSmWithoutTheZero() {
         val radio = FakeRadio(::text) { c ->
             when (c.toString(Charsets.US_ASCII)) {

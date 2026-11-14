@@ -32,7 +32,7 @@ object SettingsSync {
     private val LOCAL_KEYS = setOf(
         "ui_scale", "launch_count", "welcome_done", "whats_new_seen", "update_dismissed", "cat_device", "cw_device",
         "cw_ptt_device", "tqsl_path", "start_apps", "start_apps_return", "backup_last", "last_band", "last_freq",
-        "last_mode", "last_power", "contest_serial", "settings", "secret_fallback",
+        "last_mode", "last_power", "contest_serial", "settings", "secret_fallback", "last_dir",
     )
     // "hamlog_": the HAMLOG connection is this device's own (single-use tokens: two devices sharing them would revoke it).
     private val LOCAL_PREFIXES = listOf("sheet_", "settings_sync_", "window_", "hamlog_")

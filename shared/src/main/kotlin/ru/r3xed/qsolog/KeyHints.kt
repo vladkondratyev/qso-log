@@ -28,6 +28,26 @@ object KeyHints {
                 k(KeyAction.LOG_DELETE),
                 "Esc" to if (desktop) tr("снять отметки · компактный журнал") else tr("снять отметки"),
                 k(KeyAction.HISTORY), k(KeyAction.DASHBOARD), k(KeyAction.MAP), k(KeyAction.SETTINGS), k(KeyAction.EXPORT_ADIF),
+                k(KeyAction.IMPORT_ADIF), k(KeyAction.SELECT_PART), k(KeyAction.BACKUP), if (desktop) k(KeyAction.LOG_VIEW) else null,
+                k(KeyAction.NEXT_STATION),
+            )),
+            Section(tr("Разделы и сервис"), listOfNotNull(
+                k(KeyAction.DX_CLUSTER), k(KeyAction.PROPAGATION), k(KeyAction.AWARDS), k(KeyAction.REFERENCE),
+                k(KeyAction.ONLINE_LOGS), k(KeyAction.LOTW_SYNC),
+                // The command palette is the computer's; on the phone Ctrl+K is CONTEST MODE.
+                if (desktop) "${m}K" to tr("все команды по названию") else null,
+            )),
+            Section(tr("DX-кластер"), listOf(
+                "↑ ↓" to tr("по спотам"),
+                "Enter" to tr("перестроить трансивер и открыть карточку"),
+                "Shift+Enter" to tr("карточка без перестройки трансивера"),
+                "S" to tr("свой спот"),
+                "1…9 · 0" to tr("диапазон (n-й из тех, где есть споты) · все"),
+                "Esc" to tr("назад"),
+            )),
+            Section(tr("Прохождение"), listOf(
+                "F5" to tr("обновить"),
+                "Esc" to tr("назад"),
             )),
             Section(tr("Карточка связи"), listOfNotNull(
                 k(KeyAction.SPACE_NEXT), k(KeyAction.LOG_ENTER),
@@ -60,6 +80,11 @@ object KeyHints {
                 (tr("Пробел") + " · ${m}A") to tr("отметить запись · отметить все"),
                 k(KeyAction.H_FAVORITE), k(KeyAction.H_EDIT), k(KeyAction.H_NEW), k(KeyAction.H_MAP), k(KeyAction.H_DELETE),
                 "Esc" to tr("назад"),
+            )),
+            Section(tr("Дата и время в карточке"), listOf(
+                "1234 → 12:34 · 931 → 09:31" to tr("время цифрами, двоеточие ставится само"),
+                "14112026 · 1411 · 141126" to tr("дата цифрами: точки и год ставятся сами"),
+                "↑ ↓" to tr("на минуту или день вперёд и назад"),
             )),
             Section(tr("Дашборд"), listOf(
                 "1 · 2 · 3 · 4" to tr("7 дней · 30 дней · год · всё время"),

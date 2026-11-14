@@ -147,6 +147,19 @@ class MainActivity : ComponentActivity() {
             hit(KeyAction.CONTEST_MODE) && !inCard -> { vm.toggleContestMode(); true }
             hit(KeyAction.SYNC) && !inCard -> { vm.syncByKey(); true }
             hit(KeyAction.EXPORT_ADIF) && inLog -> { vm.openExport(ExportFormat.ADIF, selectedOnly = false); true }
+            // The sections and actions of the menu (2.9.6): from any screen but an open card.
+            hit(KeyAction.DX_CLUSTER) -> { vm.outsideCard(vm::openDxCluster); true }
+            hit(KeyAction.PROPAGATION) -> { vm.outsideCard(vm::openPropagation); true }
+            hit(KeyAction.AWARDS) -> { vm.outsideCard(vm::openAwards); true }
+            hit(KeyAction.REFERENCE) -> { vm.outsideCard(vm::openReference); true }
+            hit(KeyAction.ONLINE_LOGS) -> { vm.outsideCard { vm.openUpload(selectedOnly = false) }; true }
+            hit(KeyAction.LOTW_SYNC) -> { vm.outsideCard(vm::syncLotw); true }
+            hit(KeyAction.IMPORT_ADIF) -> { vm.outsideCard { vm.importAdifTick++ }; true }
+            hit(KeyAction.SELECT_PART) -> { vm.outsideCard { vm.showSelect = true }; true }
+            hit(KeyAction.BACKUP) -> { vm.backupNow(); true }
+            hit(KeyAction.NEXT_STATION) -> { vm.outsideCard(vm::nextStation); true }
+            vm.screen == Screen.DxCluster && !ctrl && !event.isAltPressed && vm.dxKey(dxKeyName(event)) -> true
+            vm.screen == Screen.Propagation && !ctrl && event.keyCode == KeyEvent.KEYCODE_F5 -> { vm.refreshPropagation(force = true); true }
             ctrl && event.keyCode == KeyEvent.KEYCODE_A && inLog && !vm.searchFocused -> { vm.selectAllShown(); true }
             // Delete, and Backspace that many keyboards label "Delete": asks first, Enter confirms.
             hit(KeyAction.LOG_DELETE) && inLog && !vm.searchFocused && vm.logDeleteAsk == null -> vm.askDeleteLog()
@@ -165,6 +178,17 @@ class MainActivity : ComponentActivity() {
             return true
         }
         return false
+    }
+
+    /** The key of the cluster's list as [AppViewModel.dxKey] names it. */
+    private fun dxKeyName(e: KeyEvent): String? = when (e.keyCode) {
+        KeyEvent.KEYCODE_DPAD_UP -> "Up"
+        KeyEvent.KEYCODE_DPAD_DOWN -> "Down"
+        KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> if (e.isShiftPressed) "Shift+Enter" else "Enter"
+        KeyEvent.KEYCODE_S -> "S"
+        in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> (e.keyCode - KeyEvent.KEYCODE_0).toString()
+        in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> (e.keyCode - KeyEvent.KEYCODE_NUMPAD_0).toString()
+        else -> null
     }
 
     /** The log without a focused field: the arrows walk through the rows, Enter opens, Space picks, Delete deletes. */
@@ -299,6 +323,8 @@ class MainActivity : ComponentActivity() {
                 val importAdif = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                     uri?.let(vm::importAdif)
                 }
+                // Ctrl+O on an external keyboard: the same picker.
+                LaunchedEffect(vm.importAdifTick) { if (vm.importAdifTick > 0) importAdif.launch(arrayOf("*/*")) }
                 // Contest reports: .txt (ЕРМАК) and .cbr (Cabrillo) are plain text.
                 val exportContest = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
                     uri?.let(vm::exportContest)

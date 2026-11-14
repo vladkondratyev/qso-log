@@ -337,8 +337,8 @@ fun EditPane(vm: AppState) {
             // --- date/time, opened from the header ---
             if (editTime) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Field(tr("Дата UTC"), f.date, { vm.update(f.copy(date = it)) }, Modifier.weight(1.3f), KeyboardType.Number, mono = true)
-                    Field(tr("Время UTC"), f.time, { vm.update(f.copy(time = it)) }, Modifier.weight(1f), KeyboardType.Number, mono = true)
+                    DateTimeField(tr("Дата UTC"), f.date, { vm.update(f.copy(date = it)) }, Modifier.weight(1.3f), date = true)
+                    DateTimeField(tr("Время UTC"), f.time, { vm.update(f.copy(time = it)) }, Modifier.weight(1f), date = false)
                     IconButton(onClick = vm::setNow, modifier = Modifier.size(52.dp)) { Icon(Icons.Filled.Refresh, tr("Текущее время") + " (F6)") }
                 }
             }
@@ -983,6 +983,46 @@ private fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
             selectedContainerColor = MaterialTheme.colorScheme.primary,
             selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
         ),
+    )
+}
+
+
+/**
+ * The date or the time of the card typed as bare digits: the dots and the colon come by themselves (931 → 09:31,
+ * 1411 → 14.11), what is short is completed when the field is left, ↑ and ↓ step a minute or a day.
+ */
+@Composable
+fun DateTimeField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, date: Boolean) {
+    val live: (String) -> String = if (date) ru.r3xed.qsolog.data.DateTimeInput::liveDate else ru.r3xed.qsolog.data.DateTimeInput::liveTime
+    fun today() = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+    fun finish(v: String) = if (date) ru.r3xed.qsolog.data.DateTimeInput.finishDate(v, today()) else ru.r3xed.qsolog.data.DateTimeInput.finishTime(v)
+    var tf by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    // Changed from outside (F6, the clock of a new card): the cursor to the end.
+    val shown = if (tf.text == value) tf else TextFieldValue(value, TextRange(value.length))
+    OutlinedTextField(
+        value = shown,
+        onValueChange = { v ->
+            val text = live(v.text)
+            val at = ru.r3xed.qsolog.data.DateTimeInput.cursor(v.text, v.selection.end, text, live)
+            tf = TextFieldValue(text, TextRange(at))
+            if (text != value) onChange(text)
+        },
+        modifier = modifier
+            .onFocusChanged { if (!it.isFocused) finish(value).let { v -> if (v != value) onChange(v) } }
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown || e.isCtrlPressed || e.isMetaPressed || e.isAltPressed) return@onPreviewKeyEvent false
+                val step = when (e.key) { Key.DirectionUp -> 1L; Key.DirectionDown -> -1L; else -> return@onPreviewKeyEvent false }
+                val v = if (date) ru.r3xed.qsolog.data.DateTimeInput.stepDate(value, step, today())
+                else ru.r3xed.qsolog.data.DateTimeInput.stepTime(value, step * (if (e.isShiftPressed) 10 else 1))
+                if (v != value) onChange(v)
+                true
+            },
+        label = { Text(label) },
+        placeholder = { Text(if (date) tr("ДДММГГГГ") else tr("ЧЧММ"), fontFamily = Mono) },
+        singleLine = true,
+        textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+        shape = RoundedCornerShape(12.dp),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
     )
 }
 

@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -95,7 +98,7 @@ private fun bandOrder(b: String) = BANDS.indexOf(b.lowercase()).let { if (it < 0
  * by it. The number (No.) is the contact's place in the log, the oldest first.
  */
 enum class TableColumn(private val ru: String, val width: Int, val group: Boolean = false) {
-    NO("№", 56), // no-tr
+    NO("№", 76), // no-tr
     MY_CALL("Мой позывной", 110, group = true), // no-tr
     DATE("Дата", 100, group = true), // no-tr
     TIME("Время", 60), // no-tr
@@ -256,22 +259,29 @@ fun LogTable(state: AppState, shortcut: String, onExportSelected: () -> Unit, mo
             keys.map { it to by.getValue(it) }
         }
         val order = remember(groups) { groups.flatMap { g -> g.second.map { it.first.id } } }
-        val total = cols.sumOf { it.width } + 16
+        val total = cols.sumOf { state.tableWidth(it) } + 16
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth.value >= total
             val h = rememberScrollState()
             Column(Modifier.fillMaxSize().then(if (wide) Modifier else Modifier.horizontalScroll(h))) {
                 val width = if (wide) Modifier.fillMaxWidth() else Modifier.width(total.dp)
+                val measure = androidx.compose.ui.text.rememberTextMeasurer()
                 // The header: a click sorts by the column, again — the other way round.
                 Row(width.background(MaterialTheme.colorScheme.primary).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     cols.forEach { c ->
                         val on = state.tableSort == c
                         Row(
-                            cellWidth(c, wide).height(34.dp).clickable(onClickLabel = tr("Сортировать: %s", c.title)) { state.sortTable(c) }.padding(horizontal = 4.dp),
+                            cellWidth(state.tableWidth(c), wide).height(34.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(c.title, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                            if (on) Icon(if (state.tableSortDesc) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                            Row(
+                                Modifier.weight(1f).fillMaxHeight().clickable(onClickLabel = tr("Сортировать: %s", c.title)) { state.sortTable(c) }.padding(start = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(c.title, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                if (on) Icon(if (state.tableSortDesc) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                            }
+                            ColumnEdge(state, c, rows, measure)
                         }
                     }
                 }
@@ -298,8 +308,41 @@ fun LogTable(state: AppState, shortcut: String, onExportSelected: () -> Unit, mo
 }
 
 /** A cell's width: its own, or — when the window is wider than the columns need — a share of the room in proportion. */
-private fun androidx.compose.foundation.layout.RowScope.cellWidth(c: TableColumn, wide: Boolean): Modifier =
-    if (wide) Modifier.weight(c.width.toFloat()) else Modifier.width(c.width.dp)
+private fun androidx.compose.foundation.layout.RowScope.cellWidth(w: Int, wide: Boolean): Modifier =
+    if (wide) Modifier.weight(w.toFloat()) else Modifier.width(w.dp)
+
+/**
+ * The right edge of a header cell: dragged — the column wider or narrower; double-clicked — as wide as its longest text.
+ * The widths are kept (Вид → Журнал таблицей).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ColumnEdge(state: AppState, c: TableColumn, rows: List<Pair<Qso, Int>>, measure: androidx.compose.ui.text.TextMeasurer) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var drag by remember { mutableStateOf(0f) }
+    val style = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, fontFamily = if (c == TableColumn.CALL || c == TableColumn.FREQ || c == TableColumn.LOCATOR) Mono else null, fontWeight = if (c == TableColumn.CALL) FontWeight.Bold else null)
+    Box(
+        Modifier.width(8.dp).fillMaxHeight()
+            .pointerHoverIcon(androidx.compose.ui.input.pointer.PointerIcon(java.awt.Cursor(java.awt.Cursor.E_RESIZE_CURSOR)))
+            .draggable(
+                orientation = androidx.compose.foundation.gestures.Orientation.Horizontal,
+                state = androidx.compose.foundation.gestures.rememberDraggableState { d ->
+                    drag += d
+                    val step = with(density) { drag.toDp().value }.toInt()
+                    if (step != 0) { state.changeTableWidth(c, state.tableWidth(c) + step); drag = 0f }
+                },
+            )
+            .combinedClickable(onClickLabel = tr("Ширина по содержимому"), onDoubleClick = {
+                val texts = rows.asSequence().take(2000).map { c.text(it.first, it.second) } + c.title
+                val px = texts.maxOf { measure.measure(it, style).size.width }
+                val dots = if (c == TableColumn.NO) 36 else 0
+                state.changeTableWidth(c, with(density) { px.toDp().value }.toInt() + 14 + dots)
+            }) {},
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.width(1.dp).height(18.dp).background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.35f)))
+    }
+}
 
 @Composable
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
@@ -316,7 +359,7 @@ private fun TableRow(state: AppState, q: Qso, no: Int, cols: List<TableColumn>, 
     }
     val ink = if (open || picked) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
     Row(
-        Modifier.fillMaxWidth().background(bg).hamlogStripe(q.onHamlog(), x.hamlog).clickable {
+        Modifier.fillMaxWidth().background(bg).clickable {
             // ⌘-click (macOS) or Ctrl-click picks a row, Shift-click — the rows from the last picked one.
             val mods = window.keyboardModifiers
             when {
@@ -328,11 +371,15 @@ private fun TableRow(state: AppState, q: Qso, no: Int, cols: List<TableColumn>, 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         cols.forEach { c ->
-            Text(
+            // The number with the export dots (ADIF, CSV, Cabrillo, HAMLOG) after it, as in the list log.
+            if (c == TableColumn.NO) Row(cellWidth(state.tableWidth(c), wide).padding(horizontal = 4.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(c.text(q, no), color = x.muted, maxLines = 1, fontSize = 14.sp)
+                ExportDots(q.adif, size = 6.dp, modifier = Modifier.padding(start = 5.dp))
+            } else Text(
                 c.text(q, no), color = if (c == TableColumn.NO) x.muted else ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 fontSize = 14.sp, fontFamily = if (c == TableColumn.CALL || c == TableColumn.FREQ || c == TableColumn.LOCATOR) Mono else null,
                 fontWeight = if (c == TableColumn.CALL) FontWeight.Bold else null,
-                modifier = cellWidth(c, wide).padding(horizontal = 4.dp, vertical = 5.dp),
+                modifier = cellWidth(state.tableWidth(c), wide).padding(horizontal = 4.dp, vertical = 5.dp),
             )
         }
     }

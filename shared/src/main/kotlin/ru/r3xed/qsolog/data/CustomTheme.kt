@@ -42,7 +42,7 @@ data class CustomTheme(val dark: Boolean = false, val colors: Map<Role, Long> = 
         OK("ok", "Успех, новый диапазон"), // no-tr
         ERROR("error", "Ошибка, повтор"), // no-tr
         FOCUS("focus", "Контрастная обводка поля ввода"), // no-tr
-        HAMLOG("hamlog", "Полоска «выгружено в HAMLOG»"), // no-tr
+        HAMLOG("hamlog", "Точка «выгружено в HAMLOG»"), // no-tr
     }
 
     companion object {

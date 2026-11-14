@@ -137,15 +137,18 @@ fun ConfirmedMark(adif: Map<String, String>) {
 
 /** The dots of the formats a contact was exported to, for the log row; nothing when it has not been exported. */
 @Composable
-fun ExportDots(adif: Map<String, String>) {
+fun ExportDots(adif: Map<String, String>, size: Dp = 8.dp, modifier: Modifier = Modifier.padding(end = 8.dp)) {
     val done = ExportFormat.entries.filter { it.isExported(adif) }
-    if (done.isEmpty()) return
+    val hamlog = ru.r3xed.qsolog.data.OnlineLog.HAMLOG.sentAt(adif)
+    if (done.isEmpty() && hamlog == null) return
+    val tip = done.map { it.title + " " + it.exportedAt(adif).orEmpty() } + listOfNotNull(hamlog?.let { "HAMLOG $it" })
     Row(
-        Modifier.padding(end = 8.dp).semantics { contentDescription = tr("Экспорт: %s", done.joinToString(", ") { it.title }) },
+        modifier.semantics { contentDescription = tr("Экспорт: %s", tip.joinToString(", ")) },
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        done.forEach { ExportDot(it, size = 8.dp) }
+        done.forEach { ExportDot(it, size = size) }
+        if (hamlog != null) Box(Modifier.size(size).clip(CircleShape).background(LocalExtra.current.hamlog))
     }
 }
 

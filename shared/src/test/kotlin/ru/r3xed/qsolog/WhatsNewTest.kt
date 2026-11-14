@@ -15,15 +15,14 @@ class WhatsNewTest {
     }
 
     @Test
-    fun digitsAndCwOnComputerOnly() {
-        // 2.9.5: the digits of the rig panel and the CW timing file are the computer's, the long press the phone's.
+    fun computerAndPhonePoints() {
+        // 2.9.6: the folder, the column widths and the scale error are the computer's; the keys are on both.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Наблюдатели (SWL)"))
-            assertTrue(WhatsNew.items(desktop = true).any { "щелчок по цифре" in it })
-            assertTrue(WhatsNew.items(desktop = true).any { "cw-timing.txt" in it })
-            assertTrue(WhatsNew.items(desktop = false).none { "cw-timing.txt" in it || "щелчок по цифре" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "долгим нажатием" in it })
+            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Горячие клавиши"))
+            assertTrue(WhatsNew.items(desktop = true).any { "в папке" in it })
+            assertTrue(WhatsNew.items(desktop = false).none { "в папке" in it || "колонок" in it || "«Error»" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "внешней клавиатурой" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

@@ -136,16 +136,30 @@ fun ConfirmedMark(adif: Map<String, String>) {
 }
 
 /** The dots of the formats a contact was exported to, for the log row; nothing when it has not been exported. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun ExportDots(adif: Map<String, String>) {
+fun ExportDots(adif: Map<String, String>, size: Dp = 8.dp, modifier: Modifier = Modifier.padding(end = 8.dp)) {
     val done = ExportFormat.entries.filter { it.isExported(adif) }
-    if (done.isEmpty()) return
-    Row(
-        Modifier.padding(end = 8.dp).semantics { contentDescription = tr("Экспорт: %s", done.joinToString(", ") { it.title }) },
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val hamlog = ru.r3xed.qsolog.data.OnlineLog.HAMLOG.sentAt(adif)
+    if (done.isEmpty() && hamlog == null) return
+    // Hovered: what each dot is and when (ADIF 13.11.2026 10:15 UTC · HAMLOG …).
+    val tip = done.map { it.title + " " + it.exportedAt(adif).orEmpty() } + listOfNotNull(hamlog?.let { "HAMLOG $it" })
+    androidx.compose.foundation.TooltipArea(
+        tooltip = {
+            androidx.compose.material3.Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp), shadowElevation = 4.dp, color = MaterialTheme.colorScheme.inverseSurface) {
+                Text(tip.joinToString("\n"), color = MaterialTheme.colorScheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+            }
+        },
+        delayMillis = 300,
     ) {
-        done.forEach { ExportDot(it, size = 8.dp) }
+        Row(
+            modifier.semantics { contentDescription = tr("Экспорт: %s", tip.joinToString(", ")) },
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            done.forEach { ExportDot(it, size = size) }
+            if (hamlog != null) Box(Modifier.size(size).clip(CircleShape).background(LocalExtra.current.hamlog))
+        }
     }
 }
 

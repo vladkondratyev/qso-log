@@ -162,16 +162,5 @@ fun focusRingColor(dark: Boolean, custom: ru.r3xed.qsolog.data.CustomTheme?): Co
     Color((custom?.get(ru.r3xed.qsolog.data.CustomTheme.Role.FOCUS) ?: (if (dark) ru.r3xed.qsolog.data.CustomTheme.DARK else ru.r3xed.qsolog.data.CustomTheme.LIGHT)
         .getValue(ru.r3xed.qsolog.data.CustomTheme.Role.FOCUS)).toInt())
 
-/**
- * The mark of a contact uploaded to HAMLOG.online: a stripe of [LocalExtra]'s hamlog colour along the left edge of the
- * row, [inset] from it — seen together with the light green of a LoTW confirmation. Comes after the row's background.
- */
-fun Modifier.hamlogStripe(on: Boolean, color: Color, inset: androidx.compose.ui.unit.Dp = 0.dp): Modifier =
-    if (!on) this else drawBehind {
-        val w = 4.dp.toPx()
-        val i = inset.toPx()
-        drawRoundRect(color, androidx.compose.ui.geometry.Offset(i, i), androidx.compose.ui.geometry.Size(w, size.height - 2 * i), androidx.compose.ui.geometry.CornerRadius(w / 2))
-    }
-
 /** Uploaded to HAMLOG.online (the mark of [ru.r3xed.qsolog.data.OnlineLog.HAMLOG]). */
 fun ru.r3xed.qsolog.data.Qso.onHamlog(): Boolean = ru.r3xed.qsolog.data.OnlineLog.HAMLOG.isSent(this)

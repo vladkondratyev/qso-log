@@ -181,7 +181,7 @@ enum class SortBy(private val ru: String, val defaultDesc: Boolean) {
 class AppState {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val db = QsoDb()
-    private val prefs = Settings()
+    private val prefs = Settings().also { FileDirs.prefs = it }
 
     /** Interface language, set before anything builds a text. Changing it re-creates the screen (key in the root). */
     var language by mutableStateOf(I18n.fromCode(prefs.language).also { I18n.chosen = it }); private set
@@ -234,6 +234,26 @@ class AppState {
         updateSettings(MyStations.apply(settings, st))
         onStationSwitched(st)
     }
+
+    /**
+     * A section or an action by its key: not over an open card, whose typing it would leave behind — the card says
+     * so instead.
+     */
+    fun outsideCard(block: () -> Unit) {
+        if (pane == Pane.Edit || pane == Pane.Contest) say(tr("Сначала запишите или закройте карточку (Esc)")) else block()
+    }
+
+    /** Ctrl+Shift+N: the next of one's stations in work, round; SWL said, so a listener's report is not logged unawares. */
+    fun nextStation() {
+        if (stations.size < 2) { say(tr("Станция одна: вторую (например, номер наблюдателя SWL) добавьте в настройках, «Мои станции»")); return }
+        val i = stations.indexOfFirst { it.id == activeStationId }
+        val st = stations[(i + 1).mod(stations.size)]
+        switchStation(st.id)
+        say(tr("В работе: %s", st.call.ifBlank { st.title }) + if (ru.r3xed.qsolog.data.Swl.isSwl(st.station)) " · SWL" else "")
+    }
+
+    /** Ctrl+O: the window opens its file dialog for the ADIF import when this grows. */
+    var importAdifTick by mutableStateOf(0)
 
     /** "Добавить станцию": the callsign, power and station fields of the one in work, a new name; it goes to work. */
     fun addStation() {
@@ -435,6 +455,23 @@ class AppState {
     }
 
     var tableColumns by mutableStateOf(ru.r3xed.qsolog.ui.TableColumn.decode(prefs.tableColumns)); private set
+
+    /** Widths the user set by dragging a header's edge (dp); the others keep TableColumn.width. */
+    var tableWidths by mutableStateOf(
+        prefs.text("table_widths").split(',').mapNotNull { p ->
+            val (n, w) = p.split('=').takeIf { it.size == 2 } ?: return@mapNotNull null
+            val c = ru.r3xed.qsolog.ui.TableColumn.entries.firstOrNull { it.name == n } ?: return@mapNotNull null
+            w.toIntOrNull()?.let { c to it }
+        }.toMap(),
+    ); private set
+
+    fun tableWidth(c: ru.r3xed.qsolog.ui.TableColumn): Int = tableWidths[c] ?: c.width
+
+    /** [w] null — back to the column's own width. */
+    fun changeTableWidth(c: ru.r3xed.qsolog.ui.TableColumn, w: Int?) {
+        tableWidths = if (w == null) tableWidths - c else tableWidths + (c to w.coerceIn(36, 600))
+        prefs.putText("table_widths", tableWidths.entries.joinToString(",") { "${it.key.name}=${it.value}" })
+    }
 
     fun changeTableColumns(c: List<ru.r3xed.qsolog.ui.TableColumn>) {
         tableColumns = c
@@ -1629,10 +1666,16 @@ class AppState {
         val f0 = form
         val orig = formOriginal
         // "Время связи: при сохранении": a new card whose time the user did not touch takes the moment of saving.
-        val f = if (f0.isNew && timeOnSave && orig != null && f0.date == orig.date && f0.time == orig.time) {
+        val f1 = if (f0.isNew && timeOnSave && orig != null && f0.date == orig.date && f0.time == orig.time) {
             val now = LocalDateTime.now(ZoneOffset.UTC)
             f0.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now))
         } else f0
+        // Digits typed without the dots and the colon (1411, 931) are completed: 14.11 of this year, 09:31.
+        val today = LocalDate.now(ZoneOffset.UTC)
+        val f = f1.copy(
+            date = ru.r3xed.qsolog.data.DateTimeInput.finishDate(f1.date.trim(), today),
+            time = ru.r3xed.qsolog.data.DateTimeInput.finishTime(f1.time.trim()),
+        )
         if (f.call.length < 3) return tr("Введите позывной")
         val date = try { LocalDate.parse(f.date.trim(), DATE_FMT) } catch (e: Exception) { return tr("Дата в формате ДД.ММ.ГГГГ") }
         val time = try { LocalTime.parse(f.time.trim(), TIME_FMT) } catch (e: Exception) { return tr("Время в формате ЧЧ:ММ") }
@@ -2796,6 +2839,40 @@ class AppState {
     var dxBand by mutableStateOf<String?>(null)
     var dxGroups by mutableStateOf<Set<String>>(emptySet())
     var dxOnlyNew by mutableStateOf(false)
+
+    /** The cluster's list as shown (after the filters) and the bands that have spots: set by the screen for its keys. */
+    var dxShownSpots: List<ru.r3xed.qsolog.data.DxSpot> = emptyList()
+    var dxShownBands: List<String> = emptyList()
+    /** The spot the arrows are on (its key, see [dxSpotKey]); null — none yet. */
+    var dxCursor by mutableStateOf<String?>(null)
+    /** The cluster's dialogs; while one is open the list's keys are the dialog's typing. */
+    var dxSpotDialog by mutableStateOf(false)
+    var dxCommandDialog by mutableStateOf(false)
+    var dxSettingsDialog by mutableStateOf(false)
+
+    fun dxSpotKey(s: ru.r3xed.qsolog.data.DxSpot) = s.call + "|" + s.khz + "|" + s.timeUtc
+
+    /**
+     * A key on the cluster's list: "Up"/"Down" move, "Enter" works the spot (the radio tuned), "Shift+Enter" — the card
+     * only, "S" — one's own spot, "1"–"9" — the n-th band that has spots, "0" — all bands.
+     */
+    fun dxKey(k: String?): Boolean {
+        if (k == null || dxSpotDialog || dxCommandDialog || dxSettingsDialog) return false
+        val list = dxShownSpots
+        val i = list.indexOfFirst { dxSpotKey(it) == dxCursor }
+        when (k) {
+            "Down" -> list.getOrNull(if (i < 0) 0 else (i + 1).coerceAtMost(list.lastIndex))?.let { dxCursor = dxSpotKey(it) }
+            "Up" -> list.getOrNull(if (i < 0) 0 else (i - 1).coerceAtLeast(0))?.let { dxCursor = dxSpotKey(it) }
+            "Enter", "Shift+Enter" -> (list.getOrNull(i) ?: list.firstOrNull())?.let { workSpot(it, tune = k == "Enter") } ?: return false
+            "S" -> if (dxStatus is ru.r3xed.qsolog.data.DxStatus.Connected) dxSpotDialog = true else return false
+            "0" -> dxBand = null
+            else -> {
+                val n = k.toIntOrNull() ?: return false
+                dxBand = dxShownBands.getOrNull(n - 1) ?: return false
+            }
+        }
+        return true
+    }
     private var dxClient: DxClusterClient? = null
     private var dxStopJob: Job? = null
     private var dxReconnectJob: Job? = null

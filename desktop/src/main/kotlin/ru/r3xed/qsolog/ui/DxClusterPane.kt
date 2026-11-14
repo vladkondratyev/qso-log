@@ -96,9 +96,10 @@ fun DxClusterPane(vm: AppState) {
             (vm.dxGroups.isEmpty() || DxCluster.group(s.mode) in vm.dxGroups) &&
             (!vm.dxOnlyNew || marks[s] in setOf(DxMark.NEW_COUNTRY, DxMark.NEW_REGION, DxMark.NEW_BAND, DxMark.NEW_MODE))
     }
-    var spotDialog by remember { mutableStateOf(false) }
-    var commandDialog by remember { mutableStateOf(false) }
-    var settingsDialog by remember { mutableStateOf(false) }
+    var spotDialog by vm::dxSpotDialog
+    var commandDialog by vm::dxCommandDialog
+    var settingsDialog by vm::dxSettingsDialog
+    vm.dxShownSpots = shown
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -115,6 +116,7 @@ fun DxClusterPane(vm: AppState) {
         }
         // Bands that have spots (and the one picked), then the mode groups and "only new".
         val bands = remember(spots, vm.dxBand) { BANDS.filter { b -> b == vm.dxBand || spots.any { it.band == b } } }
+        vm.dxShownBands = bands
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -152,13 +154,19 @@ fun DxClusterPane(vm: AppState) {
                     }
                 }
             } else {
+                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                // The arrows keep the cursor's spot in sight.
+                LaunchedEffect(vm.dxCursor) {
+                    val i = shown.indexOfFirst { vm.dxSpotKey(it) == vm.dxCursor }
+                    if (i >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.index == i && it.offset >= 0 && it.offset + it.size <= listState.layoutInfo.viewportEndOffset }) listState.animateScrollToItem(i)
+                }
                 LazyColumn(
-                    Modifier.fillMaxSize(),
+                    Modifier.fillMaxSize(), state = listState,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(shown, key = { it.call + "|" + it.khz + "|" + it.timeUtc }) { s ->
-                        DxSpotRow(s, marks[s] ?: DxMark.NONE, now, vm.settings.myPosition, onTap = { vm.workSpot(s) }, onHold = { vm.workSpot(s, tune = false) })
+                        DxSpotRow(s, marks[s] ?: DxMark.NONE, now, vm.settings.myPosition, cursor = vm.dxSpotKey(s) == vm.dxCursor, onTap = { vm.workSpot(s) }, onHold = { vm.workSpot(s, tune = false) })
                     }
                 }
             }
@@ -233,7 +241,7 @@ internal fun spotAge(timeUtc: Long, now: Long): String {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DxSpotRow(s: DxSpot, mark: DxMark, now: Long, me: LatLon?, onTap: () -> Unit, onHold: () -> Unit) {
+private fun DxSpotRow(s: DxSpot, mark: DxMark, now: Long, me: LatLon?, cursor: Boolean = false, onTap: () -> Unit, onHold: () -> Unit) {
     val x = LocalExtra.current
     val shape = RoundedCornerShape(14.dp)
     val newCountry = mark == DxMark.NEW_COUNTRY
@@ -243,7 +251,7 @@ private fun DxSpotRow(s: DxSpot, mark: DxMark, now: Long, me: LatLon?, onTap: ()
     Column(
         Modifier.fillMaxWidth().alpha(if (mark == DxMark.WORKED) 0.55f else 1f)
             .background(if (newCountry) x.hl else MaterialTheme.colorScheme.surface, shape)
-            .border(1.dp, if (newCountry) x.hlBorder else x.line, shape)
+            .border(if (cursor) 2.5.dp else 1.dp, if (cursor) MaterialTheme.colorScheme.primary else if (newCountry) x.hlBorder else x.line, shape)
             .combinedClickable(onClick = onTap, onLongClick = onHold, onLongClickLabel = tr("Открыть карточку без перестройки трансивера"))
             .padding(horizontal = 14.dp, vertical = 9.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp),

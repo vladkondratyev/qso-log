@@ -353,7 +353,7 @@ fun KeysEditor(vm: AppViewModel, onClose: () -> Unit) {
                     Note(tr("Нажмите на действие и затем новое сочетание на внешней клавиатуре. Стрелки, Tab, Enter и Пробел в списках, Alt+1…9 работают как прежде."))
                     KeyScope.entries.forEach { scope ->
                         Section(scope.title)
-                        KeyAction.entries.filter { it.scope == scope }.forEach { a ->
+                        KeyAction.entries.filter { it.scope == scope && !it.desktopOnly }.forEach { a ->
                             val chords = KeyMap.chords(a)
                             val changed = a in vm.keymap
                             Column(

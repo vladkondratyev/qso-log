@@ -455,6 +455,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         onStationSwitched(st)
     }
 
+    /**
+     * A section or an action by its key: not over an open card, whose typing it would leave behind — the card says
+     * so instead.
+     */
+    fun outsideCard(block: () -> Unit) {
+        if (screen == Screen.Edit || screen == Screen.Contest) say(tr("Сначала запишите или закройте карточку (Esc)")) else block()
+    }
+
+    /** Ctrl+Shift+N: the next of one's stations in work, round; SWL said, so a listener's report is not logged unawares. */
+    fun nextStation() {
+        if (stations.size < 2) { say(tr("Станция одна: вторую (например, номер наблюдателя SWL) добавьте в настройках, «Мои станции»")); return }
+        val i = stations.indexOfFirst { it.id == activeStationId }
+        val st = stations[(i + 1).mod(stations.size)]
+        switchStation(st.id)
+        say(tr("В работе: %s", st.call.ifBlank { st.title }) + if (ru.r3xed.qsolog.data.Swl.isSwl(st.station)) " · SWL" else "")
+    }
+
+    /** Ctrl+O: the activity opens the system's file picker for the ADIF import when this grows. */
+    var importAdifTick by mutableStateOf(0)
+
     /** "Добавить станцию": the callsign, power and station fields of the one in work, a new name; it goes to work. */
     fun addStation() {
         val a = activeStation
@@ -1877,10 +1897,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val f0 = form
         val orig = formOriginal
         // "Время связи: при сохранении": a new card whose time the user did not touch takes the moment of saving.
-        val f = if (f0.isNew && timeOnSave && orig != null && f0.date == orig.date && f0.time == orig.time) {
+        val f1 = if (f0.isNew && timeOnSave && orig != null && f0.date == orig.date && f0.time == orig.time) {
             val now = LocalDateTime.now(ZoneOffset.UTC)
             f0.copy(date = DATE_FMT.format(now), time = TIME_FMT.format(now))
         } else f0
+        // Digits typed without the dots and the colon (1411, 931) are completed: 14.11 of this year, 09:31.
+        val today = LocalDate.now(ZoneOffset.UTC)
+        val f = f1.copy(
+            date = ru.r3xed.qsolog.data.DateTimeInput.finishDate(f1.date.trim(), today),
+            time = ru.r3xed.qsolog.data.DateTimeInput.finishTime(f1.time.trim()),
+        )
         if (f.call.length < 3) return tr("Введите позывной")
         val date = try { LocalDate.parse(f.date.trim(), DATE_FMT) } catch (e: Exception) { return tr("Дата в формате ДД.ММ.ГГГГ") }
         val time = try { LocalTime.parse(f.time.trim(), TIME_FMT) } catch (e: Exception) { return tr("Время в формате ЧЧ:ММ") }
@@ -2901,6 +2927,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var dxBand by mutableStateOf<String?>(null)
     var dxGroups by mutableStateOf<Set<String>>(emptySet())
     var dxOnlyNew by mutableStateOf(false)
+
+    /** The cluster's list as shown (after the filters) and the bands that have spots: set by the screen for its keys. */
+    var dxShownSpots: List<ru.r3xed.qsolog.data.DxSpot> = emptyList()
+    var dxShownBands: List<String> = emptyList()
+    /** The spot the arrows are on (its key, see [dxSpotKey]); null — none yet. */
+    var dxCursor by mutableStateOf<String?>(null)
+    /** The cluster's dialogs; while one is open the list's keys are the dialog's typing. */
+    var dxSpotDialog by mutableStateOf(false)
+    var dxCommandDialog by mutableStateOf(false)
+    var dxSettingsDialog by mutableStateOf(false)
+
+    fun dxSpotKey(s: ru.r3xed.qsolog.data.DxSpot) = s.call + "|" + s.khz + "|" + s.timeUtc
+
+    /**
+     * A key on the cluster's list: "Up"/"Down" move, "Enter" works the spot (the radio tuned), "Shift+Enter" — the card
+     * only, "S" — one's own spot, "1"–"9" — the n-th band that has spots, "0" — all bands.
+     */
+    fun dxKey(k: String?): Boolean {
+        if (k == null || dxSpotDialog || dxCommandDialog || dxSettingsDialog) return false
+        val list = dxShownSpots
+        val i = list.indexOfFirst { dxSpotKey(it) == dxCursor }
+        when (k) {
+            "Down" -> list.getOrNull(if (i < 0) 0 else (i + 1).coerceAtMost(list.lastIndex))?.let { dxCursor = dxSpotKey(it) }
+            "Up" -> list.getOrNull(if (i < 0) 0 else (i - 1).coerceAtLeast(0))?.let { dxCursor = dxSpotKey(it) }
+            "Enter", "Shift+Enter" -> (list.getOrNull(i) ?: list.firstOrNull())?.let { workSpot(it, tune = k == "Enter") } ?: return false
+            "S" -> if (dxStatus is ru.r3xed.qsolog.data.DxStatus.Connected) dxSpotDialog = true else return false
+            "0" -> dxBand = null
+            else -> {
+                val n = k.toIntOrNull() ?: return false
+                dxBand = dxShownBands.getOrNull(n - 1) ?: return false
+            }
+        }
+        return true
+    }
     private var dxClient: DxClusterClient? = null
     private var dxStopJob: Job? = null
     private var dxReconnectJob: Job? = null

@@ -83,6 +83,18 @@ enum class KeyAction(val scope: KeyScope, vararg defaults: Chord) {
     SETTINGS(KeyScope.LOG, c(",", ctrl = true)),
     EXPORT_ADIF(KeyScope.LOG, c("E", ctrl = true, shift = true)),
     LOG_DELETE(KeyScope.LOG, c("Delete"), c("Backspace")),
+    // The sections and actions of the menus (2.9.6): from the log and the other screens, not from an open card.
+    DX_CLUSTER(KeyScope.LOG, c("C", ctrl = true, shift = true)),
+    PROPAGATION(KeyScope.LOG, c("P", ctrl = true, shift = true)),
+    AWARDS(KeyScope.LOG, c("A", ctrl = true, shift = true)),
+    REFERENCE(KeyScope.LOG, c("R", ctrl = true, shift = true)),
+    ONLINE_LOGS(KeyScope.LOG, c("U", ctrl = true)),
+    LOTW_SYNC(KeyScope.LOG, c("L", ctrl = true, shift = true)),
+    IMPORT_ADIF(KeyScope.LOG, c("O", ctrl = true)),
+    SELECT_PART(KeyScope.LOG, c("F", ctrl = true, shift = true)),
+    BACKUP(KeyScope.LOG, c("B", ctrl = true)),
+    LOG_VIEW(KeyScope.LOG, c("T", ctrl = true, shift = true)),
+    NEXT_STATION(KeyScope.LOG, c("N", ctrl = true, shift = true)),
 
     LOG_ENTER(KeyScope.CARD, c("Enter")),
     SPACE_NEXT(KeyScope.CARD, c("Space")),
@@ -123,6 +135,9 @@ enum class KeyAction(val scope: KeyScope, vararg defaults: Chord) {
 
     val defaults: List<Chord> = defaults.toList()
 
+    /** Only the computer has it (the table log); the phone's key list leaves it out. */
+    val desktopOnly: Boolean get() = this == LOG_VIEW
+
     /** The telegraph message number 0–7 of CW_1…CW_8, else -1. */
     val cwMessage: Int get() = if (name.startsWith("CW_") && name.length == 4) name[3] - '1' else -1
 
@@ -141,6 +156,17 @@ enum class KeyAction(val scope: KeyScope, vararg defaults: Chord) {
             SETTINGS -> tr("настройки")
             EXPORT_ADIF -> tr("экспорт журнала в ADIF")
             LOG_DELETE -> tr("удалить запись или отмеченные: окно спросит, Enter — удалить")
+            DX_CLUSTER -> tr("DX-кластер")
+            PROPAGATION -> tr("прохождение")
+            AWARDS -> tr("дипломы")
+            REFERENCE -> tr("справка и калькуляторы")
+            ONLINE_LOGS -> tr("онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com, HAMLOG")
+            LOTW_SYNC -> tr("подтверждения LoTW")
+            IMPORT_ADIF -> tr("импорт журнала из ADIF")
+            SELECT_PART -> tr("выбрать часть журнала")
+            BACKUP -> tr("сделать копию журнала")
+            LOG_VIEW -> tr("журнал таблицей или списком")
+            NEXT_STATION -> tr("следующая своя станция (по кругу)")
             LOG_ENTER -> tr("из любого поля — записать (новая карточка — записать и открыть следующую)")
             SPACE_NEXT -> tr("по кругу: позывной → RST отправлен → RST принят → позывной (у контест-связи: позывной ↔ код принят)")
             CLEAR_CARD -> tr("очистить новую карточку: курсор — в позывной")

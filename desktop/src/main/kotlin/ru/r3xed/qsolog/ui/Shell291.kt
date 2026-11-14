@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,7 +69,16 @@ fun StatusBar(state: AppState) {
             state.catConfig.enabled -> "TRX: …" to x.muted
             else -> "TRX: " + tr("выкл.") to x.muted
         }
-        StatusItem(rigText, rigColor) { state.showRigPanel = true }
+        // TRX off: a click turns CAT on when the radio is set up, else opens its settings; on — the radio panel.
+        StatusItem(rigText, rigColor) {
+            val c = state.catConfig
+            when {
+                state.rig != null || (c.enabled && cat !is CatStatus.Failed) -> state.showRigPanel = true
+                c.enabled -> state.openSettings(page = ru.r3xed.qsolog.SettingsPage.HARDWARE)
+                c.device.isNotBlank() || c.link != ru.r3xed.qsolog.cat.CatLinkType.USB -> { state.changeCat(c.copy(enabled = true)); state.say(tr("CAT включён: %s", c.rig)) }
+                else -> state.openSettings(page = ru.r3xed.qsolog.SettingsPage.HARDWARE)
+            }
+        }
         val (dxText, dxColor) = when (val d = state.dxStatus) {
             is DxStatus.Connected -> tr("Кластер: на связи · спотов %s", state.dxSpots.size) to x.ok
             is DxStatus.Connecting -> tr("Кластер: подключение…") to x.muted
@@ -84,7 +94,13 @@ fun StatusBar(state: AppState) {
         }
         state.solar?.let { s -> StatusItem(s.short, x.muted, state::openPropagation) }
         StatusItem(tr("Сегодня: %s QSO", today), x.muted, state::openDashboard)
-        StatusItem(state.settings.myCall.ifBlank { "—" }, MaterialTheme.colorScheme.onSurface) { state.openSettings(stations = true) }
+        // The station in work: a click — the list of one's stations to switch (and SWL marked, as in the log).
+        var stations by remember { mutableStateOf(false) }
+        Box {
+            val swl = ru.r3xed.qsolog.data.Swl.isSwl(state.settings.station)
+            StatusItem(state.settings.myCall.ifBlank { "—" } + (if (swl) " · SWL" else "") + " ▾", if (swl) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface) { stations = true }
+            StationMenu(state, stations) { stations = false }
+        }
     }
 }
 
@@ -97,18 +113,21 @@ private fun StatusItem(text: String, color: Color, onClick: () -> Unit) {
     }
 }
 
+/** A command of "⌘K": its name, its key ("" — none) and what it does. */
+class PaletteCommand(val name: String, val key: String = "", val run: () -> Unit)
+
 /** "⌘K" / Ctrl+K: type a few letters of a command, ↑↓ to choose, Enter to run, Esc to close. */
 @Composable
-fun CommandPalette(commands: List<Pair<String, () -> Unit>>, onClose: () -> Unit) {
+fun CommandPalette(commands: List<PaletteCommand>, onClose: () -> Unit) {
     val x = LocalExtra.current
     var q by remember { mutableStateOf("") }
     var cursor by remember { mutableIntStateOf(0) }
     val words = q.lowercase().split(' ').filter { it.isNotBlank() }
-    val hits = commands.filter { (name, _) -> words.all { it in name.lowercase() } }
+    val hits = commands.filter { c -> words.all { it in c.name.lowercase() } }
     val focus = remember { FocusRequester() }
     val list = rememberLazyListState()
     LaunchedEffect(cursor) { if (hits.isNotEmpty()) list.animateScrollToItem(cursor.coerceIn(0, hits.lastIndex)) }
-    fun run(i: Int) { hits.getOrNull(i)?.let { onClose(); it.second() } }
+    fun run(i: Int) { hits.getOrNull(i)?.let { onClose(); it.run() } }
     Dialog(onDismissRequest = onClose) {
         // The field takes the cursor once the dialog is on the screen.
         LaunchedEffect(Unit) { kotlinx.coroutines.delay(50); runCatching { focus.requestFocus() } }
@@ -131,13 +150,17 @@ fun CommandPalette(commands: List<Pair<String, () -> Unit>>, onClose: () -> Unit
                     singleLine = true, shape = RoundedCornerShape(12.dp),
                 )
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 380.dp).padding(top = 8.dp), state = list) {
-                    itemsIndexed(hits) { i, (name, _) ->
-                        Text(
-                            name, fontSize = 16.sp, fontWeight = if (i == cursor) FontWeight.Bold else null,
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                    itemsIndexed(hits) { i, c ->
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
                                 .background(if (i == cursor) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
                                 .clickable { run(i) }.padding(horizontal = 12.dp, vertical = 8.dp),
-                        )
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(c.name, fontSize = 16.sp, fontWeight = if (i == cursor) FontWeight.Bold else null, modifier = Modifier.weight(1f))
+                            // The key of the command: run it without the palette next time.
+                            if (c.key.isNotBlank()) Text(c.key, fontSize = 14.sp, fontFamily = Mono, color = x.muted, maxLines = 1)
+                        }
                     }
                 }
                 if (hits.isEmpty()) Text(tr("Ничего не найдено"), color = x.muted, modifier = Modifier.padding(12.dp))

@@ -35,7 +35,7 @@ fun exportVoiceNote(file: File, text: String, f: Form, say: (String) -> Unit) {
     val base = "QSO_${f.call.replace('/', '-')}_${f.date.replace('.', '-')}_${f.time.replace(":", "")}"
     val dialog = FileDialog(null as Frame?, tr("Сохранить запись QSO"), FileDialog.SAVE)
     dialog.file = "$base.wav"
-    dialog.isVisible = true
+    ru.r3xed.qsolog.FileDirs.show(dialog)
     val name = dialog.file ?: return
     val dir = dialog.directory ?: return
     val target = File(dir, if (name.lowercase().endsWith(".wav")) name else "$name.wav")

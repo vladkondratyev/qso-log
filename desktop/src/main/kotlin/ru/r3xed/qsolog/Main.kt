@@ -6,6 +6,7 @@ import ru.r3xed.qsolog.keys.Chord
 import ru.r3xed.qsolog.keys.KeyAction
 import ru.r3xed.qsolog.keys.KeyMap
 import ru.r3xed.qsolog.ui.chord
+import ru.r3xed.qsolog.ui.PaletteCommand
 import ru.r3xed.qsolog.ui.menuShortcut
 import androidx.compose.runtime.key
 import androidx.compose.foundation.layout.Arrangement
@@ -89,7 +90,11 @@ val NEXT_SHORTCUT = if (IS_MAC) "⇧⌘S" else "Ctrl+Shift+S"
 private fun shortcut(key: Key) = KeyShortcut(key, meta = IS_MAC, ctrl = !IS_MAC)
 
 /** Actions of the menu bar: their first key is the menu item's shortcut (see [menuShortcut]). */
-private val MENU_ACTIONS = setOf(KeyAction.NEW_QSO, KeyAction.DASHBOARD, KeyAction.MAP, KeyAction.HISTORY, KeyAction.SETTINGS)
+private val MENU_ACTIONS = setOf(
+    KeyAction.NEW_QSO, KeyAction.DASHBOARD, KeyAction.MAP, KeyAction.HISTORY, KeyAction.SETTINGS,
+    KeyAction.DX_CLUSTER, KeyAction.PROPAGATION, KeyAction.AWARDS, KeyAction.REFERENCE, KeyAction.ONLINE_LOGS, KeyAction.LOTW_SYNC,
+    KeyAction.IMPORT_ADIF, KeyAction.SELECT_PART, KeyAction.BACKUP, KeyAction.LOG_VIEW, KeyAction.NEXT_STATION,
+)
 
 private val DASH_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four)
 
@@ -136,6 +141,16 @@ private fun historyKey(state: AppState, e: androidx.compose.ui.input.key.KeyEven
     return true
 }
 
+/** The key of the cluster's list as [AppState.dxKey] names it: "Up", "Down", "Enter", "Shift+Enter", "S", "0"–"9". */
+private fun dxKeyName(e: androidx.compose.ui.input.key.KeyEvent): String? = when (e.key) {
+    Key.DirectionUp -> "Up"
+    Key.DirectionDown -> "Down"
+    Key.Enter, Key.NumPadEnter -> if (e.isShiftPressed) "Shift+Enter" else "Enter"
+    Key.S -> "S"
+    else -> (e.key.keyCode - Key.Zero.keyCode).takeIf { it in 0L..9L }?.toString()
+        ?: (e.key.keyCode - Key.NumPad0.keyCode).takeIf { it in 0L..9L }?.toString()
+}
+
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 fun main() {
     if (IS_MAC) {
@@ -145,6 +160,8 @@ fun main() {
     application {
         val state = remember { AppState() }
         val windowState = rememberWindowState(width = 1024.dp, height = 700.dp, position = WindowPosition(Alignment.Center))
+        // Errors inside the window: the lost focus of Compose 1.6 is reset quietly, the rest is written to errors.log.
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.window.LocalWindowExceptionHandlerFactory provides WindowErrors) {
         Window(
             onCloseRequest = { state.flushSettings(); state.stopServer(); state.stopCat(); state.stopDigi(); state.stopDxCluster(); state.closeCw(); state.stopStartApps(); exitApplication() },
             title = "QSO-LOG",
@@ -187,6 +204,21 @@ fun main() {
                 else if (hit(KeyAction.MAP)) { state.openMap(); true }
                 else if (hit(KeyAction.HISTORY)) { state.openHistory(); true }
                 else if (hit(KeyAction.SETTINGS)) { state.openSettings(); true }
+                // The sections and actions of the menus (2.9.6); the menu bar does the first key of each itself.
+                else if (hit(KeyAction.DX_CLUSTER)) { state.outsideCard(state::openDxCluster); true }
+                else if (hit(KeyAction.PROPAGATION)) { state.outsideCard(state::openPropagation); true }
+                else if (hit(KeyAction.AWARDS)) { state.outsideCard(state::openAwards); true }
+                else if (hit(KeyAction.REFERENCE)) { state.outsideCard(state::openReference); true }
+                else if (hit(KeyAction.ONLINE_LOGS)) { state.openUpload(selectedOnly = false); true }
+                else if (hit(KeyAction.LOTW_SYNC)) { state.syncLotw(); true }
+                else if (hit(KeyAction.IMPORT_ADIF)) { state.outsideCard { state.importAdifTick++ }; true }
+                else if (hit(KeyAction.SELECT_PART)) { state.outsideCard { state.showSelect = true }; true }
+                else if (hit(KeyAction.BACKUP)) { state.backupNow(); true }
+                else if (hit(KeyAction.LOG_VIEW)) { state.toggleTableMode(); true }
+                else if (hit(KeyAction.NEXT_STATION)) { state.outsideCard(state::nextStation); true }
+                // DX-кластер: arrows through the spots, Enter works one, S — one's own spot, digits — the band.
+                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.DxCluster && !mod && !e.isAltPressed && state.dxKey(dxKeyName(e))) true
+                else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Propagation && !mod && e.key == Key.F5) { state.refreshPropagation(force = true); true }
                 else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Empty && !state.searchFocused && !state.showKeys && state.logDeleteAsk == null && !state.showTransfer && logKey(state, e, mod, c)) true
                 // Alt+W or Ctrl+Esc (⌘Esc) wipes a new card, as in classic loggers: a clean card, the cursor in the callsign.
                 else if (inCard && hit(KeyAction.CLEAR_CARD)) { if (state.form.isNew) state.clearCard(); true }
@@ -220,6 +252,8 @@ fun main() {
             },
         ) {
             LaunchedEffect(Unit) { window.minimumSize = Dimension(720, 480) }
+            val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+            androidx.compose.runtime.SideEffect { WindowErrors.resetFocus = { focusManager.clearFocus(force = true) } }
             // ADIF and CSV: first the dialog (only new or all, the export mark), then the save dialog.
             val exportCsv = { state.openExport(ExportFormat.CSV, selectedOnly = false) }
             val exportAdif = { state.openExport(ExportFormat.ADIF, selectedOnly = false) }
@@ -236,6 +270,7 @@ fun main() {
                 chooseFile(window, tr("Импорт лога из ADIF"), save = false, ext = "adi")?.let(state::importAdif)
                 Unit
             }
+            LaunchedEffect(state.importAdifTick) { if (state.importAdifTick > 0) importAdif() }
             val importCsv = {
                 chooseFile(window, tr("Импорт лога из CSV"), save = false)?.let(state::importCsv)
                 Unit
@@ -261,8 +296,8 @@ fun main() {
                         shortcut = KeyShortcut(Key.S, meta = IS_MAC, ctrl = !IS_MAC, shift = true), onClick = { state.saveAndNext() },
                     )
                     Separator()
-                    Item(tr("Экспорт лога в ADIF…"), onClick = exportAdif)
-                    Item(tr("Импорт лога из ADIF…"), onClick = importAdif)
+                    Item(tr("Экспорт лога в ADIF…"), shortcut = menuShortcut(KeyAction.EXPORT_ADIF), onClick = exportAdif)
+                    Item(tr("Импорт лога из ADIF…"), shortcut = menuShortcut(KeyAction.IMPORT_ADIF), onClick = { state.outsideCard(importAdif) })
                     Separator()
                     Item(tr("Экспорт лога в CSV…"), onClick = exportCsv)
                     Item(tr("Импорт лога из CSV…"), onClick = importCsv)
@@ -270,7 +305,7 @@ fun main() {
                     Item(tr("Экспорт в ЕРМАК / Cabrillo…"), onClick = { state.openContestExport(selectedOnly = false) })
                     Item(tr("Импорт из ЕРМАК / Cabrillo…"), onClick = importContest)
                     Separator()
-                    Item(tr("Сделать копию журнала"), onClick = { state.backupNow() })
+                    Item(tr("Сделать копию журнала"), shortcut = menuShortcut(KeyAction.BACKUP), onClick = { state.backupNow() })
                     Item(tr("Открыть папку копий"), onClick = state::openBackupFolder)
                     if (!IS_MAC) {
                         Separator()
@@ -281,7 +316,7 @@ fun main() {
                     Item(tr("Найти в журнале"), onClick = state::requestSearchFocus)
                     Item(tr("Команды…"), shortcut = shortcut(Key.K), onClick = { state.showPalette = true })
                     Separator()
-                    Item(tr("Выбрать часть журнала…"), onClick = { state.showSelect = true })
+                    Item(tr("Выбрать часть журнала…"), shortcut = menuShortcut(KeyAction.SELECT_PART), onClick = { state.outsideCard { state.showSelect = true } })
                     Item(tr("Снять выбор"), enabled = state.selecting, onClick = state::clearSelection)
                     Item(tr("Печать QSL-наклеек"), enabled = state.selecting, onClick = state::printQslLabels)
                     Item(tr("Отметить: QSL отправлены"), enabled = state.selecting, onClick = state::markQslSent)
@@ -303,7 +338,7 @@ fun main() {
                     }
                     Separator()
                     CheckboxItem(tr("Компактный журнал"), checked = state.compactLog, onCheckedChange = { state.toggleCompactLog() })
-                    CheckboxItem(tr("Журнал таблицей"), checked = state.tableMode, onCheckedChange = { state.toggleTableMode() })
+                    CheckboxItem(tr("Журнал таблицей"), checked = state.tableMode, shortcut = menuShortcut(KeyAction.LOG_VIEW), onCheckedChange = { state.toggleTableMode() })
                     Menu(tr("Колонки компактного журнала")) {
                         listOf("freq" to tr("Частота"), "rst" to "RST", "name" to tr("Имя и QTH"), "km" to tr("Расстояние")).forEach { (k, t) ->
                             CheckboxItem(t, checked = k in state.compactColumns, onCheckedChange = { state.toggleCompactColumn(k) })
@@ -311,19 +346,21 @@ fun main() {
                     }
                     Separator()
                     Item(tr("Дашборд"), shortcut = menuShortcut(KeyAction.DASHBOARD), onClick = state::dashboardOrDelete)
-                    Item(tr("Дипломы"), onClick = state::openAwards)
-                    Item(tr("Прохождение"), onClick = state::openPropagation)
+                    Item(tr("Дипломы"), shortcut = menuShortcut(KeyAction.AWARDS), onClick = { state.outsideCard(state::openAwards) })
+                    Item(tr("Прохождение"), shortcut = menuShortcut(KeyAction.PROPAGATION), onClick = { state.outsideCard(state::openPropagation) })
                     Item(tr("Карта QSO"), shortcut = menuShortcut(KeyAction.MAP), onClick = state::openMap)
                     Item(tr("История поиска"), shortcut = menuShortcut(KeyAction.HISTORY), onClick = state::openHistory)
                 }
                 Menu(tr("Трансивер")) {
                     Item(tr("Пульт трансивера"), enabled = state.catConfig.enabled || state.rig != null, onClick = { state.showRigPanel = true })
                     Item(tr("CAT и программы…"), onClick = { state.openSettings(page = ru.r3xed.qsolog.SettingsPage.HARDWARE) })
+                    Separator()
+                    Item(tr("Следующая своя станция"), enabled = state.stations.size > 1, shortcut = menuShortcut(KeyAction.NEXT_STATION), onClick = { state.outsideCard(state::nextStation) })
                 }
                 Menu(tr("Сервис")) {
-                    Item(tr("DX-кластер"), onClick = state::openDxCluster)
-                    Item(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com, HAMLOG…"), onClick = { state.openUpload(selectedOnly = false) })
-                    Item(tr("Подтверждения LoTW"), onClick = state::syncLotw)
+                    Item(tr("DX-кластер"), shortcut = menuShortcut(KeyAction.DX_CLUSTER), onClick = { state.outsideCard(state::openDxCluster) })
+                    Item(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com, HAMLOG…"), shortcut = menuShortcut(KeyAction.ONLINE_LOGS), onClick = { state.openUpload(selectedOnly = false) })
+                    Item(tr("Подтверждения LoTW"), shortcut = menuShortcut(KeyAction.LOTW_SYNC), onClick = state::syncLotw)
                     // Shown once the table is set up in the settings; the sync runs only when asked.
                     if (ru.r3xed.qsolog.data.SheetSync.isScriptUrl(state.sheetUrl)) {
                         Item(tr("Синхронизировать"), enabled = !state.sheetSyncing, onClick = state::syncSheet)
@@ -332,7 +369,7 @@ fun main() {
                     Item(tr("Настройки"), shortcut = menuShortcut(KeyAction.SETTINGS), onClick = { state.openSettings() })
                 }
                 Menu(tr("Справка")) {
-                    Item(tr("Справка и калькуляторы"), onClick = state::openReference)
+                    Item(tr("Справка и калькуляторы"), shortcut = menuShortcut(KeyAction.REFERENCE), onClick = { state.outsideCard(state::openReference) })
                     Item(tr("Горячие клавиши") + KeyMap.label(KeyAction.KEYS_HELP, IS_MAC).ifEmpty { null }?.let { " ($it)" }.orEmpty(), onClick = { state.showKeys = true })
                     Item(tr("Что нового"), onClick = { state.showWhatsNew = true })
                     Item(tr("Сообщить о проблеме"), onClick = {
@@ -363,46 +400,52 @@ fun main() {
                 ) { key(state.language) { App(state, Exports(exportCsv, importCsv, exportAdif, importAdif, exportSelected, exportContest, importContest, saveExport)) } }
             }
         }
+        }
     }
 }
 
-/** "⌘K": every command of the menus, searchable by name. */
-fun paletteCommands(state: AppState, files: Exports): List<Pair<String, () -> Unit>> = listOf(
-    tr("Новый QSO") to { state.addQso() },
-    tr("Найти в журнале") to state::requestSearchFocus,
-    tr("Дашборд") to state::openDashboard,
-    tr("Дипломы") to state::openAwards,
-    tr("Прохождение") to state::openPropagation,
-    tr("Карта QSO") to state::openMap,
-    tr("DX-кластер") to state::openDxCluster,
-    tr("История поиска") to state::openHistory,
-    tr("Справка и калькуляторы") to state::openReference,
-    tr("Настройки") to { state.openSettings() },
-    tr("Оборудование и программы…") to { state.openSettings(page = ru.r3xed.qsolog.SettingsPage.HARDWARE) },
-    tr("Справочники и онлайн-журналы") to { state.openSettings(page = ru.r3xed.qsolog.SettingsPage.SOURCES) },
-    tr("Пульт трансивера") to { state.showRigPanel = true },
-    tr("Экспорт лога в ADIF…") to files.exportAdif,
-    tr("Импорт лога из ADIF…") to files.importAdif,
-    tr("Экспорт лога в CSV…") to files.exportCsv,
-    tr("Экспорт в ЕРМАК / Cabrillo…") to { state.openContestExport(selectedOnly = false) },
-    tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com, HAMLOG…") to { state.openUpload(selectedOnly = false) },
-    tr("Подтверждения LoTW") to state::syncLotw,
-    tr("Выбрать часть журнала…") to { state.showSelect = true },
-    tr("Печать QSL-наклеек") to state::printQslLabels,
-    tr("Отметить: QSL отправлены") to state::markQslSent,
-    tr("Дозаполнить данные корреспондентов") to state::fillMissing,
-    tr("Сделать копию журнала") to { state.backupNow() },
-    tr("Открыть папку копий") to state::openBackupFolder,
-    tr("Компактный журнал") to state::toggleCompactLog,
-    tr("Журнал таблицей") to state::toggleTableMode,
-    tr("Крупнее") to state::zoomIn,
-    tr("Мельче") to state::zoomOut,
-    tr("Обычный размер (100%)") to state::zoomReset,
-    "CONTEST MODE" to state::toggleContestMode,
-    tr("Горячие клавиши") to { state.showKeys = true },
-    tr("Что нового") to { state.showWhatsNew = true },
-) + state.savedFilters.map { f -> tr("Фильтр: %s", f.name) to { state.applySavedFilter(f) } } +
-    (state.activation?.let { listOf(tr("Завершить активацию %s", it.title) to { state.stopActivation(export = true) }) } ?: emptyList())
+/** "⌘K": every command of the menus, searchable by name, with its key on the right. */
+fun paletteCommands(state: AppState, files: Exports): List<PaletteCommand> {
+    fun k(a: KeyAction) = KeyMap.label(a, IS_MAC)
+    val m = if (IS_MAC) "⌘" else "Ctrl+"
+    return listOf(
+        PaletteCommand(tr("Новый QSO"), k(KeyAction.NEW_QSO)) { state.addQso() },
+        PaletteCommand(tr("Найти в журнале"), k(KeyAction.SEARCH), state::requestSearchFocus),
+        PaletteCommand(tr("Дашборд"), k(KeyAction.DASHBOARD), state::openDashboard),
+        PaletteCommand(tr("Дипломы"), k(KeyAction.AWARDS), state::openAwards),
+        PaletteCommand(tr("Прохождение"), k(KeyAction.PROPAGATION), state::openPropagation),
+        PaletteCommand(tr("Карта QSO"), k(KeyAction.MAP), state::openMap),
+        PaletteCommand(tr("DX-кластер"), k(KeyAction.DX_CLUSTER), state::openDxCluster),
+        PaletteCommand(tr("История поиска"), k(KeyAction.HISTORY), state::openHistory),
+        PaletteCommand(tr("Справка и калькуляторы"), k(KeyAction.REFERENCE), state::openReference),
+        PaletteCommand(tr("Настройки"), k(KeyAction.SETTINGS)) { state.openSettings() },
+        PaletteCommand(tr("Оборудование и программы…")) { state.openSettings(page = ru.r3xed.qsolog.SettingsPage.HARDWARE) },
+        PaletteCommand(tr("Справочники и онлайн-журналы")) { state.openSettings(page = ru.r3xed.qsolog.SettingsPage.SOURCES) },
+        PaletteCommand(tr("Пульт трансивера"), k(KeyAction.RIG_PANEL)) { state.showRigPanel = true },
+        PaletteCommand(tr("Следующая своя станция"), k(KeyAction.NEXT_STATION), state::nextStation),
+        PaletteCommand(tr("Экспорт лога в ADIF…"), k(KeyAction.EXPORT_ADIF), files.exportAdif),
+        PaletteCommand(tr("Импорт лога из ADIF…"), k(KeyAction.IMPORT_ADIF), files.importAdif),
+        PaletteCommand(tr("Экспорт лога в CSV…"), "", files.exportCsv),
+        PaletteCommand(tr("Экспорт в ЕРМАК / Cabrillo…")) { state.openContestExport(selectedOnly = false) },
+        PaletteCommand(tr("Онлайн-журналы: LoTW, eQSL, Club Log, QRZ.com, HAMLOG…"), k(KeyAction.ONLINE_LOGS)) { state.openUpload(selectedOnly = false) },
+        PaletteCommand(tr("Подтверждения LoTW"), k(KeyAction.LOTW_SYNC), state::syncLotw),
+        PaletteCommand(tr("Выбрать часть журнала…"), k(KeyAction.SELECT_PART)) { state.showSelect = true },
+        PaletteCommand(tr("Печать QSL-наклеек"), "", state::printQslLabels),
+        PaletteCommand(tr("Отметить: QSL отправлены"), "", state::markQslSent),
+        PaletteCommand(tr("Дозаполнить данные корреспондентов"), "", state::fillMissing),
+        PaletteCommand(tr("Сделать копию журнала"), k(KeyAction.BACKUP)) { state.backupNow() },
+        PaletteCommand(tr("Открыть папку копий"), "", state::openBackupFolder),
+        PaletteCommand(tr("Компактный журнал"), "", state::toggleCompactLog),
+        PaletteCommand(tr("Журнал таблицей"), k(KeyAction.LOG_VIEW), state::toggleTableMode),
+        PaletteCommand(tr("Крупнее"), "$m+", state::zoomIn),
+        PaletteCommand(tr("Мельче"), "$m−", state::zoomOut),
+        PaletteCommand(tr("Обычный размер (100%)"), "${m}0", state::zoomReset),
+        PaletteCommand("CONTEST MODE", k(KeyAction.CONTEST_MODE), state::toggleContestMode),
+        PaletteCommand(tr("Горячие клавиши"), k(KeyAction.KEYS_HELP)) { state.showKeys = true },
+        PaletteCommand(tr("Что нового")) { state.showWhatsNew = true },
+    ) + state.savedFilters.map { f -> PaletteCommand(tr("Фильтр: %s", f.name)) { state.applySavedFilter(f) } } +
+        (state.activation?.let { listOf(PaletteCommand(tr("Завершить активацию %s", it.title)) { state.stopActivation(export = true) }) } ?: emptyList())
+}
 
 /** File dialogs, opened from the menu, the settings pane and the selection bar. */
 class Exports(
@@ -580,9 +623,11 @@ private fun KeysDialog(cwMessages: List<String>?, onClose: () -> Unit) {
         title = { Text(tr("Горячие клавиши")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // Balanced by lines: "everywhere" and the card on the left, the log, contest, history and dashboard on the right.
-                val left = listOf(sections[0], sections[2])
-                val columns = listOf(left, sections - left.toSet())
+                // Balanced by lines: the sections in order, the left column takes them until it has half the lines.
+                val half = sections.sumOf { it.keys.size + 2 } / 2
+                var acc = 0
+                val left = sections.takeWhile { sec -> (acc < half).also { acc += sec.keys.size + 2 } }
+                val columns = listOf(left, sections.drop(left.size))
                 Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                     columns.forEach { col ->
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -617,7 +662,7 @@ private fun chooseFile(window: ComposeWindow, title: String, save: Boolean, sugg
         dialog.setFilenameFilter { _, name -> name.lowercase().let { it.endsWith(".$ext") || it.endsWith(".txt") || (ext == "adi" && it.endsWith(".adif")) || (ext == "cbr" && it.endsWith(".log")) } }
         if (!IS_MAC) dialog.file = "*.$ext" // Windows ignores the filter above and uses this pattern instead
     }
-    dialog.isVisible = true
+    FileDirs.show(dialog)
     val name = dialog.file ?: return null
     val dir = dialog.directory ?: return null
     return if (save && !name.lowercase().endsWith(".$ext")) File(dir, "$name.$ext") else File(dir, name)

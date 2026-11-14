@@ -180,8 +180,13 @@ fun main(args: Array<String>) {
             state.changeContestMode(false)
 
             // 2.9.3: the whole log as a table; a new card over it, the callsign coloured as a dupe on this band.
+            state.pane = Pane.Empty
             state.toggleTableMode()
             shot("38-table", 1500)
+            // 2.9.6: ⌘K with the keys of the commands on the right.
+            state.showPalette = true
+            shot("43-palette", 1200)
+            state.showPalette = false
             state.newQso()
             state.setCall("DL1DEMO")
             shot("39-table-card", 2500)
@@ -344,7 +349,7 @@ private fun fakeWsjtxLogged(port: Int, call: String, grid: String, hz: Long, mod
 @Volatile private var rigTx = false
 
 /** A DX cluster node for the shot: the login prompt, then a few spots of made-up stations, a minute or more old. */
-private fun fakeCluster(): java.net.ServerSocket {
+internal fun fakeCluster(): java.net.ServerSocket {
     val server = java.net.ServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())
     Thread {
         val c = runCatching { server.accept() }.getOrNull() ?: return@Thread

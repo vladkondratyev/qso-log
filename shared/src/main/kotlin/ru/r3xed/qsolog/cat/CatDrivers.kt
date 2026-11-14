@@ -305,6 +305,7 @@ class KenwoodDriver(private val name: String, private val elecraft: Boolean, pri
     override val what get() = name
     private var smCmd = if (elecraft) "SM;" else "SM0;"
     private var ifSupported = true
+    private var daSupported = true
 
     override fun poll(io: CatIo, last: RigState): RigState {
         var s = last
@@ -312,6 +313,13 @@ class KenwoodDriver(private val name: String, private val elecraft: Boolean, pri
         ask(io, "FA;")?.let { r -> digits(r.removePrefix("FA"))?.let { s = s.copy(freqHz = it, at = System.currentTimeMillis()) } }
         if (!answered) return s
         ask(io, "MD;")?.let { r -> r.getOrNull(2)?.let { c -> s = s.copy(radioMode = (if (elecraft) ELECRAFT_MODES else MODES)[c] ?: s.radioMode) } }
+        // TS-590, TS-890, TS-990: USB or LSB with the data switch on ("DA1;") is USB-D / LSB-D — the FT8 button lights.
+        // A radio without the command answers "?;" (TS-480, TS-2000) and is not asked again.
+        if (!elecraft && daSupported && (s.radioMode == "USB" || s.radioMode == "LSB")) {
+            val r = ask(io, "DA;")
+            if (r == null) daSupported = false
+            else if (r.getOrNull(2) == '1') s = s.copy(radioMode = s.radioMode + "-D")
+        }
         // IF: the 29th character (after "IF", 11 digits of frequency, 5 spaces, RIT, flags, memory) is 1 on transmit.
         if (ifSupported) ask(io, "IF;").let { r ->
             if (r == null || r.length < 29) ifSupported = r != null && r.length >= 29 else s = s.copy(tx = r[28] == '1')

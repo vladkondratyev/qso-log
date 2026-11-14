@@ -5,6 +5,7 @@ import ru.r3xed.qsolog.keys.KeyAction
 import ru.r3xed.qsolog.keys.KeyMap
 import ru.r3xed.qsolog.tr
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -457,38 +458,54 @@ private fun StationLine(vm: AppState, color: androidx.compose.ui.graphics.Color)
     var open by remember { mutableStateOf(false) }
     Box {
         Box(Modifier.clickable(onClickLabel = if (many) tr("Выбрать станцию") else tr("Моя станция")) { open = true }) {
-            Text((if (who.isNotBlank()) "$who ▾ · " else "") + count, style = MaterialTheme.typography.bodyMedium, color = color, maxLines = 1)
+            // SWL said next to the number: what is logged now is a listener's report.
+            val swl = if (ru.r3xed.qsolog.data.Swl.isSwl(s.station)) " SWL" else ""
+            Text((if (who.isNotBlank()) "$who$swl ▾ · " else "") + count, style = MaterialTheme.typography.bodyMedium, color = color, maxLines = 1)
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            val muted = LocalExtra.current.muted
-            vm.stations.forEach { st ->
-                val active = st.id == vm.activeStationId
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(st.call.ifBlank { "—" }, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            if (active) {
-                                // The station in work: all its settings, one per line.
-                                ru.r3xed.qsolog.data.MyStations.details(st, tr("по геолокации")).forEach { (k, v) ->
-                                    Text("$k: $v", fontSize = 14.sp, color = muted)
-                                }
-                            } else {
-                                val d = ru.r3xed.qsolog.data.MyStations.describe(st, tr("локатор по геолокации"))
-                                if (d.isNotBlank()) Text(d, fontSize = 14.sp, color = muted)
-                            }
-                        }
-                    },
-                    leadingIcon = { if (active) Icon(Icons.Filled.Check, tr("В работе")) else Spacer(Modifier.size(24.dp)) },
-                    onClick = { open = false; if (active) vm.openSettings(stations = true) else vm.switchStation(st.id) },
-                )
-            }
-            HorizontalDivider()
+        StationMenu(vm, open) { open = false }
+    }
+}
+
+
+/** One's stations: the one in work with all its settings (a click — to them), the others a click away from work. */
+@Composable
+internal fun StationMenu(vm: AppState, open: Boolean, onDismiss: () -> Unit) {
+    DropdownMenu(expanded = open, onDismissRequest = onDismiss) {
+        val muted = LocalExtra.current.muted
+        val many = vm.stations.size > 1
+        vm.stations.forEach { st ->
+            val active = st.id == vm.activeStationId
             DropdownMenuItem(
-                text = { Text(if (many) tr("Настроить станции…") else tr("Настроить станцию…"), fontSize = 17.sp) },
-                leadingIcon = { Icon(Icons.Filled.Settings, null) },
-                onClick = { open = false; vm.openSettings(stations = true) },
+                text = {
+                    Column {
+                        Text(st.call.ifBlank { "—" } + if (ru.r3xed.qsolog.data.Swl.isSwl(st.station)) " · SWL" else "", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        if (active) {
+                            // The station in work: all its settings, one per line.
+                            ru.r3xed.qsolog.data.MyStations.details(st, tr("по геолокации")).forEach { (k, v) ->
+                                Text("$k: $v", fontSize = 14.sp, color = muted)
+                            }
+                        } else {
+                            val d = ru.r3xed.qsolog.data.MyStations.describe(st, tr("локатор по геолокации"))
+                            if (d.isNotBlank()) Text(d, fontSize = 14.sp, color = muted)
+                        }
+                    }
+                },
+                leadingIcon = { if (active) Icon(Icons.Filled.Check, tr("В работе")) else Spacer(Modifier.size(24.dp)) },
+                onClick = { onDismiss(); if (active) vm.openSettings(stations = true) else vm.switchStation(st.id) },
             )
         }
+        HorizontalDivider()
+        DropdownMenuItem(
+            text = { Text(if (many) tr("Настроить станции…") else tr("Настроить станцию…"), fontSize = 17.sp) },
+            leadingIcon = { Icon(Icons.Filled.Settings, null) },
+            onClick = { onDismiss(); vm.openSettings(stations = true) },
+        )
+        // A second callsign, a club station or a listener's (SWL) number: added here, filled in the settings.
+        DropdownMenuItem(
+            text = { Text(tr("Добавить станцию (позывной, клубная, SWL)…"), fontSize = 17.sp) },
+            leadingIcon = { Icon(Icons.Filled.Add, null) },
+            onClick = { onDismiss(); vm.addStation(); vm.openSettings(stations = true) },
+        )
     }
 }
 
@@ -650,7 +667,6 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
                 shape,
             )
             .border(if (highlighted) 2.dp else 1.dp, if (highlighted) MaterialTheme.colorScheme.primary else x.line, shape)
-            .hamlogStripe(qso.onHamlog(), x.hamlog, inset = 5.dp)
             .combinedClickable(
                 onClick = {
                     // ⌘-click (macOS) or Ctrl-click picks records, like a long press.

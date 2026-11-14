@@ -197,12 +197,12 @@ fun LogScreen(
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         // Кластер, карта и статистика — on the bottom bar; here the rest of the log's views.
                         DropdownMenuItem(
-                            text = { Text(tr("Дипломы"), fontSize = 18.sp) },
+                            text = { MenuText(tr("Дипломы"), KeyMap.label(KeyAction.AWARDS, false), vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.EmojiEvents, null) },
                             onClick = { menu = false; vm.openAwards() },
                         )
                         DropdownMenuItem(
-                            text = { Text(tr("Прохождение"), fontSize = 18.sp) },
+                            text = { MenuText(tr("Прохождение"), KeyMap.label(KeyAction.PROPAGATION, false), vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.Filled.Public, null) },
                             onClick = { menu = false; vm.openPropagation() },
                         )
@@ -230,7 +230,7 @@ fun LogScreen(
                         }
                         HorizontalDivider()
                         DropdownMenuItem(
-                            text = { Text(tr("Справка и калькуляторы"), fontSize = 18.sp) },
+                            text = { MenuText(tr("Справка и калькуляторы"), KeyMap.label(KeyAction.REFERENCE, false), vm.hardKeyboard) },
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
                             onClick = { menu = false; vm.openReference() },
                         )
@@ -540,7 +540,9 @@ private fun StationLine(vm: AppViewModel, color: androidx.compose.ui.graphics.Co
     var open by remember { mutableStateOf(false) }
     Box {
         Box(Modifier.clickable(onClickLabel = if (many) tr("Выбрать станцию") else tr("Моя станция")) { open = true }) {
-            OneLineText((if (who.isNotBlank()) "$who ▾ · " else "") + count, maxSize = 16.sp, minSize = 11.sp, color = color)
+            // SWL said next to the number: what is logged now is a listener's report.
+            val swl = if (ru.r3xed.qsolog.data.Swl.isSwl(vm.settings.station)) " SWL" else ""
+            OneLineText((if (who.isNotBlank()) "$who$swl ▾ · " else "") + count, maxSize = 16.sp, minSize = 11.sp, color = color)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             val muted = LocalExtra.current.muted
@@ -549,7 +551,7 @@ private fun StationLine(vm: AppViewModel, color: androidx.compose.ui.graphics.Co
                 DropdownMenuItem(
                     text = {
                         Column {
-                            Text(st.call.ifBlank { "—" }, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(st.call.ifBlank { "—" } + if (ru.r3xed.qsolog.data.Swl.isSwl(st.station)) " · SWL" else "", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             if (active) {
                                 // The station in work: all its settings, one per line.
                                 ru.r3xed.qsolog.data.MyStations.details(st, tr("по геолокации")).forEach { (k, v) ->
@@ -570,6 +572,12 @@ private fun StationLine(vm: AppViewModel, color: androidx.compose.ui.graphics.Co
                 text = { Text(if (many) tr("Настроить станции…") else tr("Настроить станцию…"), fontSize = 17.sp) },
                 leadingIcon = { Icon(Icons.Filled.Settings, null) },
                 onClick = { open = false; vm.openSettings(stations = true) },
+            )
+            // A second callsign, a club station or a listener's (SWL) number: added here, filled in the settings.
+            DropdownMenuItem(
+                text = { Text(tr("Добавить станцию (позывной, клубная, SWL)…"), fontSize = 17.sp) },
+                leadingIcon = { Icon(Icons.Filled.Add, null) },
+                onClick = { open = false; vm.addStation(); vm.openSettings(stations = true) },
             )
         }
     }
@@ -766,7 +774,6 @@ private fun QsoRow(
                 shape,
             )
             .border(if (selected || cursor) 2.dp else 1.dp, if (selected || cursor) MaterialTheme.colorScheme.primary else x.line, shape)
-            .hamlogStripe(qso.onHamlog(), x.hamlog, inset = 5.dp)
             .combinedClickable(
                 onClick = onClick,
                 onLongClickLabel = tr("Выбрать запись"),

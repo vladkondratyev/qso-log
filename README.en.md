@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.9.5 | [QSO-LOG-2.9.5.apk](../../releases/tag/v2.9.5) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.5 | [QSO-LOG-2.9.5-macos-arm64.dmg](../../releases/tag/desktop-v2.9.5) |
-| macOS 11 or newer, Intel | 2.9.5 | [QSO-LOG-2.9.5-macos-x64.dmg](../../releases/tag/desktop-v2.9.5) |
-| Windows 10 and 11, 64-bit | 2.9.5 | [QSO-LOG-2.9.5-windows-x64.zip](../../releases/tag/desktop-v2.9.5) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.5 | [QSO-LOG-2.9.5-linux-amd64.deb](../../releases/tag/desktop-v2.9.5) |
+| Android 8.0 or newer | 2.9.6 | [QSO-LOG-2.9.6.apk](../../releases/tag/v2.9.6) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.6 | [QSO-LOG-2.9.6-macos-arm64.dmg](../../releases/tag/desktop-v2.9.6) |
+| macOS 11 or newer, Intel | 2.9.6 | [QSO-LOG-2.9.6-macos-x64.dmg](../../releases/tag/desktop-v2.9.6) |
+| Windows 10 and 11, 64-bit | 2.9.6 | [QSO-LOG-2.9.6-windows-x64.zip](../../releases/tag/desktop-v2.9.6) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.6 | [QSO-LOG-2.9.6-linux-amd64.deb](../../releases/tag/desktop-v2.9.6) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
@@ -93,6 +93,8 @@ come from the previous QSO, so usually only the callsign and RST are left.
 
 What helps while typing:
 
+- The date and time can be typed as bare digits (since 2.9.6): `1234` → 12:34, `931` → 09:31, `1411` → 14.11 of this
+  year, `141126` → 14.11.2026 — the dots and the colon come by themselves. ↑ and ↓ in the field step a minute or a day.
 - From the second letter, callsigns from your log appear under the field. Pick one instead of typing it all.
 - From the fourth letter, the app looks the station up on QRZ.ru (and QRZ.com) and fills in name, city and locator.
 - A yellow box shows how many times you have worked this callsign and when last. If you worked it on several bands,
@@ -478,6 +480,34 @@ Keys by screen. On macOS use ⌘ instead of Ctrl.
 | Ctrl+Shift+E | export the log to ADIF |
 | F1 (on Android also Ctrl+/) | list of all keys |
 
+**Sections and tools** (since 2.9.6; not from an open card — save or close it first)
+
+| Key | What it does |
+|---|---|
+| Ctrl+Shift+C | DX cluster |
+| Ctrl+Shift+P | propagation |
+| Ctrl+Shift+A | awards |
+| Ctrl+Shift+R | reference and calculators |
+| Ctrl+U | online logbooks: LoTW, eQSL, Club Log, QRZ.com, HAMLOG |
+| Ctrl+Shift+L | LoTW confirmations |
+| Ctrl+O | import the log from ADIF |
+| Ctrl+Shift+F | select part of the log |
+| Ctrl+B | back up the log |
+| Ctrl+Shift+T | the log as a table or a list (computer) |
+| Ctrl+Shift+N | next own station (round) |
+| Ctrl+K on Windows and Linux, ⌘K on a Mac | all commands by name, with their keys on the right (computer; on a phone Ctrl+K is CONTEST MODE) |
+
+**DX cluster** (since 2.9.6)
+
+| Key | What it does |
+|---|---|
+| ↑ ↓ | through the spots (the chosen one outlined) |
+| Enter | tune the radio and open the card |
+| Shift+Enter | the card without tuning the radio |
+| S | own spot |
+| 1…9 · 0 | band (the n-th of those with spots) · all |
+| F5 in Propagation | refresh |
+
 **Log**
 
 | Key | Action |
@@ -592,6 +622,11 @@ the station's QSOs are logged as reports. In the card, "Heard (callsign)" is the
 "SWL 59 · with R0DEMO", ADIF gets `SWL=Y` and `APP_QSOLOG_SWL_WITH`. Reports do not go to LoTW, eQSL, Club Log, QRZ.com
 and HAMLOG; QSL labels print as SWL reports. Keep two stations, your own and the listener's, and switch under the logo.
 
+To add a listener number next to your callsign: click your callsign under the logo (on a computer also in the status bar,
+the table view included) → "Add a station (callsign, club, SWL)…" → switch on "Listener (SWL)" and enter the number.
+Switch there or with Ctrl+Shift+N (⌘⇧N), round. While the listener's station is in use, **SWL** shows next to the
+callsign (since 2.9.6).
+
 ## Log
 
 QSOs are grouped by day, newest first. A row shows callsign, time, frequency, mode, RST, distance, name and city.
@@ -602,7 +637,7 @@ A microphone icon means the QSO has a voice note.
   also filled in by themselves, every two minutes, once the internet is back.
 - **Deleting several QSOs** (since 2.9.5): select them with a long press (on a computer ⌘/Ctrl-click, in the table also
   Shift-click for a range) and press the bin or Delete; the message after it offers to undo.
-- QSOs uploaded to HAMLOG have a purple stripe on the left (since 2.9.5; the colour is in "Custom theme").
+- QSOs uploaded to HAMLOG have a purple dot next to the ADIF and CSV export dots (since 2.9.6, a stripe before; the colour is in "Custom theme"). On a computer, hover over the dots to see where and when a QSO went.
 - **Search** looks in callsign, name, city, locator and comment. If the callsign is not in your log, the app looks it up
   on QRZ.ru and opens a new card with what it found.
 - If the search narrows to one station you know, the bands you worked it on are shown under the search, with the last
@@ -948,7 +983,8 @@ import and the reference are also in the File menu.
 Since 2.9.3: "View → Log as a table". The whole log as a compact table over the window: pick the columns, click a header
 to sort, search, filter and group by band, mode, date, station, country or region above it. A new QSO opens as a compact
 card over the table. The Cabrillo report writes the full header (CATEGORY-POWER, -ASSISTED, -TRANSMITTER, GRID-LOCATOR,
-CLUB, OPERATORS, NAME, ADDRESS, EMAIL).
+CLUB, OPERATORS, NAME, ADDRESS, EMAIL). Since 2.9.6 drag a header's edge to change a column's width, double-click the edge to fit
+the contents; the export dots (ADIF, CSV, Cabrillo, HAMLOG) sit next to the number.
 
 ## Installation
 
@@ -956,26 +992,26 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-0.40.2.apk` from the [release page](../../releases/tag/v0.40.2) and open it on the phone; allow
+Download `QSO-LOG-2.9.6.apk` from the [release page](../../releases/tag/v2.9.6) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.9.5-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.9.5), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.9.6-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.9.6), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.9.5-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.5), unpack the
+Download `QSO-LOG-2.9.6-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.6), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.9.5-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.5) and install it:
+Download `QSO-LOG-2.9.6-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.6) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.9.5-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.9.6-linux-amd64.deb
 ```
 
 ## Where the data is kept
