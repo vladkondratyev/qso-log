@@ -36,6 +36,12 @@ internal val EN_2_9_6: Map<String, String> = mapOf(
     "В работе: %s" to "In use: %s",
     "CAT включён: %s" to "CAT on: %s",
     "Ширина по содержимому" to "Fit to contents",
+    // The photo, full screen (phone) or zoomable (computer)
+    "Открыть фото на весь экран" to "Open the photo full screen",
+    "Открыть фото крупно" to "Open the photo large",
+    "Закрыть (Esc)" to "Close (Esc)",
+    "Колесо мыши или + и − — масштаб, перетаскивание — сдвиг, двойной щелчок — крупнее или обратно" to
+        "Mouse wheel or + and − to zoom, drag to move, double-click to zoom in or back",
     "Точка «выгружено в HAMLOG»" to "Dot \"uploaded to HAMLOG\"",
     "Подробности записаны в файл %s — пришлите его, пожалуйста, вместе с описанием, что вы делали." to
         "The details are in the file %s — please send it with a description of what you were doing.",

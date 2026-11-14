@@ -1,10 +1,22 @@
 package ru.r3xed.qsolog.ui
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -179,14 +191,79 @@ fun CallPhoto(url: String, modifier: Modifier = Modifier) {
     var big by remember { mutableStateOf(false) }
     Image(
         b, tr("Фото корреспондента"),
-        modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = tr("Увеличить фото")) { big = true },
+        modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = tr("Открыть фото крупно")) { big = true },
         contentScale = ContentScale.Crop,
     )
-    if (big) Dialog(onDismissRequest = { big = false }) {
-        Image(
-            b, tr("Фото корреспондента"),
-            modifier = Modifier.widthIn(max = 480.dp).clip(RoundedCornerShape(16.dp)).clickable { big = false },
-            contentScale = ContentScale.Fit,
-        )
+    if (big) PhotoViewer(b) { big = false }
+}
+
+/**
+ * The photo large over the window: the mouse wheel zooms towards the pointer, dragging moves it, a double click zooms
+ * in (or back), Esc or ✕ closes it.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+internal fun PhotoViewer(img: androidx.compose.ui.graphics.ImageBitmap, onClose: () -> Unit) {
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var boxSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    fun zoomAt(factor: Float, at: androidx.compose.ui.geometry.Offset) {
+        val s = (scale * factor).coerceIn(1f, 10f)
+        if (s == 1f) { scale = 1f; offset = androidx.compose.ui.geometry.Offset.Zero; return }
+        // The point under the pointer stays where it is.
+        val c = androidx.compose.ui.geometry.Offset(boxSize.width / 2f, boxSize.height / 2f)
+        offset = (offset - (at - c)) * (s / scale) + (at - c)
+        scale = s
+    }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+        Box(
+            Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.94f).clip(RoundedCornerShape(16.dp))
+                .background(androidx.compose.ui.graphics.Color.Black)
+                .onSizeChanged { boxSize = it }
+                .focusRequester(focus).focusable()
+                .onPreviewKeyEvent { e ->
+                    if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    val c = androidx.compose.ui.geometry.Offset(boxSize.width / 2f, boxSize.height / 2f)
+                    when (e.key) {
+                        androidx.compose.ui.input.key.Key.Escape -> { onClose(); true }
+                        androidx.compose.ui.input.key.Key.Plus, androidx.compose.ui.input.key.Key.Equals, androidx.compose.ui.input.key.Key.NumPadAdd -> { zoomAt(1.25f, c); true }
+                        androidx.compose.ui.input.key.Key.Minus, androidx.compose.ui.input.key.Key.NumPadSubtract -> { zoomAt(0.8f, c); true }
+                        androidx.compose.ui.input.key.Key.Zero, androidx.compose.ui.input.key.Key.NumPad0 -> { scale = 1f; offset = androidx.compose.ui.geometry.Offset.Zero; true }
+                        else -> false
+                    }
+                }
+                .onPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Scroll) { ev ->
+                    val ch = ev.changes.firstOrNull() ?: return@onPointerEvent
+                    zoomAt(if (ch.scrollDelta.y < 0) 1.15f else 1 / 1.15f, ch.position)
+                    ev.changes.forEach { it.consume() }
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures { change, drag -> change.consume(); if (scale > 1f) offset += drag }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(onDoubleTap = { p -> if (scale > 1f) { scale = 1f; offset = androidx.compose.ui.geometry.Offset.Zero } else zoomAt(2.5f, p) })
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                img, tr("Фото корреспондента"),
+                modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y },
+                contentScale = ContentScale.Fit,
+            )
+            IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(48.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), androidx.compose.foundation.shape.CircleShape)) {
+                Icon(Icons.Filled.Close, tr("Закрыть (Esc)"), tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(28.dp))
+            }
+            Text(
+                tr("Колесо мыши или + и − — масштаб, перетаскивание — сдвиг, двойной щелчок — крупнее или обратно"),
+                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f), fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(10.dp)
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
     }
 }

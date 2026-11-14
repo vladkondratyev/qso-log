@@ -2,6 +2,10 @@ package ru.r3xed.qsolog.ui
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -211,39 +215,76 @@ private fun PickMap(point: LatLon?, start: LatLon?, flyTo: Pair<LatLon, Int>?, o
 /** The station's photo from QRZ.ru / QRZ.com while the card is filled: loaded from the web, kept nowhere. */
 @Composable
 fun CallPhoto(url: String, modifier: Modifier = Modifier) {
-    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, url) {
+    // The file as it came, for the full-screen view; the card's thumbnail is decoded small.
+    val bytes by produceState<ByteArray?>(null, url) {
         value = withContext(Dispatchers.IO) {
             try {
                 val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
                 c.connectTimeout = 8_000; c.readTimeout = 12_000
                 c.setRequestProperty("User-Agent", "QSO-LOG")
-                try {
-                    val bytes = c.inputStream.use { it.readBytes() }
-                    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
-                    var sample = 1
-                    while (o.outWidth / (sample * 2) >= 480 && o.outHeight / (sample * 2) >= 480) sample *= 2
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
-                } finally {
-                    c.disconnect()
-                }
+                try { c.inputStream.use { it.readBytes() } } finally { c.disconnect() }
             } catch (e: Exception) {
                 null
             }
         }
     }
-    val b = bmp ?: return
+    val data = bytes ?: return
+    val thumb = remember(data) { decodePhoto(data, 480) } ?: return
     var big by remember { mutableStateOf(false) }
     Image(
-        b, tr("Фото корреспондента"),
-        modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = tr("Увеличить фото")) { big = true },
+        thumb, tr("Фото корреспондента"),
+        modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = tr("Открыть фото на весь экран")) { big = true },
         contentScale = ContentScale.Crop,
     )
-    if (big) Dialog(onDismissRequest = { big = false }) {
-        Image(
-            b, tr("Фото корреспондента"),
-            modifier = Modifier.widthIn(max = 480.dp).clip(RoundedCornerShape(16.dp)).clickable { big = false },
-            contentScale = ContentScale.Fit,
-        )
+    if (big) PhotoViewer(data) { big = false }
+}
+
+/** [bytes] decoded no smaller than [min] px on the short side (halving while it stays above it). */
+private fun decodePhoto(bytes: ByteArray, min: Int): androidx.compose.ui.graphics.ImageBitmap? {
+    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
+    var sample = 1
+    while (o.outWidth / (sample * 2) >= min && o.outHeight / (sample * 2) >= min) sample *= 2
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
+}
+
+/**
+ * The photo over the whole screen: two fingers zoom and move it, a double tap zooms in (or back), a tap or Back
+ * closes it.
+ */
+@Composable
+private fun PhotoViewer(bytes: ByteArray, onClose: () -> Unit) {
+    val img = remember(bytes) { decodePhoto(bytes, 1600) } ?: return
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(
+            Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        val s = (scale * zoom).coerceIn(1f, 8f)
+                        scale = s
+                        offset = if (s == 1f) androidx.compose.ui.geometry.Offset.Zero else offset + pan
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = { if (scale > 1f) { scale = 1f; offset = androidx.compose.ui.geometry.Offset.Zero } else scale = 2.5f },
+                        onTap = { onClose() },
+                    )
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                img, tr("Фото корреспондента"),
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y
+                },
+                contentScale = ContentScale.Fit,
+            )
+            IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 8.dp).size(56.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), androidx.compose.foundation.shape.CircleShape)) {
+                Icon(Icons.Filled.Close, tr("Закрыть"), tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(30.dp))
+            }
+        }
     }
 }
