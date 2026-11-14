@@ -98,7 +98,7 @@ private fun bandOrder(b: String) = BANDS.indexOf(b.lowercase()).let { if (it < 0
  * by it. The number (No.) is the contact's place in the log, the oldest first.
  */
 enum class TableColumn(private val ru: String, val width: Int, val group: Boolean = false) {
-    NO("№", 76), // no-tr
+    NO("№", 64), // no-tr
     MY_CALL("Мой позывной", 110, group = true), // no-tr
     DATE("Дата", 100, group = true), // no-tr
     TIME("Время", 60), // no-tr
@@ -335,7 +335,7 @@ private fun ColumnEdge(state: AppState, c: TableColumn, rows: List<Pair<Qso, Int
             .combinedClickable(onClickLabel = tr("Ширина по содержимому"), onDoubleClick = {
                 val texts = rows.asSequence().take(2000).map { c.text(it.first, it.second) } + c.title
                 val px = texts.maxOf { measure.measure(it, style).size.width }
-                val dots = if (c == TableColumn.NO) 36 else 0
+                val dots = if (c == TableColumn.NO) 14 else 0
                 state.changeTableWidth(c, with(density) { px.toDp().value }.toInt() + 14 + dots)
             }) {},
         contentAlignment = Alignment.Center,
@@ -371,10 +371,10 @@ private fun TableRow(state: AppState, q: Qso, no: Int, cols: List<TableColumn>, 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         cols.forEach { c ->
-            // The number with the export dots (ADIF, CSV, Cabrillo, HAMLOG) after it, as in the list log.
+            // The number with the HAMLOG dot after it (where the stripe of 2.9.5 was).
             if (c == TableColumn.NO) Row(cellWidth(state.tableWidth(c), wide).padding(horizontal = 4.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(c.text(q, no), color = x.muted, maxLines = 1, fontSize = 14.sp)
-                ExportDots(q.adif, size = 6.dp, modifier = Modifier.padding(start = 5.dp))
+                ExportDots(q.adif, size = 7.dp, modifier = Modifier.padding(start = 6.dp), hamlogOnly = true)
             } else Text(
                 c.text(q, no), color = if (c == TableColumn.NO) x.muted else ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 fontSize = 14.sp, fontFamily = if (c == TableColumn.CALL || c == TableColumn.FREQ || c == TableColumn.LOCATOR) Mono else null,

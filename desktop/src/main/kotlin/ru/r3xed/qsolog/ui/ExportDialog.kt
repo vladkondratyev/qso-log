@@ -138,8 +138,9 @@ fun ConfirmedMark(adif: Map<String, String>) {
 /** The dots of the formats a contact was exported to, for the log row; nothing when it has not been exported. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun ExportDots(adif: Map<String, String>, size: Dp = 8.dp, modifier: Modifier = Modifier.padding(end = 8.dp)) {
-    val done = ExportFormat.entries.filter { it.isExported(adif) }
+fun ExportDots(adif: Map<String, String>, size: Dp = 8.dp, modifier: Modifier = Modifier.padding(end = 8.dp), hamlogOnly: Boolean = false) {
+    // The table shows only the HAMLOG dot (where its stripe was); the list shows the file exports too.
+    val done = if (hamlogOnly) emptyList() else ExportFormat.entries.filter { it.isExported(adif) }
     val hamlog = ru.r3xed.qsolog.data.OnlineLog.HAMLOG.sentAt(adif)
     if (done.isEmpty() && hamlog == null) return
     // Hovered: what each dot is and when (ADIF 13.11.2026 10:15 UTC · HAMLOG …).
