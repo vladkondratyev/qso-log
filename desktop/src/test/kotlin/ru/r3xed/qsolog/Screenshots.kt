@@ -478,7 +478,7 @@ internal fun seed(dir: File) {
 }
 
 /** Made-up stations for the search history screenshots (fictional callsigns, places approximate). */
-private fun seedHistory(dir: File) {
+internal fun seedHistory(dir: File) {
     val h = ru.r3xed.qsolog.data.SearchHistory(File(dir, "search_history.json"))
     val now = System.currentTimeMillis()
     val hour = 3_600_000L

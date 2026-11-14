@@ -348,6 +348,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.HistoryEntryView(vm: 
     val approx = e.adif[HamQth.POSITION_FIELD] != null
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = vm::closeHistory, modifier = Modifier.size(56.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Назад"), Modifier.size(30.dp)) }
+        // The photo kept on this device when the station was looked up (a click opens it large).
+        val photo = remember(e.call) { vm.historyPhoto(e.call) }
+        if (photo.isNotBlank()) CallPhoto(photo, Modifier.padding(end = 10.dp).size(width = 44.dp, height = 56.dp))
         Text(e.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 26.sp, modifier = Modifier.weight(1f))
         IconButton(onClick = { vm.toggleFavorite(listOf(e.call)) }) {
             Icon(if (e.favorite) Icons.Filled.Star else Icons.Filled.StarBorder, if (e.favorite) tr("Убрать из избранного") else tr("В избранное"), tint = if (e.favorite) STAR else x.muted)

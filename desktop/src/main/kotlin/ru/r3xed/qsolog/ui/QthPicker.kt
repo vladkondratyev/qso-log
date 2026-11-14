@@ -167,21 +167,16 @@ fun QthPickerDialog(
     }
 }
 
-/** The station's photo from QRZ.ru / QRZ.com while the card is filled: loaded from the web, kept nowhere. */
+/** The station's photo: from QRZ.ru / QRZ.com while the card is filled, or kept on this device ("file:…"). */
 @Composable
 fun CallPhoto(url: String, modifier: Modifier = Modifier) {
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, url) {
         value = withContext(Dispatchers.IO) {
             try {
-                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                c.connectTimeout = 8_000; c.readTimeout = 12_000
-                c.setRequestProperty("User-Agent", "QSO-LOG")
-                try {
-                    val bytes = c.inputStream.use { it.readBytes() }
-                    org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
-                } finally {
-                    c.disconnect()
-                }
+                // "file:…" — the photo this device kept with a contact or a history entry.
+                val bytes = if (url.startsWith("file:")) java.io.File(java.net.URI(url)).readBytes()
+                else ru.r3xed.qsolog.data.QsoPhotos.download(url)
+                bytes?.let { org.jetbrains.skia.Image.makeFromEncoded(it).toComposeImageBitmap() }
             } catch (e: Exception) {
                 null
             }

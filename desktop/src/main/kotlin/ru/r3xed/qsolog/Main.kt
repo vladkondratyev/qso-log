@@ -219,6 +219,11 @@ fun main() {
                 // DX-кластер: arrows through the spots, Enter works one, S — one's own spot, digits — the band.
                 else if (e.type == KeyEventType.KeyDown && state.pane == Pane.DxCluster && !mod && !e.isAltPressed && state.dxKey(dxKeyName(e))) true
                 else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Propagation && !mod && e.key == Key.F5) { state.refreshPropagation(force = true); true }
+                // The table with a saved contact's card over it and no field in use: ↑ ↓ open the row above or below.
+                else if (e.type == KeyEventType.KeyDown && state.tableMode && state.pane == Pane.Edit && !state.form.isNew && !state.cardHasFocus &&
+                    !mod && !e.isAltPressed && !e.isShiftPressed && (e.key == Key.DirectionUp || e.key == Key.DirectionDown)) {
+                    state.stepTableCard(if (e.key == Key.DirectionDown) 1 else -1); true
+                }
                 else if (e.type == KeyEventType.KeyDown && state.pane == Pane.Empty && !state.searchFocused && !state.showKeys && state.logDeleteAsk == null && !state.showTransfer && logKey(state, e, mod, c)) true
                 // Alt+W or Ctrl+Esc (⌘Esc) wipes a new card, as in classic loggers: a clean card, the cursor in the callsign.
                 else if (inCard && hit(KeyAction.CLEAR_CARD)) { if (state.form.isNew) state.clearCard(); true }
@@ -484,7 +489,7 @@ fun App(state: AppState, files: Exports) {
             if (table) Box(Modifier.weight(1f).fillMaxWidth()) {
                 ru.r3xed.qsolog.ui.LogTable(state, NEW_SHORTCUT, files.exportSelected, Modifier.fillMaxSize())
                 when (state.pane) {
-                    Pane.Edit -> ru.r3xed.qsolog.ui.TableCardOverlay { key(state.editSession) { EditPane(state) } }
+                    Pane.Edit -> ru.r3xed.qsolog.ui.TableCardOverlay({ state.cardHasFocus = it }) { key(state.editSession) { EditPane(state) } }
                     Pane.Contest -> ru.r3xed.qsolog.ui.TableCardOverlay { key(state.editSession) { ContestPane(state) } }
                     else -> {}
                 }

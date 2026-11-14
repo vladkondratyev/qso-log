@@ -212,17 +212,16 @@ private fun PickMap(point: LatLon?, start: LatLon?, flyTo: Pair<LatLon, Int>?, o
     })
 }
 
-/** The station's photo from QRZ.ru / QRZ.com while the card is filled: loaded from the web, kept nowhere. */
+/** The station's photo: from QRZ.ru / QRZ.com while the card is filled, or kept on this device ("file:…"). */
 @Composable
 fun CallPhoto(url: String, modifier: Modifier = Modifier) {
     // The file as it came, for the full-screen view; the card's thumbnail is decoded small.
     val bytes by produceState<ByteArray?>(null, url) {
         value = withContext(Dispatchers.IO) {
             try {
-                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                c.connectTimeout = 8_000; c.readTimeout = 12_000
-                c.setRequestProperty("User-Agent", "QSO-LOG")
-                try { c.inputStream.use { it.readBytes() } } finally { c.disconnect() }
+                // "file:…" — the photo this device kept with a contact or a history entry.
+                if (url.startsWith("file:")) java.io.File(java.net.URI(url)).readBytes()
+                else ru.r3xed.qsolog.data.QsoPhotos.download(url)
             } catch (e: Exception) {
                 null
             }

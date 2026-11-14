@@ -193,6 +193,42 @@ class AppState {
     }
     val voice = VoiceNotes()
 
+    /**
+     * Station photos kept on this device only: a saved contact's by its UID, a search history entry's by its callsign
+     * (folder "history"). Plain files in the app's folder — not in the log, ADIF, backups or any sync.
+     */
+    private val photos = ru.r3xed.qsolog.data.QsoPhotos(java.io.File(AppDirs.data, "photos"))
+    private val historyPhotos = ru.r3xed.qsolog.data.QsoPhotos(java.io.File(java.io.File(AppDirs.data, "photos"), "history"))
+
+    /** The photo just shown in the card, if it is [call]'s. */
+    private fun lookupPhoto(call: String): String =
+        (lookup as? Lookup.Found)?.info?.takeIf { it.call.equals(call, ignoreCase = true) }?.photo.orEmpty()
+
+    /** Downloads [url] and keeps it as the photo of the saved contact [id]. */
+    private fun keepPhoto(id: Long, url: String) {
+        if (url.isBlank()) return
+        scope.launch(Dispatchers.IO) {
+            val uid = db.get(id)?.uid.orEmpty()
+            if (uid.isBlank()) return@launch
+            ru.r3xed.qsolog.data.QsoPhotos.download(url)?.let { photos.save(uid, it) }
+        }
+    }
+
+    /** "file:…" of the photo this device keeps for the saved contact [id], or "". */
+    fun savedPhoto(id: Long): String {
+        if (id == 0L) return ""
+        val uid = db.get(id)?.uid.orEmpty()
+        return photos.file(uid)?.toURI()?.toString().orEmpty()
+    }
+
+    /** "file:…" of the photo kept for [call] in the search history, or "". */
+    fun historyPhoto(call: String): String = historyPhotos.file(call.uppercase())?.toURI()?.toString().orEmpty()
+
+    private fun keepHistoryPhoto(call: String, url: String) {
+        if (url.isBlank() || call.isBlank()) return
+        scope.launch(Dispatchers.IO) { ru.r3xed.qsolog.data.QsoPhotos.download(url)?.let { historyPhotos.save(call.uppercase(), it) } }
+    }
+
     var settings by mutableStateOf(prefs.load()); private set
 
     // ---------- my stations ----------
@@ -1247,6 +1283,7 @@ class AppState {
 
     fun edit(qso: Qso, from: Pane = Pane.Empty) {
         openedByKeys = false
+        cardHasFocus = false // the new card has no field in use until one takes the cursor
         catWrote = null // a saved contact keeps its frequency and mode
         lookupJob?.cancel() // a lookup for another card must not land in this one
         if (pane == Pane.Edit && form.isNew) closeEditor()
@@ -1707,6 +1744,7 @@ class AppState {
         )
         if (f.removedAudio.isNotBlank() && f.removedAudio != f.audio) voice.delete(f.removedAudio)
         // QRZ.ru did not answer (no internet, error, still waiting): keep a mark so the log can retry later.
+        val savedPhotoUrl = lookupPhoto(f.call)
         val l = lookup
         val lookupMissed = hasQrzAccount &&
             (!f.infoFromQrz && (l is Lookup.Failed || l is Lookup.Loading) || (l is Lookup.Approx && l.qrzProblem != null) || (l is Lookup.FromHistory && l.problem != null))
@@ -1718,6 +1756,7 @@ class AppState {
         lookupJob?.cancel()
         saveJob = scope.launch {
             lastSavedId = withContext(Dispatchers.IO) { db.save(finalQso) }
+            lastSavedId?.let { keepPhoto(it, savedPhotoUrl) }
             reload()
             val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
             if (f.isNew) { newSavedTick++; queueHamlog(listOfNotNull(lastSavedId?.takeIf { !ru.r3xed.qsolog.data.Swl.isSwl(finalQso) })) }
@@ -1753,6 +1792,20 @@ class AppState {
     var searchFocused by mutableStateOf(false)
 
     /** ↑ ↓ PgUp PgDn: [delta] rows; [to] ±1 jumps to the first (Home) or last (End). */
+    /** A field of the card over the table has the cursor (then ↑ ↓ are the field's). */
+    var cardHasFocus = false
+
+    /**
+     * ↑ ↓ with a saved contact's card open over the table and no field in it: the card of the row above or below.
+     * Changes are not dropped: the card asks to save or close first.
+     */
+    fun stepTableCard(delta: Int) {
+        if (hasUnsavedChanges) { say(tr("Сначала сохраните изменения (F12) или закройте карточку (Esc)")); return }
+        if (logCursor != form.id) logCursor = form.id
+        moveLogCursor(delta)
+        if (logCursor != form.id) cursorQso()?.let { edit(it) }
+    }
+
     fun moveLogCursor(delta: Int, to: Int = 0) {
         val o = logOrder
         if (o.isEmpty()) return
@@ -2028,6 +2081,7 @@ class AppState {
         )
         if (e.isEmpty) return
         searchHistory.put(e)
+        keepHistoryPhoto(f.call, lookupPhoto(f.call))
         historyEntries = searchHistory.all()
     }
 

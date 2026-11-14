@@ -36,6 +36,7 @@ internal val EN_2_9_6: Map<String, String> = mapOf(
     "В работе: %s" to "In use: %s",
     "CAT включён: %s" to "CAT on: %s",
     "Ширина по содержимому" to "Fit to contents",
+    "Сначала сохраните изменения (F12) или закройте карточку (Esc)" to "Save the changes first (F12) or close the card (Esc)",
     // The photo, full screen (phone) or zoomable (computer)
     "Открыть фото на весь экран" to "Open the photo full screen",
     "Открыть фото крупно" to "Open the photo large",

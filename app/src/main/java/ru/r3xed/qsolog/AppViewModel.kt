@@ -208,6 +208,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     val voice = VoiceNotes(app)
 
+    /**
+     * Station photos kept on this device only: a saved contact's by its UID, a search history entry's by its callsign
+     * (folder "history"). Plain files in the app's folder — not in the log, ADIF, backups or any sync.
+     */
+    private val photos = ru.r3xed.qsolog.data.QsoPhotos(java.io.File(app.filesDir, "photos"))
+    private val historyPhotos = ru.r3xed.qsolog.data.QsoPhotos(java.io.File(java.io.File(app.filesDir, "photos"), "history"))
+
+    /** The photo just shown in the card, if it is [call]'s. */
+    private fun lookupPhoto(call: String): String =
+        (lookup as? Lookup.Found)?.info?.takeIf { it.call.equals(call, ignoreCase = true) }?.photo.orEmpty()
+
+    /** Downloads [url] and keeps it as the photo of the saved contact [id]. */
+    private fun keepPhoto(id: Long, url: String) {
+        if (url.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val uid = db.get(id)?.uid.orEmpty()
+            if (uid.isBlank()) return@launch
+            ru.r3xed.qsolog.data.QsoPhotos.download(url)?.let { photos.save(uid, it) }
+        }
+    }
+
+    /** "file:…" of the photo this device keeps for the saved contact [id], or "". */
+    fun savedPhoto(id: Long): String {
+        if (id == 0L) return ""
+        val uid = db.get(id)?.uid.orEmpty()
+        return photos.file(uid)?.toURI()?.toString().orEmpty()
+    }
+
+    /** "file:…" of the photo kept for [call] in the search history, or "". */
+    fun historyPhoto(call: String): String = historyPhotos.file(call.uppercase())?.toURI()?.toString().orEmpty()
+
+    private fun keepHistoryPhoto(call: String, url: String) {
+        if (url.isBlank() || call.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) { ru.r3xed.qsolog.data.QsoPhotos.download(url)?.let { historyPhotos.save(call.uppercase(), it) } }
+    }
+
     var settings by mutableStateOf(prefs.loadPublic()); private set
 
     // ---------- 2.9.1: log filters, backups, activation, QSL, awards, cluster alerts, solar data ----------
@@ -1937,6 +1973,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
         if (f.removedAudio.isNotBlank() && f.removedAudio != f.audio) voice.delete(f.removedAudio)
         // QRZ.ru did not answer (no internet, error, still waiting): keep a mark so the log can retry later.
+        val savedPhotoUrl = lookupPhoto(f.call)
         val l = lookup
         val lookupMissed = hasQrzAccount &&
             (!f.infoFromQrz && (l is Lookup.Failed || l is Lookup.Loading) || (l is Lookup.Approx && l.qrzProblem != null) || (l is Lookup.FromHistory && l.problem != null))
@@ -1947,6 +1984,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.lastPower = f.power
         saveJob = viewModelScope.launch {
             lastSavedId = withContext(Dispatchers.IO) { db.save(finalQso) }
+            lastSavedId?.let { keepPhoto(it, savedPhotoUrl) }
             reload()
             if (f.isNew) { newSavedTick++; queueHamlog(listOfNotNull(lastSavedId?.takeIf { !ru.r3xed.qsolog.data.Swl.isSwl(finalQso) })) }
             val note = if (finalQso.pendingLookup) tr(". Данные QRZ.ru не получены: обновите их кнопкой ⟳ в логе") else ""
@@ -2239,6 +2277,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
         if (e.isEmpty) return
         searchHistory.put(e)
+        keepHistoryPhoto(f.call, lookupPhoto(f.call))
         historyEntries = searchHistory.all()
     }
 

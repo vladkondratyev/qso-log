@@ -558,8 +558,10 @@ private fun StationCard(vm: AppState) {
         initial = f.qth, start = vm.settings.myPosition, search = vm::searchPlaces,
         onPick = { name, p -> picker = false; vm.setPlace(name, p) }, onDismiss = { picker = false },
     )
-    // The photo from QRZ.ru / QRZ.com, only while the card is open: not saved anywhere.
-    val photo = (lookup as? Lookup.Found)?.info?.takeIf { it.call.equals(f.call, ignoreCase = true) }?.photo.orEmpty()
+    // The photo from QRZ.ru / QRZ.com while the card is filled.
+    // A saved contact: the photo this device kept when it was logged (nowhere else, not synced).
+    val kept = remember(f.id) { vm.savedPhoto(f.id) }
+    val photo = (lookup as? Lookup.Found)?.info?.takeIf { it.call.equals(f.call, ignoreCase = true) }?.photo?.ifBlank { null } ?: kept
 
     val hasInfo = f.name.isNotBlank() || f.qth.isNotBlank() || f.country.isNotBlank() || f.locator.isNotBlank()
     Column(

@@ -259,6 +259,8 @@ fun LogTable(state: AppState, shortcut: String, onExportSelected: () -> Unit, mo
             keys.map { it to by.getValue(it) }
         }
         val order = remember(groups) { groups.flatMap { g -> g.second.map { it.first.id } } }
+        // ↑ ↓ walk the rows in the table's own order (its sort and groups), not the list log's.
+        LaunchedEffect(order) { state.logOrder = order }
         val total = cols.sumOf { state.tableWidth(it) } + 16
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth.value >= total
@@ -287,6 +289,22 @@ fun LogTable(state: AppState, shortcut: String, onExportSelected: () -> Unit, mo
                 }
                 val list = rememberLazyListState()
                 LaunchedEffect(state.newSavedTick) { if (state.newSavedTick > 0) list.scrollToItem(0) }
+                // The cursor's row stays in sight while the arrows move it.
+                LaunchedEffect(state.logCursor) {
+                    val id = state.logCursor ?: return@LaunchedEffect
+                    var i = 0
+                    var at = -1
+                    for ((title, items) in groups) {
+                        if (title != null) i++
+                        val k = items.indexOfFirst { it.first.id == id }
+                        if (k >= 0) { at = i + k; break }
+                        i += items.size
+                    }
+                    if (at < 0) return@LaunchedEffect
+                    val info = list.layoutInfo
+                    val seen = info.visibleItemsInfo.any { it.index == at && it.offset >= 0 && it.offset + it.size <= info.viewportEndOffset }
+                    if (!seen) list.animateScrollToItem((at - 2).coerceAtLeast(0))
+                }
                 LazyColumn(width.weight(1f), state = list) {
                     groups.forEach { (title, items) ->
                         if (title != null) stickyHeader(key = "g$title") {
@@ -348,6 +366,7 @@ private fun ColumnEdge(state: AppState, c: TableColumn, rows: List<Pair<Qso, Int
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 private fun TableRow(state: AppState, q: Qso, no: Int, cols: List<TableColumn>, wide: Boolean, order: List<Long>) {
     val window = androidx.compose.ui.platform.LocalWindowInfo.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val x = LocalExtra.current
     val open = (state.pane == Pane.Edit || state.pane == Pane.Contest) && state.form.id == q.id
     val picked = q.id in state.selected
@@ -362,6 +381,9 @@ private fun TableRow(state: AppState, q: Qso, no: Int, cols: List<TableColumn>, 
         Modifier.fillMaxWidth().background(bg).clickable {
             // ⌘-click (macOS) or Ctrl-click picks a row, Shift-click — the rows from the last picked one.
             val mods = window.keyboardModifiers
+            // The row becomes the cursor's and the search lets the keys go: ↑ ↓ move from here.
+            focusManager.clearFocus()
+            state.logCursor = q.id
             when {
                 mods.isShiftPressed -> state.selectRange(order, q.id)
                 state.selecting || (if (ru.r3xed.qsolog.IS_MAC) mods.isMetaPressed else mods.isCtrlPressed) -> state.toggleSelected(q.id)
@@ -439,10 +461,11 @@ private fun ColumnsDialog(chosen: List<TableColumn>, onChange: (List<TableColumn
  * Esc and the card's own buttons close it, as usual.
  */
 @Composable
-fun TableCardOverlay(content: @Composable () -> Unit) {
+fun TableCardOverlay(onFocus: (Boolean) -> Unit = {}, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
         Surface(
-            Modifier.widthIn(max = 760.dp).fillMaxWidth(0.9f).fillMaxHeight(0.92f),
+            // A field of the card has the cursor: the arrows are the field's, not the table's.
+            Modifier.widthIn(max = 760.dp).fillMaxWidth(0.9f).fillMaxHeight(0.92f).onFocusChanged { onFocus(it.hasFocus) },
             shape = RoundedCornerShape(18.dp), tonalElevation = 6.dp, shadowElevation = 12.dp,
             color = MaterialTheme.colorScheme.background,
         ) { content() }
