@@ -1090,11 +1090,10 @@ class AppState {
         val t = exportTarget ?: return null
         pendingExport = PendingExport(t.format, t.only, onlyNew, mark)
         exportTarget = null
-        val call = settings.myCall.ifBlank { "log" }.replace('/', '-')
-        val n = exportCandidates(t.format, t.only, onlyNew).size
+        val call = settings.myCall
         return t.format to when (t.format) {
-            ExportFormat.CSV -> "qso_${call}_${LocalDate.now()}.csv"
-            else -> if (t.only != null || onlyNew) "${call}_${n}qso_${LocalDate.now()}.adi" else "${call}_${LocalDate.now()}.adi"
+            ExportFormat.CSV -> ExportFormat.fileName(call, "csv")
+            else -> ExportFormat.fileName(call, "adi")
         }
     }
 
@@ -3988,6 +3987,20 @@ class AppState {
         rig?.let(::applyRig)
     }
 
+    /**
+     * The radio's mode for the card. WSJT-X, JTDX or MSHV, while heard, name the digital mode themselves: a radio in plain
+     * USB (many run FT8 so) does not turn their FT8 card into SSB.
+     */
+    private fun radioModeFor(s: RigState): String? {
+        val r = s.radioMode ?: return null
+        if (s !== catRig) return r
+        val d = digiRig ?: return r
+        val heard = (digiStatus as? DigiStatus.Listening)?.heardAt ?: 0
+        val program = d.radioMode?.uppercase()?.takeIf { it in CatModes.DIGITAL && it != "DIGI" && it in MODES }
+        val fresh = System.currentTimeMillis() - maxOf(d.at, heard) < 45_000
+        return if (program != null && fresh && CatModes.toLog(r, program).let { it == "SSB" || it == program }) program else r
+    }
+
     /** The open new card takes the radio's frequency, band, mode and S-meter — the fields not changed by hand. */
     private fun applyRig(s: RigState) {
         if (System.currentTimeMillis() < rigHoldUntil) return
@@ -3998,7 +4011,7 @@ class AppState {
         if (c.followFreq && f.freq == w.freq && f.band == w.band) s.freqMhz?.let { mhz ->
             f = f.copy(freq = mhz, band = bandForFreq(mhz.toDouble()) ?: f.band)
         }
-        if (c.followMode && f.mode == w.mode) s.radioMode?.let { CatModes.toLog(it, f.mode) }?.let { m ->
+        if (c.followMode && f.mode == w.mode) radioModeFor(s)?.let { CatModes.toLog(it, f.mode) }?.let { m ->
             if (m != f.mode) f = withMode(f, m)
         }
         if (c.sMeterToRst && f.rstSent == w.rst) s.sDb?.let { db -> f = f.copy(rstSent = CatFormat.rstWithS(f.rstSent, db)) }

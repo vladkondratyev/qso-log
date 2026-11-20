@@ -344,6 +344,8 @@ private fun fakeWsjtxLogged(port: Int, call: String, grid: String, hz: Long, mod
 @Volatile private var rigOnFt8 = false
 /** Where the app tuned the made-up transceiver; null — where [rigOnFt8] says. */
 @Volatile internal var rigFreq: Long? = null
+/** The S-meter in dB over S9 (rigctld's STRENGTH); null — the usual S8. */
+@Volatile internal var rigStrength: Int? = null
 @Volatile private var rigMode: String? = null
 /** The made-up transceiver transmits: the panel shows power, SWR and ALC. */
 @Volatile private var rigTx = false
@@ -393,7 +395,7 @@ internal fun fakeRigctld(): java.net.ServerSocket {
                         w.write(when {
                             l == "f" -> rigFreq?.let { "$it\n" } ?: if (ft8) "14074000\n" else "14195000\n"
                             l == "m" -> rigMode?.let { "$it\n500\n" } ?: if (ft8) "PKTUSB\n3000\n" else "USB\n2400\n"
-                            l == "l STRENGTH" -> if (ft8) "-18\n" else "-6\n"
+                            l == "l STRENGTH" -> rigStrength?.let { "$it\n" } ?: if (ft8) "-18\n" else "-6\n"
                             l == "t" -> if (rigTx) "1\n" else "0\n"
                             l == "l RFPOWER_METER" -> "0.82\n"
                             l == "l SWR" -> "1.3\n"

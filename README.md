@@ -29,13 +29,14 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 
 | Система | Версия | Файл |
 |---|---|---|
-| Android 8.0 и новее | 2.9.6 | [QSO-LOG-2.9.6.apk](../../releases/tag/v2.9.6) |
-| macOS 11 и новее, процессор Apple (M1 и новее) | 2.9.6 | [QSO-LOG-2.9.6-macos-arm64.dmg](../../releases/tag/desktop-v2.9.6) |
-| macOS 11 и новее, процессор Intel | 2.9.6 | [QSO-LOG-2.9.6-macos-x64.dmg](../../releases/tag/desktop-v2.9.6) |
-| Windows 10 и 11, 64 бит | 2.9.6 | [QSO-LOG-2.9.6-windows-x64.zip](../../releases/tag/desktop-v2.9.6) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.6 | [QSO-LOG-2.9.6-linux-amd64.deb](../../releases/tag/desktop-v2.9.6) |
+| Android 8.0 и новее | 2.9.7 | [QSO-LOG-2.9.7.apk](../../releases/tag/v2.9.7) |
+| macOS 11 и новее, процессор Apple (M1 и новее) | 2.9.7 | [QSO-LOG-2.9.7-macos-arm64.dmg](../../releases/tag/desktop-v2.9.7) |
+| macOS 11 и новее, процессор Intel | 2.9.7 | [QSO-LOG-2.9.7-macos-x64.dmg](../../releases/tag/desktop-v2.9.7) |
+| Windows 10 и 11, 64 бит | 2.9.7 | [QSO-LOG-2.9.7-windows-x64.zip](../../releases/tag/desktop-v2.9.7) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.7 | [QSO-LOG-2.9.7-linux-amd64.deb](../../releases/tag/desktop-v2.9.7) |
 
 Как установить: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
+Без установки: [QSO-LOG Web](https://qso-log.ru/app/) — облегчённая версия в браузере (журнал, страна и расстояние, повторы, ADIF и CSV, статистика, CAT в Chrome и Edge); работает без интернета и ставится на главный экран. Журнал хранится только в браузере.
 Есть и [страница программы](https://vladkondratyev.github.io/qso-log/), она сама предложит файл для вашей системы.
 
 ## Содержание
@@ -191,7 +192,7 @@ QSO-LOG связывается с трансивером так же, как N1M
 |---|---|
 | ICOM: IC-705, IC-7300, IC-7610, IC-9700, IC-905, IC-7100, IC-7851, IC-7800, IC-7700, IC-7600, IC-7410, IC-7200, IC-9100, IC-7000, IC-756PRO, IC-746PRO, IC-910H, IC-718, IC-706MKIIG, IC-703, IC-R8600 и другие | CI-V (адрес задаётся вручную) |
 | Xiegu X6100, X6200, G90, X5105, X108G | совместимый с CI-V |
-| Kenwood TS-590, TS-890, TS-990, TS-480, TS-2000; Elecraft K3, K4, KX2, KX3; FlexRadio (SmartSDR CAT) | Kenwood |
+| Kenwood TS-590, TS-890, TS-990, TS-480, TS-2000; Elecraft K3, K4, KX2, KX3; FlexRadio (SmartSDR CAT); Lab599 TX-500, TX-500MP (в меню трансивера протокол TS-2000) | Kenwood |
 | Yaesu FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450 | Yaesu, новый CAT |
 | Yaesu FT-817, FT-818, FT-857, FT-897 | Yaesu, старый 5-байтный CAT |
 | Yaesu FT-840, FT-890, FT-900, FT-990 (с версии 2.9.1, 4800 бод, на трансивере не проверено) | Yaesu FT-840 / 890 / 900 / 990 (старый CAT) |
@@ -925,6 +926,7 @@ OpenStreetMap (уходит только набранное название), �
 Все форматы собраны в одном окне: меню ⋮ → **«Экспорт и импорт…»** (на компьютере — меню «Файл»; в настройках, блок
 «Журнал связей», есть кнопка, открывающая это же окно). Поддерживаются три формата:
 
+- Имя файла предлагается вида `UA3DEMO_2026-11-15_164059.adi` — позывной, дата и время выгрузки (с 2.9.7): в папке файлы идут по порядку.
 - **ADIF** (.adi) понимают LogHX, UR5EQF, HamLog, N1MM, QRZ.com и другие журналы. Через ADIF же удобно переносить
   лог между телефоном и компьютером. Кодировку файла выбираете при экспорте: UTF-8 подходит для большинства программ
   и сайтов, Windows-1251 нужна для LogHX и UR5EQF. Программа запоминает ваш выбор. При импорте (с версии 2.7.0)
@@ -1291,14 +1293,14 @@ Esc ещё раз — как было.
 
 ### Android
 
-1. Скачайте `QSO-LOG-2.9.6.apk` со [страницы релиза](../../releases/tag/v2.9.6).
+1. Скачайте `QSO-LOG-2.9.7.apk` со [страницы релиза](../../releases/tag/v2.9.7).
 2. Откройте файл на телефоне. Android может попросить разрешить установку из этого источника — разрешите.
 
 ### macOS
 
-1. Скачайте со [страницы релиза](../../releases/tag/desktop-v2.9.6) файл для своего Mac:
-   - `QSO-LOG-2.9.6-macos-arm64.dmg`, если процессор Apple (M1 и новее);
-   - `QSO-LOG-2.9.6-macos-x64.dmg`, если Intel.
+1. Скачайте со [страницы релиза](../../releases/tag/desktop-v2.9.7) файл для своего Mac:
+   - `QSO-LOG-2.9.7-macos-arm64.dmg`, если процессор Apple (M1 и новее);
+   - `QSO-LOG-2.9.7-macos-x64.dmg`, если Intel.
 
    Узнать, какой у вас, можно в меню  → «Об этом Mac».
 2. Откройте DMG и перетащите QSO-LOG в «Программы».
@@ -1308,7 +1310,7 @@ Esc ещё раз — как было.
 
 ### Windows
 
-1. Скачайте `QSO-LOG-2.9.6-windows-x64.zip` со [страницы релиза](../../releases/tag/desktop-v2.9.6).
+1. Скачайте `QSO-LOG-2.9.7-windows-x64.zip` со [страницы релиза](../../releases/tag/desktop-v2.9.7).
 2. Распакуйте архив целиком, например в «Документы». Прямо из архива программа не запустится.
 3. Запустите `QSO-LOG.exe`. Java ставить не нужно, она уже в папке.
 4. Windows может показать «Система Windows защитила ваш компьютер», потому что программа не подписана.
@@ -1320,10 +1322,10 @@ Esc ещё раз — как было.
 
 ### Linux
 
-1. Скачайте `QSO-LOG-2.9.6-linux-amd64.deb` со [страницы релиза](../../releases/tag/desktop-v2.9.6).
+1. Скачайте `QSO-LOG-2.9.7-linux-amd64.deb` со [страницы релиза](../../releases/tag/desktop-v2.9.7).
 2. Установите двойным щелчком или из терминала:
    ```bash
-   sudo apt install ./QSO-LOG-2.9.6-linux-amd64.deb
+   sudo apt install ./QSO-LOG-2.9.7-linux-amd64.deb
    ```
 3. QSO-LOG появится в меню приложений, в разделе «Любительское радио».
 

@@ -30,13 +30,14 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.9.6 | [QSO-LOG-2.9.6.apk](../../releases/tag/v2.9.6) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.6 | [QSO-LOG-2.9.6-macos-arm64.dmg](../../releases/tag/desktop-v2.9.6) |
-| macOS 11 or newer, Intel | 2.9.6 | [QSO-LOG-2.9.6-macos-x64.dmg](../../releases/tag/desktop-v2.9.6) |
-| Windows 10 and 11, 64-bit | 2.9.6 | [QSO-LOG-2.9.6-windows-x64.zip](../../releases/tag/desktop-v2.9.6) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.6 | [QSO-LOG-2.9.6-linux-amd64.deb](../../releases/tag/desktop-v2.9.6) |
+| Android 8.0 or newer | 2.9.7 | [QSO-LOG-2.9.7.apk](../../releases/tag/v2.9.7) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.7 | [QSO-LOG-2.9.7-macos-arm64.dmg](../../releases/tag/desktop-v2.9.7) |
+| macOS 11 or newer, Intel | 2.9.7 | [QSO-LOG-2.9.7-macos-x64.dmg](../../releases/tag/desktop-v2.9.7) |
+| Windows 10 and 11, 64-bit | 2.9.7 | [QSO-LOG-2.9.7-windows-x64.zip](../../releases/tag/desktop-v2.9.7) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.7 | [QSO-LOG-2.9.7-linux-amd64.deb](../../releases/tag/desktop-v2.9.7) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
+Nothing to install: [QSO-LOG Web](https://qso-log.ru/app/) is a light version in the browser (the log, country and distance, dupes, ADIF and CSV, statistics, CAT in Chrome and Edge); it works offline and installs to the home screen. The log stays in the browser only.
 The [project page](https://vladkondratyev.github.io/qso-log/?lang=en) offers the right file for your system.
 
 Release notes on GitHub are written in Russian. Most screenshots below show the Russian interface; the language
@@ -186,7 +187,7 @@ the transceiver answers right now.
 |---|---|
 | ICOM: IC-705, IC-7300, IC-7610, IC-9700, IC-905, IC-7100, IC-7851, IC-7800, IC-7700, IC-7600, IC-7410, IC-7200, IC-9100, IC-7000, IC-756PRO, IC-746PRO, IC-910H, IC-718, IC-706MKIIG, IC-703, IC-R8600 and others | CI-V (the address can be set by hand) |
 | Xiegu X6100, X6200, G90, X5105, X108G | CI-V compatible |
-| Kenwood TS-590, TS-890, TS-990, TS-480, TS-2000; Elecraft K3, K4, KX2, KX3; FlexRadio (SmartSDR CAT) | Kenwood |
+| Kenwood TS-590, TS-890, TS-990, TS-480, TS-2000; Elecraft K3, K4, KX2, KX3; FlexRadio (SmartSDR CAT); Lab599 TX-500, TX-500MP (set the TS-2000 protocol in the radio's menu) | Kenwood |
 | Yaesu FT-991, FT-891, FT-710, FTDX10, FTDX101, FTDX3000, FT-950, FT-450 | Yaesu, new CAT |
 | Yaesu FT-817, FT-818, FT-857, FT-897 | Yaesu, old 5-byte CAT |
 | Yaesu FT-840, FT-890, FT-900, FT-990 (since 2.9.1, 4800 baud, not tried on a radio) | Yaesu FT-840 / 890 / 900 / 990 (old CAT) |
@@ -796,6 +797,7 @@ worked on OpenStreetMap; a tap on a point opens the last QSO with that station.
 
 All formats are in one window: ⋮ menu → **"Export and import…"** (on the computer, the "File" menu; Settings → "Logbook" has a button for the same window).
 
+- The offered file name is like `UA3DEMO_2026-11-15_164059.adi`: the callsign, the date and the time of the export (since 2.9.7), so files sort in order in a folder.
 - **ADIF** (.adi) for LogHX, UR5EQF, HamLog, N1MM, QRZ.com and others, and for moving the log between phone and
   computer. Choose UTF-8 or Windows-1251 when exporting. On import (since 2.7.0) the encoding is chosen in a window —
   UTF-8 by default, Windows-1251, KOI8-R, CP866 (DOS), Windows-1252, ISO-8859-1 — with the file's first records shown
@@ -992,26 +994,26 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-2.9.6.apk` from the [release page](../../releases/tag/v2.9.6) and open it on the phone; allow
+Download `QSO-LOG-2.9.7.apk` from the [release page](../../releases/tag/v2.9.7) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.9.6-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.9.6), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-2.9.7-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v2.9.7), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.9.6-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.6), unpack the
+Download `QSO-LOG-2.9.7-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.7), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.9.6-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.6) and install it:
+Download `QSO-LOG-2.9.7-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.7) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.9.6-linux-amd64.deb
+sudo apt install ./QSO-LOG-2.9.7-linux-amd64.deb
 ```
 
 ## Where the data is kept

@@ -15,14 +15,24 @@ class WhatsNewTest {
     }
 
     @Test
+    fun reportCarriesTheCrash() {
+        val e = IllegalStateException("boom", IndexOutOfBoundsException("Index 0"))
+        val text = ProblemReport.crashText(e)
+        assertTrue(text.startsWith("java.lang.IllegalStateException: boom"))
+        assertTrue("Caused by: java.lang.IndexOutOfBoundsException" in text)
+        val body = URLDecoder.decode(ProblemReport.url("2.9.7", "Android 10", "Tablet", crash = text).substringAfter("body="), "UTF-8")
+        assertTrue("```" in body && "boom" in body)
+    }
+
+    @Test
     fun computerAndPhonePoints() {
-        // 2.9.6: the folder, the column widths and the scale error are the computer's; the keys are on both.
+        // 2.9.7: the LoTW certificate and the crash report are the phone's; the rest is on both.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Горячие клавиши"))
-            assertTrue(WhatsNew.items(desktop = true).any { "в папке" in it })
-            assertTrue(WhatsNew.items(desktop = false).none { "в папке" in it || "колонок" in it || "«Error»" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "внешней клавиатурой" in it })
+            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Имя файла"))
+            assertTrue(WhatsNew.items(desktop = true).none { "LoTW" in it || "отчёт" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "LoTW" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "QSO-LOG Web" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

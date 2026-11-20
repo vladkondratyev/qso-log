@@ -9,27 +9,32 @@ import java.net.URLEncoder
 object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
-    /** Points of this release: 2.9.6 — the users' requests after 2.9.5. */
+    /** Points of this release: 2.9.7 — the users' requests after 2.9.6. */
     fun items(desktop: Boolean): List<String> = listOfNotNull(
-        if (desktop) tr("Горячие клавиши для всех разделов и действий меню: DX-кластер ⌘⇧C, Прохождение ⌘⇧P, Дипломы ⌘⇧A, Справка ⌘⇧R, онлайн-журналы ⌘U, LoTW ⌘⇧L, импорт ADIF ⌘O, копия журнала ⌘B, таблица ⌘⇧T, следующая станция ⌘⇧N (на Windows и Linux — Ctrl). Клавиши видны в меню и в ⌘K; меняются в настройках.")
-        else tr("С внешней клавиатурой — горячие клавиши для разделов: DX-кластер Ctrl+Shift+C, Прохождение Ctrl+Shift+P, Дипломы Ctrl+Shift+A, Справка Ctrl+Shift+R, онлайн-журналы Ctrl+U, импорт ADIF Ctrl+O, следующая станция Ctrl+Shift+N; список — F1."),
-        tr("DX-кластер с клавиатуры: ↑ ↓ по спотам, Enter — перестроить трансивер и открыть карточку, Shift+Enter — только карточка, S — свой спот, цифры — диапазон."),
-        tr("Дата и время в карточке набираются цифрами: 1234 → 12:34, 931 → 09:31, 1411 → 14.11 этого года; ↑ и ↓ — на минуту или день."),
-        if (desktop) tr("Переключить станцию (например, на номер наблюдателя SWL) можно щелчком по позывному в строке состояния — и в режиме таблицы; станция-наблюдатель помечена SWL.")
-        else tr("Станция-наблюдатель помечена SWL рядом с позывным; новую станцию можно добавить прямо из списка станций."),
-        tr("Связи, выгруженные в HAMLOG, отмечены фиолетовой точкой рядом с точками экспорта, как ADIF и CSV."),
-        tr("Kenwood TS-590/890/990: цифровой режим (USB с DA1) распознаётся — кнопка FT8 на пульте горит."),
-        if (desktop) tr("Экспорт и импорт открываются в папке, куда сохраняли в прошлый раз.") else null,
-        if (desktop) tr("Ширина колонок таблицы меняется перетаскиванием края заголовка, двойной щелчок — по содержимому. Наведите на точки экспорта — видно, куда и когда выгружено.") else null,
-        if (desktop) tr("Исправлено: после изменения масштаба колесом мыши могло появиться окно «Error» и программа закрывалась.") else null,
+        tr("Имя файла при экспорте: позывной, дата и время — UA3DEMO_2026-11-15_164059.adi. В папке файлы идут по порядку, несколько выгрузок за день не путаются."),
+        tr("Карточка, открытая из WSJT-X, JTDX или MSHV, сразу в FT8 (или в виде программы), даже если трансивер в обычном USB."),
+        tr("Kenwood TS-590/890/990: цифровой режим (DA1) больше не перестаёт опрашиваться после случайного ответа «?;» — кнопка FT8 на пульте горит."),
+        tr("Lab599 TX-500 и TX-500MP в списке трансиверов (протокол TS-2000)."),
+        tr("Пульт трансивера: строка под частотой больше не дёргается при смене показаний S-метра."),
+        if (desktop) null else tr("LoTW: сертификаты .p12 из новых версий TQSL открываются и на старых Android (ошибка «PBKDF2 SecretKeyFactory not available»)."),
+        tr("Исправлено закрытие программы при наборе позывного вида «A/P»."),
+        if (desktop) null else tr("Если приложение закрылось с ошибкой, при следующем запуске оно предложит отправить отчёт разработчику."),
+        tr("Новое: QSO-LOG Web — версия в браузере без установки, работает и без интернета: qso-log.ru/app"),
     )
 }
 
 /** A new GitHub issue with the app's version and the device filled in — no personal data, nothing from the log. */
 object ProblemReport {
-    fun url(appVersion: String, platform: String, device: String): String {
+    /** [crash] — the error the app closed with (see [crashText]): it goes under "Что случилось". */
+    fun url(appVersion: String, platform: String, device: String, crash: String? = null): String {
         val body = buildString {
             appendLine("**${tr("Что случилось")}:**")
+            if (crash != null) {
+                appendLine(tr("Приложение закрылось с ошибкой:"))
+                appendLine("```")
+                appendLine(crash)
+                appendLine("```")
+            }
             appendLine()
             appendLine("**${tr("Что ожидали")}:**")
             appendLine()
@@ -40,5 +45,26 @@ object ProblemReport {
             appendLine("QSO-LOG $appVersion · $platform · $device")
         }
         return "https://github.com/vladkondratyev/qso-log/issues/new?body=" + URLEncoder.encode(body, "UTF-8").replace("+", "%20")
+    }
+
+    /**
+     * The error as text for the report: the exception and its causes with the app's own lines of the stack (and the
+     * first lines of each) — short enough for a link. No data of the log: only class names and line numbers.
+     */
+    fun crashText(t: Throwable): String {
+        val sb = StringBuilder()
+        var e: Throwable? = t
+        var depth = 0
+        while (e != null && depth < 4) {
+            if (depth > 0) sb.append("Caused by: ")
+            sb.append(e.javaClass.name).append(": ").append(e.message.orEmpty().take(200)).append('\n')
+            val frames = e.stackTrace
+            frames.withIndex().filter { (i, f) -> i < 6 || f.className.startsWith("ru.r3xed") }.take(25).forEach { (_, f) ->
+                sb.append("  at ").append(f.className).append('.').append(f.methodName).append('(').append(f.fileName).append(':').append(f.lineNumber).append(")\n")
+            }
+            e = e.cause?.takeIf { it !== e }
+            depth++
+        }
+        return sb.toString().take(4000).trimEnd()
     }
 }

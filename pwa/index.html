@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QSO-LOG Web</title>
+<meta name="description" content="Аппаратный журнал радиолюбителя в браузере: работает без интернета, устанавливается на телефон и компьютер.">
+<meta name="theme-color" content="#0A5C8A">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">QSO<span class="dash">-</span>LOG</span><span class="web">web</span></div>
+  <button id="trx" class="trx" title="Трансивер" data-i18n-title="Трансивер" hidden></button>
+  <div class="grow"></div>
+  <button id="install" class="ghost" hidden data-i18n="Установить">Установить</button>
+  <button id="lang" class="ghost small" title="Language">EN</button>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="log" aria-selected="true" data-i18n="Журнал">Журнал</button>
+  <button role="tab" data-tab="stats" data-i18n="Статистика">Статистика</button>
+  <button role="tab" data-tab="settings" data-i18n="Настройки">Настройки</button>
+</nav>
+
+<main>
+  <section id="tab-log" class="tab">
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Поиск: позывной, имя, QTH" data-i18n-ph="Поиск: позывной, имя, QTH" autocomplete="off">
+      <select id="fband" aria-label="Диапазон"></select>
+      <select id="fmode" aria-label="Вид"></select>
+    </div>
+    <div id="count" class="muted"></div>
+    <ul id="list" class="list"></ul>
+    <div id="empty" class="empty" hidden>
+      <p data-i18n="Журнал пуст. Нажмите «+ QSO» или клавишу Insert, чтобы записать первую связь.">Журнал пуст. Нажмите «+ QSO» или клавишу Insert, чтобы записать первую связь.</p>
+      <p class="muted" data-i18n="Можно перенести журнал из другой программы: Настройки → Импорт ADIF.">Можно перенести журнал из другой программы: Настройки → Импорт ADIF.</p>
+    </div>
+  </section>
+
+  <section id="tab-stats" class="tab" hidden>
+    <div id="stats"></div>
+  </section>
+
+  <section id="tab-settings" class="tab" hidden>
+    <h2 data-i18n="Моя станция">Моя станция</h2>
+    <div class="grid2">
+      <label><span data-i18n="Мой позывной">Мой позывной</span><input id="s-call" autocomplete="off" autocapitalize="characters"></label>
+      <label><span data-i18n="Мой QTH-локатор">Мой QTH-локатор</span><input id="s-loc" autocomplete="off" autocapitalize="characters" placeholder="KO85ts"></label>
+      <label><span data-i18n="Мощность, Вт">Мощность, Вт</span><input id="s-pwr" inputmode="decimal"></label>
+      <label><span data-i18n="Тема">Тема</span>
+        <select id="s-theme"><option value="" data-i18n="Как в системе">Как в системе</option><option value="light" data-i18n="Светлая">Светлая</option><option value="dark" data-i18n="Тёмная">Тёмная</option></select></label>
+    </div>
+
+    <h2 data-i18n="Обмен данными">Обмен данными</h2>
+    <div class="row wrap">
+      <button id="exp-adi" data-i18n="Экспорт ADIF">Экспорт ADIF</button>
+      <button id="exp-csv" class="ghost" data-i18n="Экспорт CSV">Экспорт CSV</button>
+      <label class="btn ghost"><span data-i18n="Импорт ADIF">Импорт ADIF</span><input id="imp-adi" type="file" accept=".adi,.adif,.txt" hidden></label>
+    </div>
+    <p class="muted" data-i18n="Файл ADIF подходит для LoTW (через TQSL), eQSL, Club Log, QRZ.com, HAMLOG и программ QSO-LOG для Android и компьютера.">Файл ADIF подходит для LoTW (через TQSL), eQSL, Club Log, QRZ.com, HAMLOG и программ QSO-LOG для Android и компьютера.</p>
+
+    <h2 data-i18n="Трансивер (CAT)">Трансивер (CAT)</h2>
+    <div id="cat-box">
+      <div class="grid2">
+        <label><span data-i18n="Протокол">Протокол</span>
+          <select id="cat-proto">
+            <option value="kenwood">Kenwood / Elecraft / Lab599 / FlexRadio</option>
+            <option value="yaesu">Yaesu (FT-991, FT-710, FTDX10…)</option>
+            <option value="icom">ICOM CI-V / Xiegu</option>
+          </select></label>
+        <label><span data-i18n="Скорость, бод">Скорость, бод</span>
+          <select id="cat-baud"><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option selected>115200</option></select></label>
+        <label><span data-i18n="Адрес CI-V (ICOM)">Адрес CI-V (ICOM)</span><input id="cat-civ" value="94" maxlength="2"></label>
+      </div>
+      <div class="row wrap"><button id="cat-connect" data-i18n="Подключить трансивер">Подключить трансивер</button><span id="cat-status" class="muted"></span></div>
+      <p class="muted" data-i18n="Через USB-кабель трансивера, в Chrome или Edge на компьютере. Новая карточка берёт частоту, диапазон и вид с трансивера.">Через USB-кабель трансивера, в Chrome или Edge на компьютере. Новая карточка берёт частоту, диапазон и вид с трансивера.</p>
+    </div>
+    <p id="cat-none" class="muted" hidden data-i18n="Этот браузер не умеет работать с COM-портами (Web Serial). CAT доступен в Chrome и Edge на компьютере.">Этот браузер не умеет работать с COM-портами (Web Serial). CAT доступен в Chrome и Edge на компьютере.</p>
+
+    <h2 data-i18n="Данные">Данные</h2>
+    <p class="muted" id="storage-note"></p>
+    <div class="row wrap"><button id="wipe" class="danger ghost" data-i18n="Удалить весь журнал">Удалить весь журнал</button></div>
+
+    <h2 data-i18n="О программе">О программе</h2>
+    <p class="muted"><span data-i18n="QSO-LOG Web — облегчённая версия для браузера. Всё хранится только в этом браузере, на сервер ничего не уходит. Полная версия с поиском по QRZ.ru, онлайн-журналами, WSJT-X, DX-кластером и голосовыми заметками — для Android, Windows, macOS и Linux:">QSO-LOG Web — облегчённая версия для браузера. Всё хранится только в этом браузере, на сервер ничего не уходит. Полная версия с поиском по QRZ.ru, онлайн-журналами, WSJT-X, DX-кластером и голосовыми заметками — для Android, Windows, macOS и Linux:</span>
+      <a href="https://qso-log.ru/" target="_blank" rel="noopener">qso-log.ru</a> · <a href="https://github.com/vladkondratyev/qso-log" target="_blank" rel="noopener">GitHub</a></p>
+    <p class="muted" id="version"></p>
+  </section>
+</main>
+
+<button id="add" class="fab" title="Новая связь (Insert)" data-i18n-title="Новая связь (Insert)">+ QSO</button>
+
+<dialog id="card" class="card">
+  <form id="form" method="dialog" autocomplete="off">
+    <div class="card-head">
+      <input id="f-call" class="call" placeholder="ПОЗЫВНОЙ" data-i18n-ph="ПОЗЫВНОЙ" autocapitalize="characters" spellcheck="false" required>
+      <button type="button" id="f-close" class="ghost icon" title="Закрыть (Esc)" data-i18n-title="Закрыть (Esc)">✕</button>
+    </div>
+    <div id="f-info" class="info"></div>
+    <div id="f-dupe" class="dupe" hidden></div>
+    <div class="grid3">
+      <label><span data-i18n="Дата UTC">Дата UTC</span><input id="f-date" type="date" required></label>
+      <label><span data-i18n="Время UTC">Время UTC</span><input id="f-time" type="time" step="60" required></label>
+      <label><span data-i18n="Частота, МГц">Частота, МГц</span><input id="f-freq" inputmode="decimal" placeholder="14.195"></label>
+    </div>
+    <div class="chips" id="f-bands" role="radiogroup" aria-label="Диапазон"></div>
+    <div class="chips" id="f-modes" role="radiogroup" aria-label="Вид"></div>
+    <div class="grid3">
+      <label><span data-i18n="RST отпр.">RST отпр.</span><input id="f-rsts" inputmode="text"></label>
+      <label><span data-i18n="RST прин.">RST прин.</span><input id="f-rstr" inputmode="text"></label>
+      <label><span data-i18n="Мощность, Вт">Мощность, Вт</span><input id="f-pwr" inputmode="decimal"></label>
+    </div>
+    <div class="grid3">
+      <label><span data-i18n="Имя">Имя</span><input id="f-name"></label>
+      <label><span>QTH</span><input id="f-qth"></label>
+      <label><span data-i18n="Локатор">Локатор</span><input id="f-loc" autocapitalize="characters" maxlength="8"></label>
+    </div>
+    <label><span data-i18n="Комментарий">Комментарий</span><input id="f-comment"></label>
+    <div class="row wrap qsl">
+      <label class="check"><input type="checkbox" id="f-qsls"> <span data-i18n="QSL отправлена">QSL отправлена</span></label>
+      <label class="check"><input type="checkbox" id="f-qslr"> <span data-i18n="QSL получена">QSL получена</span></label>
+    </div>
+    <div class="row actions">
+      <button type="button" id="f-delete" class="danger ghost" hidden data-i18n="Удалить">Удалить</button>
+      <div class="grow"></div>
+      <button type="submit" id="f-save" data-i18n="Записать">Записать</button>
+    </div>
+    <p class="muted small" data-i18n="Enter — записать, Esc — закрыть.">Enter — записать, Esc — закрыть.</p>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -62,3 +62,29 @@ fun AboutActions(onWhatsNew: () -> Unit, reportUrl: () -> String) {
         }
     }
 }
+
+/**
+ * The app closed with an error last time (see CrashLog in MainActivity): offer to send it as a GitHub issue — the
+ * error's text with class names and line numbers, the version and the device; nothing of the log.
+ */
+@Composable
+fun CrashReportDialog(crash: String, reportUrl: (String) -> String, onClose: () -> Unit) {
+    val uri = LocalUriHandler.current
+    AlertDialog(
+        onDismissRequest = onClose,
+        icon = { Icon(Icons.Filled.BugReport, null, tint = MaterialTheme.colorScheme.error) },
+        title = { Text(tr("QSO-LOG закрылся с ошибкой")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(tr("Отправьте отчёт разработчику — так ошибку быстрее исправят. Откроется страница GitHub с текстом ошибки, версией и моделью устройства; данных журнала там нет. Допишите, что вводили перед закрытием."), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    crash.lineSequence().firstOrNull().orEmpty(),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.heightIn(max = 120.dp).verticalScroll(rememberScrollState()),
+                )
+            }
+        },
+        confirmButton = { Button(onClick = { uri.openUri(reportUrl(crash)); onClose() }) { Text(tr("Сообщить")) } },
+        dismissButton = { TextButton(onClick = onClose) { Text(tr("Не надо")) } },
+    )
+}

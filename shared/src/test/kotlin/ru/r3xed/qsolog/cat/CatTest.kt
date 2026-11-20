@@ -168,8 +168,26 @@ class CatTest {
         val d = KenwoodDriver("TS-480", elecraft = false)
         val io = CatIo(radio)
         assertEquals("USB", d.poll(io, RigState()).radioMode)
-        d.poll(io, RigState())
-        assertEquals(1, asked)
+        repeat(5) { d.poll(io, RigState()) }
+        assertEquals(3, asked)
+    }
+
+    @Test
+    fun kenwoodDaRefusedOnceIsAskedAgain() {
+        // A radio that once answers "?;" (busy, or a stray reply to another program's command), then "DA1;".
+        var asked = 0
+        val radio = FakeRadio(::text) { c ->
+            when (c.toString(Charsets.US_ASCII)) {
+                "FA" -> "FA00014074000;"
+                "MD" -> "MD2;"
+                "DA" -> if (asked++ == 0) "?;" else "DA1;"
+                else -> "?;"
+            }.toByteArray()
+        }
+        val d = KenwoodDriver("TS-590S", elecraft = false)
+        val io = CatIo(radio)
+        assertEquals("USB", d.poll(io, RigState()).radioMode)
+        assertEquals("USB-D", d.poll(io, RigState()).radioMode)
     }
 
     @Test

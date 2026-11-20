@@ -42,5 +42,17 @@ enum class ExportFormat(val field: String) {
 
         /** The mark fields: the card shows them in their own block, not among the other ADIF fields. */
         val FIELDS: Set<String> = entries.map { it.field }.toSet()
+
+        private val NAME_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmmss")
+
+        /**
+         * The file name offered for an export: "UA3DEMO_2026-11-15_164059.adi" (local date and time of the export), so a
+         * folder sorted by name lists the files in the order they were made and two exports of one day differ.
+         * [kind] goes between the callsign and the date ("UA3DEMO_lotw_2026-11-15_164059.adi").
+         */
+        fun fileName(myCall: String, ext: String, kind: String = "", now: LocalDateTime = LocalDateTime.now()): String {
+            val call = myCall.trim().ifBlank { "log" }.replace('/', '-').replace('\\', '-')
+            return call + (if (kind.isEmpty()) "" else "_$kind") + "_" + now.format(NAME_TIME) + "." + ext
+        }
     }
 }

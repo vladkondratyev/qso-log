@@ -29,6 +29,28 @@ class LotwTest {
     }
 
     @Test
+    fun readsNewerTqslFilesWithoutTheSystemKeystore() {
+        // TQSL with OpenSSL 3: PBES2 (PBKDF2 HMAC-SHA256, AES-256-CBC) — older Android's keystore cannot open these.
+        for (name in listOf("/lotw-test-pbes2.p12", "/lotw-test-3des.p12", "/lotw-test.p12")) {
+            val bytes = javaClass.getResourceAsStream(name)!!.readBytes()
+            val c = Pkcs12.read(bytes, "demo123")
+            assertEquals(1, c.keys.size, name)
+            assertTrue(c.certs.any { it.first.subjectX500Principal.name.isNotEmpty() }, name)
+            // The key is the certificate's own: a signature checks out with its public key.
+            val (cert, _) = c.certs.first { it.second != null && it.second.contentEquals(c.keys[0].second) }
+            val sig = Signature.getInstance("SHA256withRSA").apply { initSign(c.keys[0].first); update(byteArrayOf(1, 2, 3)) }.sign()
+            assertTrue(Signature.getInstance("SHA256withRSA").apply { initVerify(cert); update(byteArrayOf(1, 2, 3)) }.verify(sig), name)
+            assertFailsWith<Pkcs12.WrongPassword>(name) { Pkcs12.read(bytes, "wrong") }
+        }
+    }
+
+    @Test
+    fun pbkdf2MatchesRfc6070() {
+        val k = Pkcs12.pbkdf2("HmacSHA1", "password".toByteArray(), "salt".toByteArray(), 2, 20)
+        assertEquals("ea6c014dc72d6f8ccd1ed92ace1d41f0d8de8957", k.joinToString("") { "%02x".format(it) })
+    }
+
+    @Test
     fun signsAsTqslDoes() {
         val c = Lotw.loadP12(p12, "demo123")
         val t = LocalDateTime.of(2026, 10, 20, 12, 17, 5)

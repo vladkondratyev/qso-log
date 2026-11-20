@@ -68,4 +68,27 @@ internal val EN_2_9_6: Map<String, String> = mapOf(
         "Drag a header's edge to change a table column's width, double-click to fit the contents. Hover over the export dots to see where and when a QSO went.",
     "Исправлено: после изменения масштаба колесом мыши могло появиться окно «Error» и программа закрывалась." to
         "Fixed: after changing the scale with the mouse wheel an \"Error\" window could appear and the program closed.",
+    // 2.9.7
+    "Приложение закрылось с ошибкой:" to "The app closed with an error:",
+    "QSO-LOG закрылся с ошибкой" to "QSO-LOG closed with an error",
+    "Отправьте отчёт разработчику — так ошибку быстрее исправят. Откроется страница GitHub с текстом ошибки, версией и моделью устройства; данных журнала там нет. Допишите, что вводили перед закрытием." to
+        "Send a report to the developer so the error gets fixed sooner. A GitHub page opens with the error's text, the version and the device model; nothing from the log. Add what you were typing before it closed.",
+    "Сообщить" to "Report",
+    "Не надо" to "No, thanks",
+    "Имя файла при экспорте: позывной, дата и время — UA3DEMO_2026-11-15_164059.adi. В папке файлы идут по порядку, несколько выгрузок за день не путаются." to
+        "Export file names: callsign, date and time — UA3DEMO_2026-11-15_164059.adi. Files sort in order in a folder, and several exports a day do not mix up.",
+    "Карточка, открытая из WSJT-X, JTDX или MSHV, сразу в FT8 (или в виде программы), даже если трансивер в обычном USB." to
+        "A card opened from WSJT-X, JTDX or MSHV is in FT8 (or the program's mode) right away, even with the radio in plain USB.",
+    "Kenwood TS-590/890/990: цифровой режим (DA1) больше не перестаёт опрашиваться после случайного ответа «?;» — кнопка FT8 на пульте горит." to
+        "Kenwood TS-590/890/990: the data mode (DA1) is no longer left unpolled after a stray \"?;\" answer, so the FT8 button on the rig panel lights up.",
+    "Lab599 TX-500 и TX-500MP в списке трансиверов (протокол TS-2000)." to "Lab599 TX-500 and TX-500MP in the list of radios (the TS-2000 protocol).",
+    "Пульт трансивера: строка под частотой больше не дёргается при смене показаний S-метра." to
+        "Rig panel: the line under the frequency no longer jumps when the S-meter reading changes.",
+    "LoTW: сертификаты .p12 из новых версий TQSL открываются и на старых Android (ошибка «PBKDF2 SecretKeyFactory not available»)." to
+        "LoTW: .p12 certificates from newer TQSL versions open on older Android too (the \"PBKDF2 SecretKeyFactory not available\" error).",
+    "Исправлено закрытие программы при наборе позывного вида «A/P»." to "Fixed: the app closed when a callsign like \"A/P\" was typed.",
+    "Если приложение закрылось с ошибкой, при следующем запуске оно предложит отправить отчёт разработчику." to
+        "If the app closes with an error, on the next start it offers to send a report to the developer.",
+    "Новое: QSO-LOG Web — версия в браузере без установки, работает и без интернета: qso-log.ru/app" to
+        "New: QSO-LOG Web, a version in the browser with nothing to install; it works offline too: qso-log.ru/app",
 )

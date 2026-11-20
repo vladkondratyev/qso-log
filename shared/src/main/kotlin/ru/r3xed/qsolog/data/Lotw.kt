@@ -71,18 +71,28 @@ object Lotw {
 
     /** Reads the .p12 file: the certificate that has a key and a LoTW callsign. Throws [LotwException] with what is wrong. */
     fun loadP12(bytes: ByteArray, password: String): LotwCert {
-        val ks = KeyStore.getInstance("PKCS12")
-        try {
+        val pairs: List<Pair<X509Certificate, PrivateKey>> = try {
+            val ks = KeyStore.getInstance("PKCS12")
             ks.load(bytes.inputStream(), password.toCharArray())
+            ks.aliases().toList().filter { ks.isKeyEntry(it) }.mapNotNull { alias ->
+                val key = runCatching { ks.getKey(alias, password.toCharArray()) as? PrivateKey }.getOrNull() ?: return@mapNotNull null
+                val cert = ks.getCertificate(alias) as? X509Certificate ?: return@mapNotNull null
+                cert to key
+            }
         } catch (e: Exception) {
             val wrong = e.cause is javax.crypto.BadPaddingException || e.message.orEmpty().contains("password", ignoreCase = true) ||
                 e is java.io.IOException && e.cause is java.security.UnrecoverableKeyException
-            throw LotwException(if (wrong) tr("Неверный пароль файла .p12") else tr("Это не файл сертификата .p12: %s", e.message ?: e.javaClass.simpleName))
+            if (wrong) throw LotwException(tr("Неверный пароль файла .p12"))
+            // Older Android cannot open TQSL's newer files (PBES2: PBKDF2 + AES): read them ourselves.
+            try {
+                ownPairs(Pkcs12.read(bytes, password))
+            } catch (w: Pkcs12.WrongPassword) {
+                throw LotwException(tr("Неверный пароль файла .p12"))
+            } catch (e2: Exception) {
+                throw LotwException(tr("Это не файл сертификата .p12: %s", e.message ?: e.javaClass.simpleName))
+            }
         }
-        for (alias in ks.aliases().toList()) {
-            if (!ks.isKeyEntry(alias)) continue
-            val key = runCatching { ks.getKey(alias, password.toCharArray()) as? PrivateKey }.getOrNull() ?: continue
-            val cert = ks.getCertificate(alias) as? X509Certificate ?: continue
+        for ((cert, key) in pairs) {
             val call = callsign(cert) ?: continue
             val dxcc = extension(cert, OID_DXCC)?.trim()?.toIntOrNull() ?: 0
             return LotwCert(
@@ -93,6 +103,13 @@ object Lotw {
             )
         }
         throw LotwException(tr("В файле нет сертификата позывного LoTW с ключом. Сохраните в TQSL сертификат позывного (Save the callsign certificate), а не запрос"))
+    }
+
+    /** Certificates with their keys: by the localKeyId of the file, else the only key for every certificate. */
+    private fun ownPairs(c: Pkcs12.Content): List<Pair<X509Certificate, PrivateKey>> = c.certs.mapNotNull { (cert, id) ->
+        val key = c.keys.firstOrNull { id != null && it.second != null && it.second.contentEquals(id) }?.first
+            ?: c.keys.singleOrNull()?.first
+        key?.let { cert to it }
     }
 
     /** The callsign of the subject: the AROcallsign attribute (TQSL's OID) of the name. */

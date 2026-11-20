@@ -305,7 +305,9 @@ class KenwoodDriver(private val name: String, private val elecraft: Boolean, pri
     override val what get() = name
     private var smCmd = if (elecraft) "SM;" else "SM0;"
     private var ifSupported = true
-    private var daSupported = true
+    /** "DA;" left unanswered (a "?;" or silence) this many polls in a row; at 3 it is asked only once a minute or so. */
+    private var daMisses = 0
+    private var polls = 0
 
     override fun poll(io: CatIo, last: RigState): RigState {
         var s = last
@@ -314,11 +316,16 @@ class KenwoodDriver(private val name: String, private val elecraft: Boolean, pri
         if (!answered) return s
         ask(io, "MD;")?.let { r -> r.getOrNull(2)?.let { c -> s = s.copy(radioMode = (if (elecraft) ELECRAFT_MODES else MODES)[c] ?: s.radioMode) } }
         // TS-590, TS-890, TS-990: USB or LSB with the data switch on ("DA1;") is USB-D / LSB-D — the FT8 button lights.
-        // A radio without the command answers "?;" (TS-480, TS-2000) and is not asked again.
-        if (!elecraft && daSupported && (s.radioMode == "USB" || s.radioMode == "LSB")) {
+        // A radio without the command answers "?;" (TS-480, TS-2000): after three misses it is asked only now and then,
+        // so a late answer or a stray "?;" (left by a command another program sent) does not switch the question off.
+        polls++
+        if (!elecraft && (s.radioMode == "USB" || s.radioMode == "LSB") && (daMisses < 3 || polls % 60 == 0)) {
             val r = ask(io, "DA;")
-            if (r == null) daSupported = false
-            else if (r.getOrNull(2) == '1') s = s.copy(radioMode = s.radioMode + "-D")
+            if (r == null) daMisses++
+            else {
+                daMisses = 0
+                if (r.getOrNull(2) == '1') s = s.copy(radioMode = s.radioMode + "-D")
+            }
         }
         // IF: the 29th character (after "IF", 11 digits of frequency, 5 spaces, RIT, flags, memory) is 1 on transmit.
         if (ifSupported) ask(io, "IF;").let { r ->
@@ -363,7 +370,11 @@ class KenwoodDriver(private val name: String, private val elecraft: Boolean, pri
         }
         io.send("MD$c;".toByteArray(Charsets.US_ASCII))
         // TS-590, TS-890, TS-990: USB with the data switch on (DA1); radios without it answer "?;", which is dropped.
-        if (!elecraft && (c == '1' || c == '2')) io.send("DA${if (mode == RadioMode.DATA) 1 else 0};".toByteArray(Charsets.US_ASCII))
+        if (!elecraft && (c == '1' || c == '2')) {
+            io.send("DA${if (mode == RadioMode.DATA) 1 else 0};".toByteArray(Charsets.US_ASCII))
+            // The data switch was just set: the next poll asks it again, whatever it answered before.
+            daMisses = 0
+        }
         return true
     }
 

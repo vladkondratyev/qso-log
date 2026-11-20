@@ -153,10 +153,7 @@ fun RigPanel(vm: AppViewModel) {
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(CatFormat.khz(shown), fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 40.sp, maxLines = 1)
-                    Text(
-                        listOfNotNull(tr("кГц"), rig.radioMode, if (rig.tx == true) "TX" else rig.sDb?.let { CatFormat.sMeter(it) }).joinToString(" · ") + " · " + tr("ведите пальцем влево-вправо"),
-                        style = MaterialTheme.typography.bodyMedium, color = x.muted, textAlign = TextAlign.Center,
-                    )
+                    RigStatusLine(rig, tr("ведите пальцем влево-вправо"), x.muted)
                 }
             }
             // Receive: the S-meter; transmit: power, SWR, ALC. Then the band with the needle; a tap on it tunes there.
@@ -223,5 +220,23 @@ private fun PanelChip(text: String, on: Boolean, modifier: Modifier = Modifier, 
     ) {
         Text(text, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = if (small) 13.sp else 16.sp, maxLines = 1,
             color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/**
+ * "кГц · USB · S7 · <hint>" under the frequency. The changing part (mode, S-meter, TX) sits in a box as wide as its
+ * longest form, so S7 → S9+20 does not move it; the hint is on its own line.
+ */
+@Composable
+private fun RigStatusLine(rig: ru.r3xed.qsolog.cat.RigState, hint: String, color: androidx.compose.ui.graphics.Color) {
+    val style = MaterialTheme.typography.bodyMedium
+    val live = listOfNotNull(tr("кГц"), rig.radioMode, if (rig.tx == true) "TX" else rig.sDb?.let { CatFormat.sMeter(it) }).joinToString(" · ")
+    // A phone is narrow: the hint goes on its own line, the changing part stays centred in its fixed box.
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(contentAlignment = Alignment.CenterStart) {
+            Text(tr("кГц") + " · " + "DATA-FM · S9+60", style = style, maxLines = 1, color = androidx.compose.ui.graphics.Color.Transparent)
+            Text(live, style = style, color = color, maxLines = 1)
+        }
+        Text(hint, style = style, color = color, textAlign = TextAlign.Center)
     }
 }

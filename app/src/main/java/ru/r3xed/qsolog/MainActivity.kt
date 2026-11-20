@@ -46,6 +46,9 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -263,6 +266,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        CrashLog.install(this)
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null && intent?.getStringExtra("open") == "dx") vm.openDxCluster()
         // Once per run of the app: not after a turn of the screen or a return from another app.
@@ -306,6 +310,16 @@ class MainActivity : ComponentActivity() {
                 val snackbar = remember { SnackbarHostState() }
                 // The settings table: what another device changed comes on start (it works after a restart).
                 LaunchedEffect(Unit) { vm.syncSettings() }
+                // The app closed with an error last time: offer to report it.
+                var crash by remember { mutableStateOf(CrashLog.take(this@MainActivity)) }
+                crash?.let { text ->
+                    ru.r3xed.qsolog.ui.CrashReportDialog(text, { c ->
+                        ru.r3xed.qsolog.ProblemReport.url(
+                            BuildConfig.VERSION_NAME, "Android " + android.os.Build.VERSION.RELEASE,
+                            "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}", crash = c,
+                        )
+                    }) { crash = null }
+                }
                 val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
                     uri?.let(vm::exportFile)
                 }
@@ -481,5 +495,34 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+}
+
+/**
+ * The error the app closed with, kept in a file until the next start (then [take] offers it as a report). The system's
+ * handler still runs after it: Android shows its own message and closes the app as before.
+ */
+object CrashLog {
+    private var installed = false
+    private fun file(c: android.content.Context) = File(c.filesDir, "last-crash.txt")
+
+    fun install(c: android.content.Context) {
+        if (installed) return
+        installed = true
+        val app = c.applicationContext
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            runCatching { file(app).writeText(ru.r3xed.qsolog.ProblemReport.crashText(e)) }
+            previous?.uncaughtException(t, e)
+        }
+    }
+
+    /** The last error, once: the file goes after it is read. */
+    fun take(c: android.content.Context): String? {
+        val f = file(c)
+        if (!f.exists()) return null
+        val text = runCatching { f.readText() }.getOrNull()
+        f.delete()
+        return text?.takeIf { it.isNotBlank() }
     }
 }

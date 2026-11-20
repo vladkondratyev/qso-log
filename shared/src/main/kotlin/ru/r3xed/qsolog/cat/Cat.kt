@@ -102,6 +102,8 @@ object Rigs {
         RigModel("TS-990S", CatProtocol.KENWOOD, baud = 115200, rts = true),
         RigModel("TS-480", CatProtocol.KENWOOD, baud = 57600),
         RigModel("TS-2000", CatProtocol.KENWOOD, baud = 57600),
+        // Lab599: the TS-2000 command subset ("CAT protocol: TS-2000" in the radio's menu, firmware 1.19.01 and later).
+        RigModel("Lab599 TX-500 / TX-500MP", CatProtocol.KENWOOD, baud = 9600),
         RigModel("Elecraft K3 / K3S", CatProtocol.KENWOOD, baud = 38400),
         RigModel("Elecraft K4", CatProtocol.KENWOOD, baud = 38400),
         RigModel("Elecraft KX2 / KX3", CatProtocol.KENWOOD, baud = 38400),
@@ -319,7 +321,7 @@ enum class RadioMode { LSB, USB, CW, AM, FM, RTTY, DATA }
 
 /** The radio's mode → the log's, and the log's → the radio's. */
 object CatModes {
-    private val DIGITAL = setOf("FT8", "FT4", "PSK31", "JT65", "JS8", "Q65", "OLIVIA", "SSTV", "DIGI", "RTTY")
+    val DIGITAL = setOf("FT8", "FT4", "PSK31", "JT65", "JS8", "Q65", "OLIVIA", "SSTV", "DIGI", "RTTY")
 
     /**
      * The radio mode for the log's [mode] at [hz]: SSB is LSB below 10 MHz (except 60 m) and USB above, digital modes are

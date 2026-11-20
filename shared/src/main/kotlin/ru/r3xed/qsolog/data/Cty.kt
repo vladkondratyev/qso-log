@@ -63,6 +63,8 @@ object Cty {
         if (parts.size < 2) return parts.firstOrNull().orEmpty()
         val skip = setOf("P", "M", "MM", "AM", "QRP", "A", "LH")
         val meaningful = parts.filter { it !in skip }
+        // Only suffixes typed so far ("A/P", "QRP/P"): the first part is all there is.
+        if (meaningful.isEmpty()) return parts[0]
         if (meaningful.size == 1) return meaningful[0]
         val (a, b) = meaningful[0] to meaningful[1]
         // A single digit after the call moves it to that call area: R0DEMO/3 → R3DEMO.
