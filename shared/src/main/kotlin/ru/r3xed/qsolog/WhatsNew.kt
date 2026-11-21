@@ -9,8 +9,9 @@ import java.net.URLEncoder
 object WhatsNew {
     const val RELEASES_URL = "https://github.com/vladkondratyev/qso-log/releases"
 
-    /** Points of this release: 2.9.7 — the users' requests after 2.9.6. */
+    /** Points of this release: 2.9.8 (the phone's fix) and 2.9.7 — the users' requests after 2.9.6. */
     fun items(desktop: Boolean): List<String> = listOfNotNull(
+        if (desktop) null else tr("Исправлено закрытие приложения на Android 8–12 при поиске позывного, у которого в QRZ.ru есть фото, и при передаче CW через USB-адаптер."),
         tr("Имя файла при экспорте: позывной, дата и время — UA3DEMO_2026-11-15_164059.adi. В папке файлы идут по порядку, несколько выгрузок за день не путаются."),
         tr("Карточка, открытая из WSJT-X, JTDX или MSHV, сразу в FT8 (или в виде программы), даже если трансивер в обычном USB."),
         tr("Kenwood TS-590/890/990: цифровой режим (DA1) больше не перестаёт опрашиваться после случайного ответа «?;» — кнопка FT8 на пульте горит."),

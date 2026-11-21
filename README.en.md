@@ -30,7 +30,7 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.9.7 | [QSO-LOG-2.9.7.apk](../../releases/tag/v2.9.7) |
+| Android 8.0 or newer | 2.9.8 | [QSO-LOG-2.9.8.apk](../../releases/tag/v2.9.8) |
 | macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.7 | [QSO-LOG-2.9.7-macos-arm64.dmg](../../releases/tag/desktop-v2.9.7) |
 | macOS 11 or newer, Intel | 2.9.7 | [QSO-LOG-2.9.7-macos-x64.dmg](../../releases/tag/desktop-v2.9.7) |
 | Windows 10 and 11, 64-bit | 2.9.7 | [QSO-LOG-2.9.7-windows-x64.zip](../../releases/tag/desktop-v2.9.7) |
@@ -994,7 +994,7 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-2.9.7.apk` from the [release page](../../releases/tag/v2.9.7) and open it on the phone; allow
+Download `QSO-LOG-2.9.8.apk` from the [release page](../../releases/tag/v2.9.8) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS

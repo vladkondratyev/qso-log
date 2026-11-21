@@ -35,12 +35,24 @@ class QsoPhotos(private val dir: File) {
             c.setRequestProperty("User-Agent", agent)
             try {
                 if (c.responseCode !in 200..299) null
-                else c.inputStream.use { s -> s.readNBytes(5_000_001) }.takeIf { it.size in 1..5_000_000 }
+                else c.inputStream.use { s -> readAtMost(s, 5_000_001) }.takeIf { it.size in 1..5_000_000 }
             } finally {
                 c.disconnect()
             }
         } catch (e: Exception) {
             null
+        }
+
+        /** Up to [limit] bytes of [s]. InputStream.readNBytes is only on Android 13+, so it is read by hand. */
+        internal fun readAtMost(s: java.io.InputStream, limit: Int): ByteArray {
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(16 * 1024)
+            while (out.size() < limit) {
+                val n = s.read(buf, 0, minOf(buf.size, limit - out.size()))
+                if (n < 0) break
+                out.write(buf, 0, n)
+            }
+            return out.toByteArray()
         }
     }
 }

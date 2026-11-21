@@ -33,6 +33,7 @@ class WhatsNewTest {
             assertTrue(WhatsNew.items(desktop = true).none { "LoTW" in it || "отчёт" in it })
             assertTrue(WhatsNew.items(desktop = false).any { "LoTW" in it })
             assertTrue(WhatsNew.items(desktop = false).any { "QSO-LOG Web" in it })
+            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Исправлено закрытие приложения на Android 8–12"))
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

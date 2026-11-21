@@ -15,10 +15,14 @@ fun preciseWait(at: Long, stop: () -> Boolean = { false }) {
     while (!stop()) {
         val left = at - System.nanoTime()
         if (left <= 0) return
-        if (left > SPIN_NS) LockSupport.parkNanos(left - SPIN_NS) else Thread.onSpinWait()
+        if (left > SPIN_NS) LockSupport.parkNanos(left - SPIN_NS) else if (ON_ANDROID) Thread.yield() else Thread.onSpinWait()
         if (Thread.interrupted()) throw InterruptedException()
     }
 }
+
+/** Thread.onSpinWait is only on Android 13+ (an older phone closed with NoSuchMethodError, 2.9.7). */
+private val ON_ANDROID = System.getProperty("java.vm.vendor").orEmpty().contains("Android") ||
+    System.getProperty("java.vendor").orEmpty().contains("Android")
 
 /**
  * How long before the moment a waiting thread stops sleeping and spins. Windows' timer ticks every 15.6 ms unless some

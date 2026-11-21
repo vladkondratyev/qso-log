@@ -22,4 +22,12 @@ class QsoPhotosTest {
         p.delete(uid)
         assertNull(p.file(uid))
     }
+
+    @Test
+    fun readAtMostStopsAtLimit() {
+        val data = ByteArray(40_000) { it.toByte() }
+        assertContentEquals(data.copyOf(20_001), QsoPhotos.readAtMost(data.inputStream(), 20_001))
+        assertContentEquals(data, QsoPhotos.readAtMost(data.inputStream(), 5_000_001))
+        assertContentEquals(ByteArray(0), QsoPhotos.readAtMost(ByteArray(0).inputStream(), 10))
+    }
 }

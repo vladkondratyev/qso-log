@@ -86,6 +86,7 @@ internal val EN_2_9_6: Map<String, String> = mapOf(
         "Rig panel: the line under the frequency no longer jumps when the S-meter reading changes.",
     "LoTW: сертификаты .p12 из новых версий TQSL открываются и на старых Android (ошибка «PBKDF2 SecretKeyFactory not available»)." to
         "LoTW: .p12 certificates from newer TQSL versions open on older Android too (the \"PBKDF2 SecretKeyFactory not available\" error).",
+    "Исправлено закрытие приложения на Android 8–12 при поиске позывного, у которого в QRZ.ru есть фото, и при передаче CW через USB-адаптер." to "Fixed: on Android 8–12 the app closed when a callsign with a photo on QRZ.ru was looked up, and when CW was sent through a USB adapter.",
     "Исправлено закрытие программы при наборе позывного вида «A/P»." to "Fixed: the app closed when a callsign like \"A/P\" was typed.",
     "Если приложение закрылось с ошибкой, при следующем запуске оно предложит отправить отчёт разработчику." to
         "If the app closes with an error, on the next start it offers to send a report to the developer.",
