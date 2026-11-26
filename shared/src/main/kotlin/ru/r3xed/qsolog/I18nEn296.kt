@@ -87,6 +87,37 @@ internal val EN_2_9_6: Map<String, String> = mapOf(
     "LoTW: сертификаты .p12 из новых версий TQSL открываются и на старых Android (ошибка «PBKDF2 SecretKeyFactory not available»)." to
         "LoTW: .p12 certificates from newer TQSL versions open on older Android too (the \"PBKDF2 SecretKeyFactory not available\" error).",
     "Исправлено закрытие приложения на Android 8–12 при поиске позывного, у которого в QRZ.ru есть фото, и при передаче CW через USB-адаптер." to "Fixed: on Android 8–12 the app closed when a callsign with a photo on QRZ.ru was looked up, and when CW was sent through a USB adapter.",
+    "Плотный журнал" to "Dense log",
+    "Фото в старой связи: в сохранённой карточке без фото есть кнопка «Загрузить фото» — фото берётся из справочников и хранится с этой связью." to
+        "A photo for an old contact: a saved card without a photo has a \"Get photo\" button; the photo comes from the callbooks and is kept with that contact.",
+    "Фото можно сохранить в полном размере: откройте его крупно и нажмите «Сохранить фото»." to "A photo can be saved in full size: open it large and press \"Save photo\".",
+    "Ширину журнала рядом с карточкой можно менять: перетащите линию между ними, двойной щелчок возвращает как было." to
+        "The log's width beside the card can be changed: drag the line between them; a double click brings it back.",
+    "Планшет в горизонтальном положении: журнал остаётся слева от карточки, линию между ними можно перетаскивать." to
+        "A tablet held sideways: the log stays to the left of the card, and the line between them can be dragged.",
+    "Соревнования: список участников по алфавиту (станции этого соревнования из журнала, в том числе прошлых лет). Клик подставляет позывной и постоянную часть контрольного номера, повторы подсвечены красным." to
+        "Contests: a participants list A–Z (stations of this contest from the log, past years too). A click fills in the callsign and the constant part of the exchange; dupes are red.",
+    "Первая связь с каждой страной отмечена звёздочкой в журнале." to "The first contact with each country has a star in the log.",
+    "Нажмите на дату над связями — откроется календарь, журнал перейдёт к выбранному дню." to "Tap the date above the contacts: a calendar opens and the log goes to the chosen day.",
+    "Плотный журнал (меню ⋮): одна строка на связь, на экране вдвое больше связей." to "Dense log (⋮ menu): one line a contact, twice as many on the screen.",
+    "С версии 3.0: большой журнал занимает в несколько раз меньше памяти." to "Since 3.0: a large log takes several times less memory.",
+    "Перейти к дате" to "Go to date",
+    "Первая связь с этой страной" to "First contact with this country",
+    "Скрыть список участников" to "Hide the participants list",
+    "Показать список участников" to "Show the participants list",
+    "Участники" to "Participants",
+    "Здесь появятся станции этого соревнования из журнала (и прошлых лет) — клик подставит позывной и постоянную часть контрольного номера." to
+        "Stations of this contest from the log (past years too) appear here; a click fills in the callsign and the constant part of the exchange.",
+    "повтор" to "dupe",
+    "Ищу фото…" to "Looking for a photo…",
+    "Загрузить фото" to "Get photo",
+    "Сохранить фото" to "Save photo",
+    "Связь не найдена в журнале" to "The contact is not in the log",
+    "В справочниках нет фото %s" to "The callbooks have no photo of %s",
+    "Фото не скачалось, попробуйте позже" to "The photo did not download, try again later",
+    "Справочник не ответил, попробуйте позже" to "The callbook did not answer, try again later",
+    "Фото сохранено" to "Photo saved",
+    "Не удалось сохранить фото" to "Could not save the photo",
     "Большой журнал (100 000 связей и больше) занимает в несколько раз меньше памяти. Программа больше не закрывается с ошибкой «Java heap space» на Windows и может взять до половины памяти компьютера." to
         "A large log (100,000 contacts and more) takes several times less memory. The program no longer closes with \"Java heap space\" on Windows and may use up to half of the computer's memory.",
     "Большой журнал (100 000 связей и больше) занимает в несколько раз меньше памяти телефона." to "A large log (100,000 contacts and more) takes several times less of the phone's memory.",

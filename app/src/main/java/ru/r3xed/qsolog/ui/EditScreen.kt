@@ -71,6 +71,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -687,7 +688,7 @@ private fun StationCard(vm: AppViewModel) {
     )
     // The photo from QRZ.ru / QRZ.com while the card is filled.
     // A saved contact: the photo this device kept when it was logged (nowhere else, not synced).
-    val kept = remember(f.id) { vm.savedPhoto(f.id) }
+    val kept = remember(f.id, vm.savedPhotoTick) { vm.savedPhoto(f.id) }
     val photo = (lookup as? Lookup.Found)?.info?.takeIf { it.call.equals(f.call, ignoreCase = true) }?.photo?.ifBlank { null } ?: kept
 
     val hasInfo = f.name.isNotBlank() || f.qth.isNotBlank() || f.country.isNotBlank() || f.locator.isNotBlank()
@@ -743,8 +744,16 @@ private fun StationCard(vm: AppViewModel) {
                 }
             }
           }
-          if (photo.isNotBlank()) CallPhoto(photo, Modifier.padding(start = 8.dp, end = 12.dp).size(width = 96.dp, height = 120.dp))
-        } else if (photo.isNotBlank()) CallPhoto(photo, Modifier.size(width = 96.dp, height = 120.dp))
+          if (photo.isNotBlank()) CallPhoto(photo, Modifier.padding(start = 8.dp, end = 12.dp).size(width = 96.dp, height = 120.dp), name = f.call, onSave = vm::savePhotoTo)
+        } else if (photo.isNotBlank()) CallPhoto(photo, Modifier.size(width = 96.dp, height = 120.dp), name = f.call, onSave = vm::savePhotoTo)
+        // A saved contact without a photo (logged before 2.9.6, or the callbook had none then): fetched on request.
+        if (!editing && !f.isNew && photo.isBlank() && f.call.length >= 3 && vm.hasQrzAccount) {
+            TextButton(onClick = { vm.fetchSavedPhoto(f.id, f.call) }, enabled = !vm.photoLoading, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
+                if (vm.photoLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = ink)
+                else Icon(Icons.Filled.AccountBox, null, tint = ink)
+                Text(if (vm.photoLoading) tr("Ищу фото…") else tr("Загрузить фото"), fontSize = 18.sp, color = ink, modifier = Modifier.padding(start = 8.dp))
+            }
+        }
         // No QTH from the callbooks: the town can be found on the map, its square goes into the locator.
         if (!editing && f.qth.isBlank() && f.call.length >= 3 && lookup != Lookup.Loading && lookup != Lookup.Idle) QthMapButton(ink) { picker = true }
         when (lookup) {

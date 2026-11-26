@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -214,7 +215,7 @@ private fun PickMap(point: LatLon?, start: LatLon?, flyTo: Pair<LatLon, Int>?, o
 
 /** The station's photo: from QRZ.ru / QRZ.com while the card is filled, or kept on this device ("file:…"). */
 @Composable
-fun CallPhoto(url: String, modifier: Modifier = Modifier) {
+fun CallPhoto(url: String, modifier: Modifier = Modifier, name: String = "", onSave: ((android.net.Uri, ByteArray) -> Unit)? = null) {
     // The file as it came, for the full-screen view; the card's thumbnail is decoded small.
     val bytes by produceState<ByteArray?>(null, url) {
         value = withContext(Dispatchers.IO) {
@@ -235,7 +236,13 @@ fun CallPhoto(url: String, modifier: Modifier = Modifier) {
         modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = tr("Открыть фото на весь экран")) { big = true },
         contentScale = ContentScale.Crop,
     )
-    if (big) PhotoViewer(data) { big = false }
+    // "Сохранить фото": the system's "save as" (any folder, Downloads or Pictures), the file in full size.
+    val ext = ru.r3xed.qsolog.data.QsoPhotos.extension(data)
+    val saver = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument(if (ext == "jpg") "image/jpeg" else "image/$ext"),
+    ) { uri -> if (uri != null) onSave?.invoke(uri, data) }
+    val fileName = (name.filter { it.isLetterOrDigit() || it == '-' || it == '_' }.ifBlank { "photo" }) + "." + ext
+    if (big) PhotoViewer(data, onSave = if (onSave != null) ({ saver.launch(fileName) }) else null) { big = false }
 }
 
 /** [bytes] decoded no smaller than [min] px on the short side (halving while it stays above it). */
@@ -252,7 +259,7 @@ private fun decodePhoto(bytes: ByteArray, min: Int): androidx.compose.ui.graphic
  * closes it.
  */
 @Composable
-private fun PhotoViewer(bytes: ByteArray, onClose: () -> Unit) {
+private fun PhotoViewer(bytes: ByteArray, onSave: (() -> Unit)? = null, onClose: () -> Unit) {
     val img = remember(bytes) { decodePhoto(bytes, 1600) } ?: return
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
@@ -281,6 +288,14 @@ private fun PhotoViewer(bytes: ByteArray, onClose: () -> Unit) {
                 },
                 contentScale = ContentScale.Fit,
             )
+            if (onSave != null) androidx.compose.material3.TextButton(
+                onClick = onSave,
+                modifier = Modifier.align(Alignment.TopStart).padding(top = 36.dp, start = 8.dp)
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), RoundedCornerShape(24.dp)),
+            ) {
+                Icon(Icons.Filled.FileDownload, null, tint = androidx.compose.ui.graphics.Color.White)
+                Text(tr("Сохранить фото"), color = androidx.compose.ui.graphics.Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 6.dp))
+            }
             IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 8.dp).size(56.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), androidx.compose.foundation.shape.CircleShape)) {
                 Icon(Icons.Filled.Close, tr("Закрыть"), tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(30.dp))
             }

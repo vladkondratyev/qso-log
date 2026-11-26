@@ -229,6 +229,50 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** "Загрузить фото": the photo of a saved contact is being fetched; [savedPhotoTick] grows when it is there. */
+    var photoLoading by mutableStateOf(false); private set
+    var savedPhotoTick by mutableStateOf(0); private set
+
+    /**
+     * A contact saved before photos were kept (or with no photo then): the callbooks are asked for [call] now, the photo
+     * is downloaded and kept with the contact [id] on this device.
+     */
+    fun fetchSavedPhoto(id: Long, call: String) {
+        if (photoLoading || id == 0L || call.isBlank()) return
+        photoLoading = true
+        viewModelScope.launch {
+            val problem = withContext(Dispatchers.IO) {
+                try {
+                    val uid = db.get(id)?.uid.orEmpty()
+                    val url = qrzLookup(call)?.photo.orEmpty()
+                    when {
+                        uid.isBlank() -> tr("Связь не найдена в журнале")
+                        url.isBlank() -> tr("В справочниках нет фото %s", call)
+                        else -> ru.r3xed.qsolog.data.QsoPhotos.download(url)?.let { photos.save(uid, it); null }
+                            ?: tr("Фото не скачалось, попробуйте позже")
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    e.message ?: tr("Справочник не ответил, попробуйте позже")
+                }
+            }
+            photoLoading = false
+            savedPhotoTick++
+            problem?.let { say(it) }
+        }
+    }
+
+    /** "Сохранить фото": the file as it came from the callbook, to the place picked in the system dialog. */
+    fun savePhotoTo(uri: android.net.Uri, bytes: ByteArray) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching { getApplication<android.app.Application>().contentResolver.openOutputStream(uri)?.use { it.write(bytes) } != null }.getOrDefault(false)
+            }
+            say(if (ok) tr("Фото сохранено") else tr("Не удалось сохранить фото"))
+        }
+    }
+
     /** "file:…" of the photo this device keeps for the saved contact [id], or "". */
     fun savedPhoto(id: Long): String {
         if (id == 0L) return ""
@@ -2675,6 +2719,48 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The latest contest contacts, newest first: the list under the contest card. */
     fun contestRecent(n: Int): List<Qso> = contestQsos().takeLast(n).reversed()
+
+    // ---------- layout ----------
+
+    /** «Плотный журнал»: one line a contact. */
+    var compactLog by mutableStateOf(prefs.compactLog); private set
+
+    fun toggleCompactLog() {
+        compactLog = !compactLog
+        prefs.compactLog = compactLog
+    }
+
+    /** Wide screen: the log's share of the width beside the card, dragged by the divider. */
+    var logPaneFraction by mutableStateOf(prefs.logPaneFraction); private set
+
+    fun changeLogPaneFraction(f: Float, keep: Boolean) {
+        logPaneFraction = f.coerceIn(0.25f, 0.7f)
+        if (keep) prefs.logPaneFraction = logPaneFraction
+    }
+
+    // ---------- contest participants ----------
+
+    /** The participants list beside the contest card. */
+    var contestParticipantsShown by mutableStateOf(prefs.contestParticipants); private set
+
+    fun changeContestParticipants(on: Boolean) {
+        contestParticipantsShown = on
+        prefs.contestParticipants = on
+    }
+
+    /** Stations of this contest (its code, any year) and of the one in work, A–Z; dupes on the card's band and mode marked. */
+    fun contestParticipants(): List<ru.r3xed.qsolog.data.ContestParticipants.Participant> {
+        // Without a contest from the book "the contest in work" is today's contest contacts (UTC), as for the dupes.
+        val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+        val current = if (activeContest != null) contestQsos() else contestQsos().filter { utc(it.timeUtc).toLocalDate() == today }
+        return ru.r3xed.qsolog.data.ContestParticipants.of(allQsos, current, activeContest?.code, form.band, form.mode)
+    }
+
+    /** A click in the list: the callsign and the constant part of its code go into the card. */
+    fun pickParticipant(p: ru.r3xed.qsolog.data.ContestParticipants.Participant) {
+        setCall(p.call)
+        if (form.isNew) setContestField(ContestMode.RCVD, p.exchange)
+    }
 
     /** Contest contacts so far and in the hour before [now]: the rate in the card's header. */
     fun contestCounts(now: Long): kotlin.Pair<Int, Int> {

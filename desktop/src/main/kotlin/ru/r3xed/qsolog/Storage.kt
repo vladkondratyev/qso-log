@@ -303,6 +303,9 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) : SyncStore {
  * The QRZ.ru password goes to the system keychain (macOS Keychain, Windows Credential Manager);
  * if the keychain is unavailable it falls back to the settings file.
  */
+const val LOG_PANE_MIN = 300
+const val LOG_PANE_MAX = 900
+
 class Settings {
     private val file = File(AppDirs.data, "settings.properties")
     private val props = Properties().apply { if (file.exists()) file.inputStream().use { load(it) } }
@@ -700,6 +703,16 @@ class Settings {
     var contestRstShown: Boolean
         get() = get("contest_rst_shown", "true") == "true"
         set(v) = put("contest_rst_shown", v.toString())
+
+    /** Contest card: the participants list on the right is shown. */
+    var contestParticipants: Boolean
+        get() = get("contest_participants", "true") == "true"
+        set(v) = put("contest_participants", v.toString())
+
+    /** The log's width beside the card, dp at text scale 1 (dragged by the divider); 460 by default. */
+    var logPaneWidth: Int
+        get() = get("log_pane_width", "460").toIntOrNull()?.coerceIn(LOG_PANE_MIN, LOG_PANE_MAX) ?: 460
+        set(v) = put("log_pane_width", v.coerceIn(LOG_PANE_MIN, LOG_PANE_MAX).toString())
 
     /** Table sync: the address of the Apps Script web app (…/exec) and what the computer remembers between syncs. */
     var sheetUrl: String

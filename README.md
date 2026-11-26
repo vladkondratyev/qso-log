@@ -29,11 +29,11 @@ QSO-LOG — аппаратный журнал радиолюбителя. Раб
 
 | Система | Версия | Файл |
 |---|---|---|
-| Android 8.0 и новее | 3.0 | [QSO-LOG-3.0.apk](../../releases/tag/v3.0) |
-| macOS 11 и новее, процессор Apple (M1 и новее) | 3.0 | [QSO-LOG-3.0-macos-arm64.dmg](../../releases/tag/desktop-v3.0) |
-| macOS 11 и новее, процессор Intel | 3.0 | [QSO-LOG-3.0-macos-x64.dmg](../../releases/tag/desktop-v3.0) |
-| Windows 10 и 11, 64 бит | 3.0 | [QSO-LOG-3.0-windows-x64.zip](../../releases/tag/desktop-v3.0) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 3.0 | [QSO-LOG-3.0-linux-amd64.deb](../../releases/tag/desktop-v3.0) |
+| Android 8.0 и новее | 3.1 | [QSO-LOG-3.1.apk](../../releases/tag/v3.1) |
+| macOS 11 и новее, процессор Apple (M1 и новее) | 3.1 | [QSO-LOG-3.1-macos-arm64.dmg](../../releases/tag/desktop-v3.1) |
+| macOS 11 и новее, процессор Intel | 3.1 | [QSO-LOG-3.1-macos-x64.dmg](../../releases/tag/desktop-v3.1) |
+| Windows 10 и 11, 64 бит | 3.1 | [QSO-LOG-3.1-windows-x64.zip](../../releases/tag/desktop-v3.1) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 3.1 | [QSO-LOG-3.1-linux-amd64.deb](../../releases/tag/desktop-v3.1) |
 
 Как установить: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 Без установки: [QSO-LOG Web](https://qso-log.ru/app/) — облегчённая версия в браузере (журнал, страна и расстояние, повторы, ADIF и CSV, статистика, CAT в Chrome и Edge); работает без интернета и ставится на главный экран. Журнал хранится только в браузере.
@@ -1293,14 +1293,14 @@ Esc ещё раз — как было.
 
 ### Android
 
-1. Скачайте `QSO-LOG-3.0.apk` со [страницы релиза](../../releases/tag/v3.0).
+1. Скачайте `QSO-LOG-3.1.apk` со [страницы релиза](../../releases/tag/v3.1).
 2. Откройте файл на телефоне. Android может попросить разрешить установку из этого источника — разрешите.
 
 ### macOS
 
-1. Скачайте со [страницы релиза](../../releases/tag/desktop-v3.0) файл для своего Mac:
-   - `QSO-LOG-3.0-macos-arm64.dmg`, если процессор Apple (M1 и новее);
-   - `QSO-LOG-3.0-macos-x64.dmg`, если Intel.
+1. Скачайте со [страницы релиза](../../releases/tag/desktop-v3.1) файл для своего Mac:
+   - `QSO-LOG-3.1-macos-arm64.dmg`, если процессор Apple (M1 и новее);
+   - `QSO-LOG-3.1-macos-x64.dmg`, если Intel.
 
    Узнать, какой у вас, можно в меню  → «Об этом Mac».
 2. Откройте DMG и перетащите QSO-LOG в «Программы».
@@ -1310,7 +1310,7 @@ Esc ещё раз — как было.
 
 ### Windows
 
-1. Скачайте `QSO-LOG-3.0-windows-x64.zip` со [страницы релиза](../../releases/tag/desktop-v3.0).
+1. Скачайте `QSO-LOG-3.1-windows-x64.zip` со [страницы релиза](../../releases/tag/desktop-v3.1).
 2. Распакуйте архив целиком, например в «Документы». Прямо из архива программа не запустится.
 3. Запустите `QSO-LOG.exe`. Java ставить не нужно, она уже в папке.
 4. Windows может показать «Система Windows защитила ваш компьютер», потому что программа не подписана.
@@ -1322,10 +1322,10 @@ Esc ещё раз — как было.
 
 ### Linux
 
-1. Скачайте `QSO-LOG-3.0-linux-amd64.deb` со [страницы релиза](../../releases/tag/desktop-v3.0).
+1. Скачайте `QSO-LOG-3.1-linux-amd64.deb` со [страницы релиза](../../releases/tag/desktop-v3.1).
 2. Установите двойным щелчком или из терминала:
    ```bash
-   sudo apt install ./QSO-LOG-3.0-linux-amd64.deb
+   sudo apt install ./QSO-LOG-3.1-linux-amd64.deb
    ```
 3. QSO-LOG появится в меню приложений, в разделе «Любительское радио».
 

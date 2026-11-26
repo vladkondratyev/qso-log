@@ -241,6 +241,18 @@ class Settings(context: Context) {
     var contestRstShown: Boolean
         get() = prefs.getBoolean("contest_rst_shown", true)
         set(v) = prefs.edit().putBoolean("contest_rst_shown", v).apply()
+    /** «Плотный журнал»: one line a contact in the log. */
+    var compactLog: Boolean
+        get() = prefs.getBoolean("compact_log", false)
+        set(v) = prefs.edit().putBoolean("compact_log", v).apply()
+    /** Contest card: the participants list is open. */
+    var contestParticipants: Boolean
+        get() = prefs.getBoolean("contest_participants", false)
+        set(v) = prefs.edit().putBoolean("contest_participants", v).apply()
+    /** Wide screen (tablet across): the log's share of the width beside the card, 0.25–0.7. */
+    var logPaneFraction: Float
+        get() = prefs.getFloat("log_pane_fraction", 0.42f).coerceIn(0.25f, 0.7f)
+        set(v) = prefs.edit().putFloat("log_pane_fraction", v.coerceIn(0.25f, 0.7f)).apply()
     /** CAT: the transceiver's frequency, mode and S-meter (see ru.r3xed.qsolog.cat). */
     var cat: ru.r3xed.qsolog.cat.CatConfig
         get() = ru.r3xed.qsolog.cat.CatConfig.fromMap(

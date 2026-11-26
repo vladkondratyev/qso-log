@@ -26,13 +26,13 @@ class WhatsNewTest {
 
     @Test
     fun computerAndPhonePoints() {
-        // 3.0: the Windows heap on the computer, the log's place after a card on the phone.
+        // 3.1: the divider on the computer, the tablet and the dense log on the phone.
         I18n.chosen = Lang.RU
         try {
-            assertTrue("Java heap space" in WhatsNew.items(desktop = true).first())
-            assertTrue(WhatsNew.items(desktop = true).none { "прыгает" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "прыгает" in it })
-            assertTrue(WhatsNew.items(desktop = false).none { "Java" in it })
+            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Фото в старой связи"))
+            assertTrue(WhatsNew.items(desktop = true).any { "двойной щелчок" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "Планшет" in it })
+            assertTrue(WhatsNew.items(desktop = true).none { "Плотный журнал" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

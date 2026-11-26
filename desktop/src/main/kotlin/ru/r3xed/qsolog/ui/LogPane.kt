@@ -1,5 +1,11 @@
 package ru.r3xed.qsolog.ui
 
+import kotlinx.coroutines.launch
+
+import androidx.compose.runtime.rememberCoroutineScope
+
+import androidx.compose.material.icons.filled.Star
+
 import androidx.compose.ui.input.pointer.isShiftPressed
 import ru.r3xed.qsolog.keys.KeyAction
 import ru.r3xed.qsolog.keys.KeyMap
@@ -332,6 +338,16 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
             SortBar(state)
             val groups = remember(state.qsos, state.sortBy, state.sortDesc) { groupAndSort(state.qsos, state.sortBy, state.sortDesc) }
             val listState = rememberLazyListState()
+            // The first contact with each country: a star on its row.
+            val firsts = remember(state.allQsos) { ru.r3xed.qsolog.data.LogMarks.firstWithCountry(state.allQsos) }
+            var jump by remember { mutableStateOf(false) }
+            val jumpScope = rememberCoroutineScope()
+            if (jump) JumpToDateDialog(onDismiss = { jump = false }) { day ->
+                jump = false
+                val days = groups.map { java.time.LocalDate.parse(it.key.removePrefix("d")).toEpochDay() }
+                val gi = ru.r3xed.qsolog.data.LogMarks.dayIndex(days, day.toEpochDay())
+                if (gi >= 0) jumpScope.launch { listState.scrollToItem(groups.take(gi).sumOf { it.items.size + 1 }) }
+            }
             // A new order starts from the top, not from wherever the old one was scrolled to.
             LaunchedEffect(state.sortBy, state.sortDesc) { listState.scrollToItem(0) }
             // A just-saved contact is shown: with the date sort it is the first row.
@@ -356,9 +372,12 @@ fun LogPane(state: AppState, shortcut: String, onExportSelected: () -> Unit, mod
                     verticalArrangement = Arrangement.spacedBy(if (state.compactLog) 4.dp else 8.dp),
                 ) {
                     groups.forEach { g ->
-                        if (g.title != null) stickyHeader(key = "h" + g.key) { GroupHeader(g.title, g.items.size) }
+                        if (g.title != null) stickyHeader(key = "h" + g.key) {
+                            // With the date sort a day's header opens the calendar: a long log is crossed in one step.
+                            GroupHeader(g.title, g.items.size, onClick = if (state.sortBy == SortBy.DATE) ({ jump = true }) else null)
+                        }
                         items(g.items, key = { it.id }) { qso ->
-                            QsoRow(qso, state, showDate = state.sortBy != SortBy.DATE)
+                            QsoRow(qso, state, showDate = state.sortBy != SortBy.DATE, firstCountry = qso.id in firsts)
                         }
                     }
                 }
@@ -581,12 +600,16 @@ private fun SortBar(state: AppState) {
 }
 
 @Composable
-private fun GroupHeader(title: String, count: Int) {
+private fun GroupHeader(title: String, count: Int, onClick: (() -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(top = 10.dp, bottom = 4.dp),
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
+            .then(if (onClick != null) Modifier.clickable(onClickLabel = tr("Перейти к дате"), onClick = onClick) else Modifier)
+            .padding(top = 10.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = LocalExtra.current.muted, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
+        Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = LocalExtra.current.muted, letterSpacing = 1.sp)
+        if (onClick != null) Icon(Icons.Filled.CalendarMonth, tr("Перейти к дате"), Modifier.padding(start = 6.dp).size(14.dp), tint = LocalExtra.current.muted)
+        Spacer(Modifier.weight(1f))
         Text("$count QSO", style = MaterialTheme.typography.labelMedium, color = LocalExtra.current.muted)
     }
 }
@@ -646,7 +669,7 @@ internal fun SelectionBar(state: AppState, onExport: () -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
+private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean, firstCountry: Boolean = false) {
     val x = LocalExtra.current
     val shape = RoundedCornerShape(14.dp)
     val selecting = state.selecting
@@ -693,9 +716,10 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
             )
             Spacer(Modifier.width(10.dp))
         }
-        if (compact) CompactRowBody(qso, state, showDate) else Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (compact) CompactRowBody(qso, state, showDate, firstCountry) else Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (firstCountry) FirstCountryStar()
                 if (ContestMode.isContest(qso.adif)) {
                     Icon(Icons.Filled.Flag, tr("Связь в контест-режиме"), Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
@@ -756,11 +780,12 @@ private fun QsoRow(qso: Qso, state: AppState, showDate: Boolean) {
  * on the second, in smaller type. The marks stay; the voice and contest icons give way to the text.
  */
 @Composable
-private fun RowScope.CompactRowBody(qso: Qso, state: AppState, showDate: Boolean) {
+private fun RowScope.CompactRowBody(qso: Qso, state: AppState, showDate: Boolean, firstCountry: Boolean = false) {
     val x = LocalExtra.current
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(0.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, modifier = Modifier.widthIn(min = 116.dp))
+            if (firstCountry) FirstCountryStar()
             val cols = state.compactColumns
             val meta = listOfNotNull(
                 if ("freq" in cols) qso.freqMhz.ifBlank { null } ?: qso.band.ifBlank { null } else qso.band.ifBlank { null },
@@ -944,3 +969,28 @@ private fun FilterPill(text: String, on: Boolean, onClick: () -> Unit) {
     )
 }
 
+
+/** The first contact with this country in the log. */
+@Composable
+private fun FirstCountryStar() {
+    Tip(tr("Первая связь с этой страной")) {
+        Icon(Icons.Filled.Star, tr("Первая связь с этой страной"), Modifier.padding(end = 6.dp).size(18.dp), tint = androidx.compose.ui.graphics.Color(0xFFE0A100))
+    }
+}
+
+/** «Перейти к дате»: the calendar; the log scrolls to that day or the nearest one before it. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun JumpToDateDialog(onDismiss: () -> Unit, onPick: (java.time.LocalDate) -> Unit) {
+    val state = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+    androidx.compose.material3.DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                val ms = state.selectedDateMillis
+                if (ms == null) onDismiss() else onPick(java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneOffset.UTC).toLocalDate())
+            }) { Text(tr("Перейти")) }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text(tr("Отмена")) } },
+    ) { androidx.compose.material3.DatePicker(state, title = { Text(tr("Перейти к дате"), modifier = Modifier.padding(start = 24.dp, top = 16.dp)) }) }
+}

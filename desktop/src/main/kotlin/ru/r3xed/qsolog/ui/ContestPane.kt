@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -199,6 +201,13 @@ fun ContestPane(vm: AppState) {
             RigBadge(vm, Modifier.weight(1f, fill = false))
             Spacer(Modifier.weight(1f))
             ContestRate(vm)
+            IconButton(onClick = { vm.changeContestParticipants(!vm.contestParticipantsShown) }) {
+                Icon(
+                    Icons.Filled.Groups,
+                    if (vm.contestParticipantsShown) tr("Скрыть список участников") else tr("Показать список участников"),
+                    tint = if (vm.contestParticipantsShown) MaterialTheme.colorScheme.primary else x.muted,
+                )
+            }
         }
         CwBar(vm, Modifier.padding(horizontal = 20.dp))
         // Where this card is among the contest contacts; the arrows do what Page Up / Page Down do.
@@ -227,145 +236,154 @@ fun ContestPane(vm: AppState) {
         }
         HorizontalDivider(color = x.line)
 
-        Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 32.dp, vertical = 16.dp).widthIn(max = 760.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            val callError = error != null && error != CONTEST_RCVD_ERROR
-            OutlinedTextField(
-                value = f.call,
-                onValueChange = { error = null; vm.setCall(it) },
-                modifier = Modifier.fillMaxWidth().focusRequester(callFocus).onFocusChanged { if (it.isFocused) focused = Target.CALL },
-                label = { Text(tr("Позывной"), fontSize = 16.sp) },
-                // ⌫ wipes the whole callsign, the cursor stays in the field.
-                trailingIcon = if (f.call.isNotEmpty()) { { ClearButton { error = null; vm.setCall(""); callFocus.requestFocus() } } } else null,
-                isError = callError,
-                textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 40.sp, letterSpacing = 1.sp),
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrect = false),
-                colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
-            )
-            LaunchedEffect(Unit) { callFocus.requestFocus() }
-            // Calls from the log that start with what is typed: one click instead of the rest.
-            if (f.isNew) {
-                val suggestions = remember(f.call, vm.allQsos) { vm.callSuggestions(f.call) }
-                if (suggestions.isNotEmpty()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        suggestions.forEach { c ->
-                            Text(
-                                c, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1,
-                                modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(x.field)
-                                    .clickable(onClickLabel = tr("Подставить позывной")) { error = null; vm.setCall(c); rcvdFocus.requestFocus() }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                            )
+        // The card on the left, the participants list on the right (the header's button shows or hides it).
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+          Column(Modifier.weight(1f).fillMaxHeight()) {
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 32.dp, vertical = 16.dp).widthIn(max = 760.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                val callError = error != null && error != CONTEST_RCVD_ERROR
+                OutlinedTextField(
+                    value = f.call,
+                    onValueChange = { error = null; vm.setCall(it) },
+                    modifier = Modifier.fillMaxWidth().focusRequester(callFocus).onFocusChanged { if (it.isFocused) focused = Target.CALL },
+                    label = { Text(tr("Позывной"), fontSize = 16.sp) },
+                    // ⌫ wipes the whole callsign, the cursor stays in the field.
+                    trailingIcon = if (f.call.isNotEmpty()) { { ClearButton { error = null; vm.setCall(""); callFocus.requestFocus() } } } else null,
+                    isError = callError,
+                    textStyle = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 40.sp, letterSpacing = 1.sp),
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrect = false),
+                    colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = MaterialTheme.colorScheme.primary),
+                )
+                LaunchedEffect(Unit) { callFocus.requestFocus() }
+                // Calls from the log that start with what is typed: one click instead of the rest.
+                if (f.isNew) {
+                    val suggestions = remember(f.call, vm.allQsos) { vm.callSuggestions(f.call) }
+                    if (suggestions.isNotEmpty()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            suggestions.forEach { c ->
+                                Text(
+                                    c, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1,
+                                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(x.field)
+                                        .clickable(onClickLabel = tr("Подставить позывной")) { error = null; vm.setCall(c); rcvdFocus.requestFocus() }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                )
+                            }
                         }
                     }
                 }
-            }
-            StationLine(vm)
+                StationLine(vm)
 
-            // The numbers first: they change with every contact. Any letters and digits: 015, MO69, EU, 16.
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                BigField(
-                    tr("Код передан"), sent, { vm.setAdif(ContestMode.SENT, it) },
-                    Modifier.weight(1f).onFocusChanged { if (it.isFocused) focused = Target.SENT },
-                )
-                BigField(
-                    tr("Код принят"), rcvd, { error = null; vm.setAdif(ContestMode.RCVD, it) },
-                    Modifier.weight(1f).focusRequester(rcvdFocus).onFocusChanged { if (it.isFocused) focused = Target.RCVD },
-                    isError = error == CONTEST_RCVD_ERROR,
-                )
-            }
-            if (grids) {
-                // The locators: mine (the station's, or the portable one typed here, kept for the next cards) and his,
-                // filled from his earlier contact (the previous tour) when there is one.
-                val myBad = f.myLocator.isNotBlank() && !Geo.isLocator(f.myLocator)
-                val hisBad = f.locator.isNotBlank() && !Geo.isLocator(f.locator)
+                // The numbers first: they change with every contact. Any letters and digits: 015, MO69, EU, 16.
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    BigField(tr("Мой локатор"), f.myLocator, vm::setContestMyLocator, Modifier.weight(1f).onFocusChanged { if (it.isFocused) focused = Target.LOC }, isError = myBad)
                     BigField(
-                        tr("Локатор корр."), f.locator, vm::setContestLocator,
-                        Modifier.weight(1f).focusRequester(locFocus).onFocusChanged { if (it.isFocused) focused = Target.LOC }, isError = hisBad,
+                        tr("Код передан"), sent, { vm.setAdif(ContestMode.SENT, it) },
+                        Modifier.weight(1f).onFocusChanged { if (it.isFocused) focused = Target.SENT },
+                    )
+                    BigField(
+                        tr("Код принят"), rcvd, { error = null; vm.setAdif(ContestMode.RCVD, it) },
+                        Modifier.weight(1f).focusRequester(rcvdFocus).onFocusChanged { if (it.isFocused) focused = Target.RCVD },
+                        isError = error == CONTEST_RCVD_ERROR,
                     )
                 }
-                val me = Geo.locatorToLatLon(f.myLocator) ?: vm.settings.myPosition
-                val them = f.position
-                if (me != null && them != null && !hisBad) {
-                    Text(tr("%s км до корреспондента", Math.round(Geo.distanceKm(me, them))), style = MaterialTheme.typography.bodyMedium, color = x.muted)
+                if (grids) {
+                    // The locators: mine (the station's, or the portable one typed here, kept for the next cards) and his,
+                    // filled from his earlier contact (the previous tour) when there is one.
+                    val myBad = f.myLocator.isNotBlank() && !Geo.isLocator(f.myLocator)
+                    val hisBad = f.locator.isNotBlank() && !Geo.isLocator(f.locator)
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        BigField(tr("Мой локатор"), f.myLocator, vm::setContestMyLocator, Modifier.weight(1f).onFocusChanged { if (it.isFocused) focused = Target.LOC }, isError = myBad)
+                        BigField(
+                            tr("Локатор корр."), f.locator, vm::setContestLocator,
+                            Modifier.weight(1f).focusRequester(locFocus).onFocusChanged { if (it.isFocused) focused = Target.LOC }, isError = hisBad,
+                        )
+                    }
+                    val me = Geo.locatorToLatLon(f.myLocator) ?: vm.settings.myPosition
+                    val them = f.position
+                    if (me != null && them != null && !hisBad) {
+                        Text(tr("%s км до корреспондента", Math.round(Geo.distanceKm(me, them))), style = MaterialTheme.typography.bodyMedium, color = x.muted)
+                    }
                 }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium) }
+                if (dupeArmed && dupe != null) {
+                    Text(
+                        tr("Уже была связь на %s %s в %s. Нажмите ещё раз, чтобы записать повтор.", dupe.band, dupe.mode, TIME_FMT.format(utc(dupe.timeUtc))),
+                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+
+                // The reports are 59 / 599 nearly always: they can be folded into one line.
+                if (vm.contestRstShown) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        BigField(
+                            tr("RST передан"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) },
+                            Modifier.weight(1f).onFocusChanged { if (it.isFocused) focused = Target.RST },
+                        )
+                        BigField(
+                            tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) },
+                            Modifier.weight(1f).onFocusChanged { if (it.isFocused) focused = Target.RST },
+                        )
+                        IconButton(onClick = { vm.changeContestRstShown(false) }) { Icon(Icons.Filled.ExpandLess, tr("Свернуть RST")) }
+                    }
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClickLabel = tr("Показать RST")) { vm.changeContestRstShown(true) }
+                            .padding(horizontal = 4.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("RST  ", style = MaterialTheme.typography.bodyLarge, color = x.muted)
+                        Text("${f.rstSent.ifBlank { "—" }} / ${f.rstRcvd.ifBlank { "—" }}", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Spacer(Modifier.weight(1f))
+                        Text(tr("изменить"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Filled.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                RecentContacts(vm) { showError(vm.contestOpen(it)) }
             }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium) }
-            if (dupeArmed && dupe != null) {
+
+            // --- bottom: the big button, and when the contact is (or will be) logged ---
+            HorizontalDivider(color = x.line)
+            Column(Modifier.padding(horizontal = 32.dp, vertical = 12.dp).widthIn(max = 760.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (!f.isNew) {
+                        OutlinedIconButton(
+                            onClick = { confirmDelete = true },
+                            modifier = Modifier.size(60.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
+                            colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        ) { Icon(Icons.Filled.DeleteOutline, tr("Удалить связь"), Modifier.size(28.dp)) }
+                    }
+                    val saveLabel = if (f.isNew) tr("Записать и следующая") else tr("Сохранить и далее")
+                    Button(
+                        onClick = next, modifier = Modifier.weight(1f).height(60.dp), shape = RoundedCornerShape(16.dp),
+                        colors = if (dupeArmed) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError)
+                        else ButtonDefaults.buttonColors(),
+                    ) {
+                        Text(if (dupeArmed) tr("Записать повтор") else saveLabel, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(28.dp))
+                    }
+                }
+                TimeLine(f.isNew, "${f.time} UTC · ${f.date}", f.freq.ifBlank { null }?.let { tr("%s МГц", it) })
+                // The contest from the book: the tour and the time left; a saved contact shows the tour it was logged in.
+                vm.activeContest?.let { c ->
+                    if (f.isNew) ContestPhaseText(c, x.muted, prefix = c.title)
+                    else Text(listOfNotNull(c.title, f.adif[ru.r3xed.qsolog.data.Contest.TOUR]?.let { tr("тур %s", it) }).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = x.muted)
+                }
                 Text(
-                    tr("Уже была связь на %s %s в %s. Нажмите ещё раз, чтобы записать повтор.", dupe.band, dupe.mode, TIME_FMT.format(utc(dupe.timeUtc))),
-                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium,
+                    tr("Enter — из позывного в принятый код, там — записать. PgUp / PgDn — предыдущая и следующая связь контеста. Esc — закрыть."),
+                    style = MaterialTheme.typography.bodyMedium, color = x.muted,
                 )
             }
-
-            // The reports are 59 / 599 nearly always: they can be folded into one line.
-            if (vm.contestRstShown) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BigField(
-                        tr("RST передан"), f.rstSent, { vm.update(vm.form.copy(rstSent = it)) },
-                        Modifier.weight(1f).onFocusChanged { if (it.isFocused) focused = Target.RST },
-                    )
-                    BigField(
-                        tr("RST принят"), f.rstRcvd, { vm.update(vm.form.copy(rstRcvd = it)) },
-                        Modifier.weight(1f).onFocusChanged { if (it.isFocused) focused = Target.RST },
-                    )
-                    IconButton(onClick = { vm.changeContestRstShown(false) }) { Icon(Icons.Filled.ExpandLess, tr("Свернуть RST")) }
-                }
-            } else {
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClickLabel = tr("Показать RST")) { vm.changeContestRstShown(true) }
-                        .padding(horizontal = 4.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("RST  ", style = MaterialTheme.typography.bodyLarge, color = x.muted)
-                    Text("${f.rstSent.ifBlank { "—" }} / ${f.rstRcvd.ifBlank { "—" }}", fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Spacer(Modifier.weight(1f))
-                    Text(tr("изменить"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                    Icon(Icons.Filled.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
-                }
-            }
-            RecentContacts(vm) { showError(vm.contestOpen(it)) }
-        }
-
-        // --- bottom: the big button, and when the contact is (or will be) logged ---
-        HorizontalDivider(color = x.line)
-        Column(Modifier.padding(horizontal = 32.dp, vertical = 12.dp).widthIn(max = 760.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (!f.isNew) {
-                    OutlinedIconButton(
-                        onClick = { confirmDelete = true },
-                        modifier = Modifier.size(60.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
-                        colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) { Icon(Icons.Filled.DeleteOutline, tr("Удалить связь"), Modifier.size(28.dp)) }
-                }
-                val saveLabel = if (f.isNew) tr("Записать и следующая") else tr("Сохранить и далее")
-                Button(
-                    onClick = next, modifier = Modifier.weight(1f).height(60.dp), shape = RoundedCornerShape(16.dp),
-                    colors = if (dupeArmed) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError)
-                    else ButtonDefaults.buttonColors(),
-                ) {
-                    Text(if (dupeArmed) tr("Записать повтор") else saveLabel, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(6.dp))
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(28.dp))
-                }
-            }
-            TimeLine(f.isNew, "${f.time} UTC · ${f.date}", f.freq.ifBlank { null }?.let { tr("%s МГц", it) })
-            // The contest from the book: the tour and the time left; a saved contact shows the tour it was logged in.
-            vm.activeContest?.let { c ->
-                if (f.isNew) ContestPhaseText(c, x.muted, prefix = c.title)
-                else Text(listOfNotNull(c.title, f.adif[ru.r3xed.qsolog.data.Contest.TOUR]?.let { tr("тур %s", it) }).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = x.muted)
-            }
-            Text(
-                tr("Enter — из позывного в принятый код, там — записать. PgUp / PgDn — предыдущая и следующая связь контеста. Esc — закрыть."),
-                style = MaterialTheme.typography.bodyMedium, color = x.muted,
-            )
+          }
+          if (vm.contestParticipantsShown) {
+            androidx.compose.material3.VerticalDivider(color = x.line)
+            ParticipantsList(vm, Modifier.width(300.dp).fillMaxHeight()) { error = null; rcvdFocus.requestFocus() }
+          }
         }
     }
 
@@ -559,4 +577,51 @@ private fun BigField(label: String, value: String, onChange: (String) -> Unit, m
         shape = RoundedCornerShape(12.dp),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrect = false),
     )
+}
+
+/**
+ * The contest's participants A–Z (this contest's code in any year and the one in work), narrowed by what is typed in
+ * the callsign. A click puts the callsign and the constant part of its code (RDA, years, zone) into the card;
+ * red — already worked on this band and mode, muted — worked on another one.
+ */
+@Composable
+private fun ParticipantsList(vm: AppState, modifier: Modifier, onPicked: () -> Unit) {
+    val x = LocalExtra.current
+    val f = vm.form
+    val all = remember(vm.allQsos, vm.activeContest, f.band, f.mode) { vm.contestParticipants() }
+    val shown = remember(all, f.call) { ru.r3xed.qsolog.data.ContestParticipants.filter(all, f.call) }
+    Column(modifier.padding(top = 12.dp)) {
+        Text(
+            tr("Участники") + "  " + if (shown.size == all.size) "${all.size}" else "${shown.size} / ${all.size}",
+            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        if (all.isEmpty()) {
+            Text(
+                tr("Здесь появятся станции этого соревнования из журнала (и прошлых лет) — клик подставит позывной и постоянную часть контрольного номера."),
+                style = MaterialTheme.typography.bodyMedium, color = x.muted, modifier = Modifier.padding(16.dp),
+            )
+            return@Column
+        }
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f).padding(top = 6.dp)) {
+            items(shown.size, key = { shown[it].call }) { i ->
+                val p = shown[i]
+                val color = when (p.worked) {
+                    ru.r3xed.qsolog.data.ContestParticipants.Worked.DUPE -> MaterialTheme.colorScheme.error
+                    ru.r3xed.qsolog.data.ContestParticipants.Worked.OTHER_BAND -> x.muted
+                    ru.r3xed.qsolog.data.ContestParticipants.Worked.NO -> MaterialTheme.colorScheme.onBackground
+                }
+                Row(
+                    Modifier.fillMaxWidth()
+                        .then(if (p.worked == ru.r3xed.qsolog.data.ContestParticipants.Worked.DUPE) Modifier.background(MaterialTheme.colorScheme.error.copy(alpha = 0.10f)) else Modifier)
+                        .clickable(onClickLabel = tr("Подставить позывной")) { vm.pickParticipant(p); onPicked() }
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(p.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = color, maxLines = 1, modifier = Modifier.weight(1f))
+                    if (p.exchange.isNotEmpty()) Text(p.exchange, fontFamily = Mono, fontSize = 15.sp, color = x.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).widthIn(max = 120.dp))
+                    if (p.worked == ru.r3xed.qsolog.data.ContestParticipants.Worked.DUPE) Text(" " + tr("повтор"), fontSize = 13.sp, color = color, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
 }

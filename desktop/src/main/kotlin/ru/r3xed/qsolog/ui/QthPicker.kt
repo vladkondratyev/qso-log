@@ -32,6 +32,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -169,27 +170,39 @@ fun QthPickerDialog(
 
 /** The station's photo: from QRZ.ru / QRZ.com while the card is filled, or kept on this device ("file:…"). */
 @Composable
-fun CallPhoto(url: String, modifier: Modifier = Modifier) {
-    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, url) {
+fun CallPhoto(url: String, modifier: Modifier = Modifier, name: String = "") {
+    // The file as downloaded (kept for "Сохранить" in full size) and the picture made of it.
+    val loaded by produceState<Pair<ByteArray, androidx.compose.ui.graphics.ImageBitmap>?>(null, url) {
         value = withContext(Dispatchers.IO) {
             try {
                 // "file:…" — the photo this device kept with a contact or a history entry.
                 val bytes = if (url.startsWith("file:")) java.io.File(java.net.URI(url)).readBytes()
                 else ru.r3xed.qsolog.data.QsoPhotos.download(url)
-                bytes?.let { org.jetbrains.skia.Image.makeFromEncoded(it).toComposeImageBitmap() }
+                bytes?.let { it to org.jetbrains.skia.Image.makeFromEncoded(it).toComposeImageBitmap() }
             } catch (e: Exception) {
                 null
             }
         }
     }
-    val b = bmp ?: return
+    val (bytes, b) = loaded ?: return
     var big by remember { mutableStateOf(false) }
     Image(
         b, tr("Фото корреспондента"),
         modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = tr("Открыть фото крупно")) { big = true },
         contentScale = ContentScale.Crop,
     )
-    if (big) PhotoViewer(b) { big = false }
+    if (big) PhotoViewer(b, onSave = { savePhotoFile(bytes, name) }) { big = false }
+}
+
+/** "Сохранить фото": the file as it came from the callbook (full size), to a place the user picks. */
+internal fun savePhotoFile(bytes: ByteArray, name: String) {
+    val ext = ru.r3xed.qsolog.data.QsoPhotos.extension(bytes)
+    val d = java.awt.FileDialog(null as java.awt.Frame?, tr("Сохранить фото"), java.awt.FileDialog.SAVE)
+    d.file = (name.filter { it.isLetterOrDigit() || it == '-' || it == '_' }.ifBlank { "photo" }) + "." + ext
+    ru.r3xed.qsolog.FileDirs.show(d)
+    val file = d.file ?: return
+    val out = java.io.File(d.directory, if (file.contains('.')) file else "$file.$ext")
+    runCatching { out.writeBytes(bytes) }
 }
 
 /**
@@ -198,7 +211,7 @@ fun CallPhoto(url: String, modifier: Modifier = Modifier) {
  */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-internal fun PhotoViewer(img: androidx.compose.ui.graphics.ImageBitmap, onClose: () -> Unit) {
+internal fun PhotoViewer(img: androidx.compose.ui.graphics.ImageBitmap, onSave: (() -> Unit)? = null, onClose: () -> Unit) {
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     var boxSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
@@ -250,6 +263,13 @@ internal fun PhotoViewer(img: androidx.compose.ui.graphics.ImageBitmap, onClose:
                 modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y },
                 contentScale = ContentScale.Fit,
             )
+            if (onSave != null) androidx.compose.material3.TextButton(
+                onClick = onSave,
+                modifier = Modifier.align(Alignment.TopStart).padding(8.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), RoundedCornerShape(24.dp)),
+            ) {
+                Icon(Icons.Filled.FileDownload, null, tint = androidx.compose.ui.graphics.Color.White)
+                Text(tr("Сохранить фото"), color = androidx.compose.ui.graphics.Color.White, fontSize = 15.sp, modifier = Modifier.padding(start = 6.dp))
+            }
             IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(48.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), androidx.compose.foundation.shape.CircleShape)) {
                 Icon(Icons.Filled.Close, tr("Закрыть (Esc)"), tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(28.dp))
             }

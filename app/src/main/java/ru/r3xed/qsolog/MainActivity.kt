@@ -52,6 +52,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.runtime.Composable
 import androidx.core.content.ContextCompat
 import org.osmdroid.config.Configuration
 import ru.r3xed.qsolog.ui.EditScreen
@@ -375,14 +379,38 @@ class MainActivity : ComponentActivity() {
                         val tabs = vm.screen in ru.r3xed.qsolog.ui.BOTTOM_TABS && !androidx.compose.foundation.layout.WindowInsets.isImeVisible
                         Column(Modifier.fillMaxSize()) {
                             Box(Modifier.weight(1f).fillMaxWidth().then(if (tabs) Modifier.consumeWindowInsets(androidx.compose.foundation.layout.WindowInsets.Companion.navigationBars) else Modifier)) {
-                                    when (vm.screen) {
-                                        Screen.Log -> LogScreen(
+                                    val logScreen: @Composable () -> Unit = {
+                                        LogScreen(
                                             vm,
                                             hasMicPermission = {
                                                 ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                                             },
                                             requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
                                         )
+                                    }
+                                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                                    // A tablet across (840 dp wide, 500 dp high; not a phone on its side): the log stays on the left beside the card;
+                                    // the line between them is dragged to share the width.
+                                    val total = maxWidth
+                                    if (total >= 840.dp && maxHeight >= 500.dp && (vm.screen == Screen.Edit || vm.screen == Screen.Contest)) Row(Modifier.fillMaxSize()) {
+                                        Box(Modifier.fillMaxHeight().width(total * vm.logPaneFraction)) { logScreen() }
+                                        ru.r3xed.qsolog.ui.PaneDivider(
+                                            onDrag = { dx -> vm.changeLogPaneFraction(vm.logPaneFraction + dx / total.value, keep = false) },
+                                            onDragEnd = { vm.changeLogPaneFraction(vm.logPaneFraction, keep = true) },
+                                        )
+                                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                                            if (vm.screen == Screen.Contest) key(vm.editSession) { ContestScreen(vm) }
+                                            else key(vm.editSession) { EditScreen(
+                                                vm,
+                                                hasMicPermission = {
+                                                    ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                                                },
+                                                requestMicPermission = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
+                                            ) }
+                                        }
+                                    } else
+                                    when (vm.screen) {
+                                        Screen.Log -> logScreen()
                                         Screen.Map -> MapScreen(vm)
                                         Screen.Welcome -> WelcomeScreen(vm)
                                         Screen.Reference -> ReferenceScreen(onClose = vm::closeReference, myPosition = vm.settings.myPosition)
@@ -408,6 +436,7 @@ class MainActivity : ComponentActivity() {
                                             onImportContest = { importContest.launch(arrayOf("*/*")) },
                                             onLaunchApps = ::launchStartApps,
                                         )
+                                    }
                                     }
                             }
                             if (tabs) ru.r3xed.qsolog.ui.BottomTabs(vm)

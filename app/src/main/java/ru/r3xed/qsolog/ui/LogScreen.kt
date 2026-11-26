@@ -16,6 +16,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ViewHeadline
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -207,6 +212,13 @@ fun LogScreen(
                             onClick = { menu = false; vm.openPropagation() },
                         )
                         HistoryMenuItem(vm) { menu = false; vm.openHistory() }
+                        // One line a contact: twice as many on the screen.
+                        DropdownMenuItem(
+                            text = { Text(tr("Плотный журнал"), fontSize = 18.sp) },
+                            leadingIcon = { Icon(Icons.Filled.ViewHeadline, null) },
+                            trailingIcon = { androidx.compose.material3.Switch(checked = vm.compactLog, onCheckedChange = null) },
+                            onClick = { vm.toggleCompactLog() },
+                        )
                         DropdownMenuItem(
                             text = { Text(tr("Дозаполнить данные корреспондентов"), fontSize = 18.sp) },
                             leadingIcon = { Icon(Icons.Filled.PersonSearch, null) },
@@ -351,6 +363,19 @@ fun LogScreen(
                 val groups = remember(vm.qsos, vm.sortBy, vm.sortDesc) { groupAndSort(vm.qsos, vm.sortBy, vm.sortDesc) }
                 // Kept by the view model: back from a card, the list is where it was (GitHub #12).
                 val listState = vm.logListState
+                // The first contact with each country: a star on its row.
+                val firsts = remember(vm.allQsos) { ru.r3xed.qsolog.data.LogMarks.firstWithCountry(vm.allQsos) }
+                var jump by remember { mutableStateOf(false) }
+                val jumpScope = rememberCoroutineScope()
+                if (jump) JumpToDateDialog(onDismiss = { jump = false }) { day ->
+                    jump = false
+                    val days = groups.map { java.time.LocalDate.parse(it.key.removePrefix("d")).toEpochDay() }
+                    val gi = ru.r3xed.qsolog.data.LogMarks.dayIndex(days, day.toEpochDay())
+                    if (gi >= 0) {
+                        val index = groups.take(gi).sumOf { it.items.size + 1 }
+                        jumpScope.launch { listState.scrollToItem(index) }
+                    }
+                }
                 // A new order starts from the top, not from wherever the old one was scrolled to.
                 LaunchedEffect(vm.sortBy, vm.sortDesc) {
                     val key = "${vm.sortBy}/${vm.sortDesc}"
@@ -382,9 +407,12 @@ fun LogScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     groups.forEach { g ->
-                        if (g.title != null) stickyHeader(key = "h" + g.key) { GroupHeader(g.title, g.items.size) }
+                        if (g.title != null) stickyHeader(key = "h" + g.key) {
+                            // With the date sort a day's header opens the calendar: a long log is crossed in one step.
+                            GroupHeader(g.title, g.items.size, onClick = if (vm.sortBy == SortBy.DATE) ({ jump = true }) else null)
+                        }
                         items(g.items, key = { it.id }) { qso ->
-                            LogRow(qso, vm, showDate = vm.sortBy != SortBy.DATE, modifier = Modifier.animateItem(), cursor = qso.id == vm.logCursor)
+                            LogRow(qso, vm, showDate = vm.sortBy != SortBy.DATE, modifier = Modifier.animateItem(), cursor = qso.id == vm.logCursor, firstCountry = qso.id in firsts)
                         }
                     }
                 }
@@ -665,21 +693,27 @@ internal fun IconPill(
 }
 
 @Composable
-private fun GroupHeader(title: String, count: Int) {
+private fun GroupHeader(title: String, count: Int, onClick: (() -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(top = 10.dp, bottom = 4.dp),
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
+            .then(if (onClick != null) Modifier.clickable(onClickLabel = tr("Перейти к дате"), onClick = onClick) else Modifier)
+            .padding(top = 10.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = LocalExtra.current.muted, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
+        Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = LocalExtra.current.muted, letterSpacing = 1.sp)
+        if (onClick != null) Icon(Icons.Filled.CalendarMonth, null, Modifier.padding(start = 6.dp).size(14.dp), tint = LocalExtra.current.muted)
+        Spacer(Modifier.weight(1f))
         Text("$count QSO", style = MaterialTheme.typography.labelMedium, color = LocalExtra.current.muted)
     }
 }
 
 /** A log row. Deleting is only possible from the card ("Удалить" there), never from the list. */
 @Composable
-private fun LogRow(qso: Qso, vm: AppViewModel, showDate: Boolean, modifier: Modifier = Modifier, cursor: Boolean = false) {
+private fun LogRow(qso: Qso, vm: AppViewModel, showDate: Boolean, modifier: Modifier = Modifier, cursor: Boolean = false, firstCountry: Boolean = false) {
     QsoRow(
         qso,
+        dense = vm.compactLog,
+        firstCountry = firstCountry,
         cursor = cursor,
         modifier = modifier,
         showDate = showDate,
@@ -757,6 +791,10 @@ private fun SelectionBar(vm: AppViewModel) {
 @Composable
 private fun QsoRow(
     qso: Qso,
+    /** «Плотный журнал»: one line a contact. */
+    dense: Boolean = false,
+    /** The first contact with its country: a star. */
+    firstCountry: Boolean = false,
     /** The keyboard's cursor is on this row. */
     cursor: Boolean = false,
     modifier: Modifier = Modifier,
@@ -791,9 +829,34 @@ private fun QsoRow(
                     onLongClick()
                 },
             )
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = if (dense) 12.dp else 14.dp, vertical = if (dense) 6.dp else 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        if (dense) {
+            // One line: the callsign, band and mode, the time; the star, the contest flag and the QSL marks stay.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (selecting) {
+                    Icon(
+                        if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                        if (selected) tr("Выбрана") else tr("Не выбрана"),
+                        Modifier.size(22.dp),
+                        tint = if (selected) MaterialTheme.colorScheme.primary else x.muted,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (firstCountry) FirstCountryStar()
+                if (ContestMode.isContest(qso.adif)) Icon(Icons.Filled.Flag, tr("Связь в контест-режиме"), Modifier.padding(end = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                ConfirmedMark(qso.adif)
+                Text(
+                    listOfNotNull(qso.band.ifBlank { null } ?: qso.freqMhz.ifBlank { null }, qso.mode.ifBlank { null }).joinToString(" "),
+                    fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp),
+                )
+                val t = utc(qso.timeUtc)
+                Text((if (showDate) SHORT_DATE.format(t) + " " else "") + TIME_FMT.format(t), fontFamily = Mono, fontSize = 15.sp, color = x.muted, maxLines = 1)
+            }
+            return@Column
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (selecting) {
                 Icon(
@@ -805,6 +868,7 @@ private fun QsoRow(
                 Spacer(Modifier.width(10.dp))
             }
             Text(qso.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (firstCountry) FirstCountryStar()
             if (ContestMode.isContest(qso.adif)) {
                 Icon(Icons.Filled.Flag, tr("Связь в контест-режиме"), Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
@@ -1024,3 +1088,26 @@ internal fun printHtml(context: android.content.Context, html: String, job: Stri
 }
 
 private var printing: android.webkit.WebView? = null
+
+/** The first contact with this country in the log. */
+@Composable
+private fun FirstCountryStar() {
+    Icon(Icons.Filled.Star, tr("Первая связь с этой страной"), Modifier.padding(end = 6.dp).size(18.dp), tint = Color(0xFFE0A100))
+}
+
+/** «Перейти к дате»: the calendar; the log scrolls to that day or the nearest one before it. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun JumpToDateDialog(onDismiss: () -> Unit, onPick: (java.time.LocalDate) -> Unit) {
+    val state = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+    androidx.compose.material3.DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                val ms = state.selectedDateMillis
+                if (ms == null) onDismiss() else onPick(java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneOffset.UTC).toLocalDate())
+            }) { Text(tr("Перейти")) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Отмена")) } },
+    ) { androidx.compose.material3.DatePicker(state, title = { Text(tr("Перейти к дате"), modifier = Modifier.padding(start = 24.dp, top = 16.dp)) }) }
+}

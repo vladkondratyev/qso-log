@@ -28,6 +28,14 @@ class QsoPhotos(private val dir: File) {
     }
 
     companion object {
+        /** "png", "gif" or "jpg" by the file's first bytes (the photos are kept as .jpg whatever they are). */
+        fun extension(b: ByteArray): String = when {
+            b.size > 3 && b[0] == 0x89.toByte() && b[1] == 'P'.code.toByte() && b[2] == 'N'.code.toByte() -> "png"
+            b.size > 3 && b[0] == 'G'.code.toByte() && b[1] == 'I'.code.toByte() && b[2] == 'F'.code.toByte() -> "gif"
+            b.size > 11 && b[8] == 'W'.code.toByte() && b[9] == 'E'.code.toByte() && b[10] == 'B'.code.toByte() -> "webp"
+            else -> "jpg"
+        }
+
         /** The photo at [url] (http or https), or null; at most 5 MB. */
         fun download(url: String, agent: String = "QSO-LOG"): ByteArray? = try {
             val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection

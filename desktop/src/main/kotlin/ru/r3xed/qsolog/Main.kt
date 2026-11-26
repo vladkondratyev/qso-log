@@ -495,8 +495,14 @@ fun App(state: AppState, files: Exports) {
                 }
             } else Row(Modifier.weight(1f).fillMaxWidth()) {
                 if (!state.tableMode) {
-                    LogPane(state, NEW_SHORTCUT, files.exportSelected, Modifier.width(460.dp * ru.r3xed.qsolog.ui.LocalTextBoost.current).fillMaxHeight())
-                    VerticalDivider(color = LocalExtra.current.line)
+                    val boost = ru.r3xed.qsolog.ui.LocalTextBoost.current
+                    LogPane(state, NEW_SHORTCUT, files.exportSelected, Modifier.width(state.logPaneWidth.dp * boost).fillMaxHeight())
+                    // The divider is dragged to give the log or the card more room; a double click brings back 460.
+                    ru.r3xed.qsolog.ui.PaneDivider(
+                        onDrag = { dx -> state.changeLogPaneWidth(state.logPaneWidth + Math.round(dx / boost), keep = false) },
+                        onDragEnd = { state.changeLogPaneWidth(state.logPaneWidth, keep = true) },
+                        onReset = { state.changeLogPaneWidth(460, keep = true) },
+                    )
                 }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     when (state.pane) {

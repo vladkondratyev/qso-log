@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +49,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -296,6 +298,14 @@ fun ContestScreen(vm: AppViewModel) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null)
                 Text(tr("назад"))
             }
+            // The participants list under the callsign: shown or hidden here, remembered.
+            IconButton(onClick = { vm.changeContestParticipants(!vm.contestParticipantsShown) }, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.Filled.Groups,
+                    if (vm.contestParticipantsShown) tr("Скрыть список участников") else tr("Показать список участников"),
+                    tint = if (vm.contestParticipantsShown) MaterialTheme.colorScheme.primary else x.muted,
+                )
+            }
             val pos = vm.contestPosition()
             // Just logged: said here instead of a message over the header.
             val saved = vm.contestLastSaved?.takeIf { f.isNew && f.call.isBlank() }
@@ -367,6 +377,7 @@ fun ContestScreen(vm: AppViewModel) {
                     }
                 }
             }
+            if (vm.contestParticipantsShown) ParticipantsList(vm) { error = null; if (keypad) activate(Target.RCVD) else rcvdFocus.requestFocus() }
             StationLine(vm)
 
             // The numbers first: they change with every contact. Any letters and digits: 015, MO69, EU, 16.
@@ -725,4 +736,52 @@ private fun BigField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = if (onDone != null) ImeAction.Done else ImeAction.Next),
         keyboardActions = if (onDone != null) KeyboardActions(onDone = { onDone() }) else KeyboardActions.Default,
     )
+}
+
+/**
+ * The contest's participants A–Z (this contest's code in any year and the one in work), narrowed by what is typed in
+ * the callsign. A tap puts the callsign and the constant part of its code (RDA, years, zone) into the card;
+ * red — already worked on this band and mode, muted — worked on another one.
+ */
+@Composable
+private fun ParticipantsList(vm: AppViewModel, onPicked: () -> Unit) {
+    val x = LocalExtra.current
+    val f = vm.form
+    val all = remember(vm.allQsos, vm.activeContest, f.band, f.mode) { vm.contestParticipants() }
+    val shown = remember(all, f.call) { ru.r3xed.qsolog.data.ContestParticipants.filter(all, f.call) }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(x.field).padding(vertical = 6.dp)) {
+        Text(
+            tr("Участники") + "  " + if (shown.size == all.size) "${all.size}" else "${shown.size} / ${all.size}",
+            style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        if (all.isEmpty()) {
+            Text(
+                tr("Здесь появятся станции этого соревнования из журнала (и прошлых лет) — клик подставит позывной и постоянную часть контрольного номера."),
+                style = MaterialTheme.typography.bodyMedium, color = x.muted, modifier = Modifier.padding(12.dp),
+            )
+            return@Column
+        }
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 220.dp)) {
+            items(shown.size, key = { shown[it].call }) { i ->
+                val p = shown[i]
+                val dupe = p.worked == ru.r3xed.qsolog.data.ContestParticipants.Worked.DUPE
+                val color = when (p.worked) {
+                    ru.r3xed.qsolog.data.ContestParticipants.Worked.DUPE -> MaterialTheme.colorScheme.error
+                    ru.r3xed.qsolog.data.ContestParticipants.Worked.OTHER_BAND -> x.muted
+                    ru.r3xed.qsolog.data.ContestParticipants.Worked.NO -> MaterialTheme.colorScheme.onSurface
+                }
+                Row(
+                    Modifier.fillMaxWidth()
+                        .then(if (dupe) Modifier.background(MaterialTheme.colorScheme.error.copy(alpha = 0.10f)) else Modifier)
+                        .clickable(onClickLabel = tr("Подставить позывной")) { vm.pickParticipant(p); onPicked() }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(p.call, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = color, maxLines = 1, modifier = Modifier.weight(1f))
+                    if (p.exchange.isNotEmpty()) Text(p.exchange, fontFamily = Mono, fontSize = 16.sp, color = x.muted, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
+                    if (dupe) Text(" " + tr("повтор"), fontSize = 14.sp, color = color, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
 }
