@@ -30,11 +30,11 @@ The app is free and open source. The interface is in Russian and English.
 
 | System | Version | File |
 |---|---|---|
-| Android 8.0 or newer | 2.9.8 | [QSO-LOG-2.9.8.apk](../../releases/tag/v2.9.8) |
-| macOS 11 or newer, Apple silicon (M1 and newer) | 2.9.7 | [QSO-LOG-2.9.7-macos-arm64.dmg](../../releases/tag/desktop-v2.9.7) |
-| macOS 11 or newer, Intel | 2.9.7 | [QSO-LOG-2.9.7-macos-x64.dmg](../../releases/tag/desktop-v2.9.7) |
-| Windows 10 and 11, 64-bit | 2.9.7 | [QSO-LOG-2.9.7-windows-x64.zip](../../releases/tag/desktop-v2.9.7) |
-| Linux: Ubuntu 22.04+, Debian 12, Mint | 2.9.7 | [QSO-LOG-2.9.7-linux-amd64.deb](../../releases/tag/desktop-v2.9.7) |
+| Android 8.0 or newer | 3.0 | [QSO-LOG-3.0.apk](../../releases/tag/v3.0) |
+| macOS 11 or newer, Apple silicon (M1 and newer) | 3.0 | [QSO-LOG-3.0-macos-arm64.dmg](../../releases/tag/desktop-v3.0) |
+| macOS 11 or newer, Intel | 3.0 | [QSO-LOG-3.0-macos-x64.dmg](../../releases/tag/desktop-v3.0) |
+| Windows 10 and 11, 64-bit | 3.0 | [QSO-LOG-3.0-windows-x64.zip](../../releases/tag/desktop-v3.0) |
+| Linux: Ubuntu 22.04+, Debian 12, Mint | 3.0 | [QSO-LOG-3.0-linux-amd64.deb](../../releases/tag/desktop-v3.0) |
 
 How to install: [Android](#android) · [macOS](#macos) · [Windows](#windows) · [Linux](#linux).
 Nothing to install: [QSO-LOG Web](https://qso-log.ru/app/) is a light version in the browser (the log, country and distance, dupes, ADIF and CSV, statistics, CAT in Chrome and Edge); it works offline and installs to the home screen. The log stays in the browser only.
@@ -994,26 +994,26 @@ Install a new version over the old one; the log and settings are kept.
 
 ### Android
 
-Download `QSO-LOG-2.9.8.apk` from the [release page](../../releases/tag/v2.9.8) and open it on the phone; allow
+Download `QSO-LOG-3.0.apk` from the [release page](../../releases/tag/v3.0) and open it on the phone; allow
 installing from this source if Android asks.
 
 ### macOS
 
-Download `QSO-LOG-2.9.7-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
-[release page](../../releases/tag/desktop-v2.9.7), open it and drag QSO-LOG to Applications. The app is not signed by
+Download `QSO-LOG-3.0-macos-arm64.dmg` (Apple silicon) or `-macos-x64.dmg` (Intel) from the
+[release page](../../releases/tag/desktop-v3.0), open it and drag QSO-LOG to Applications. The app is not signed by
 Apple: on the first start go to System Settings → Privacy & Security and click "Open Anyway".
 
 ### Windows
 
-Download `QSO-LOG-2.9.7-windows-x64.zip` from the [release page](../../releases/tag/desktop-v2.9.7), unpack the
+Download `QSO-LOG-3.0-windows-x64.zip` from the [release page](../../releases/tag/desktop-v3.0), unpack the
 whole archive and run `QSO-LOG.exe` (Java is included). If SmartScreen warns, click "More info" → "Run anyway".
 
 ### Linux
 
-Download `QSO-LOG-2.9.7-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v2.9.7) and install it:
+Download `QSO-LOG-3.0-linux-amd64.deb` from the [release page](../../releases/tag/desktop-v3.0) and install it:
 
 ```bash
-sudo apt install ./QSO-LOG-2.9.7-linux-amd64.deb
+sudo apt install ./QSO-LOG-3.0-linux-amd64.deb
 ```
 
 ## Where the data is kept

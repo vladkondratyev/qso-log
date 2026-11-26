@@ -44,7 +44,7 @@ docker run --rm --platform linux/amd64 -v "$OUT:/work" -w /work eclipse-temurin:
         --linux-deb-maintainer '13299424+vladkondratyev@users.noreply.github.com' \\
         --add-modules java.base,java.desktop,java.xml,java.logging,java.prefs,java.datatransfer,java.instrument,java.sql,jdk.security.auth,jdk.unsupported,java.naming,java.management,jdk.crypto.ec,jdk.localedata,jdk.charsets,jdk.accessibility,jdk.zipfs \\
         --jlink-options '--strip-debug --no-header-files --no-man-pages --compress=2' \\
-        --java-options '-Dfile.encoding=UTF-8 -Xmx768m' || true  # expected to fail at dpkg-deb, see above
+        --java-options '-Dfile.encoding=UTF-8 -XX:MaxRAMPercentage=50 -XX:+UseStringDeduplication' || true  # expected to fail at dpkg-deb, see above
     test -f /work/jp/images/DEBIAN/control
 "
 # jpackage finds library dependencies with ldd, which does not work under emulation either; list them here.

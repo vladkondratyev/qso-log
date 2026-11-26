@@ -66,16 +66,11 @@ class QsoDb(context: Context) : SQLiteOpenHelper(context, "qsolog.db", null, 5),
             .use { c -> buildSet { while (c.moveToNext()) add(c.getString(0)) } }
 
     fun all(query: String = ""): List<Qso> {
-        val q = query.trim()
+        // One copy of each repeated text for the whole log (see StringPool): a large log fits the memory.
+        val pool = ru.r3xed.qsolog.data.StringPool()
         val list = readableDatabase.rawQuery("SELECT * FROM qso ORDER BY time_utc DESC", null)
-            .use { c -> buildList { while (c.moveToNext()) add(c.toQso()) } }
-        if (q.isEmpty()) return list
-        // SQLite's LIKE is case-insensitive only for ASCII, so Cyrillic names are matched here instead.
-        val needle = q.lowercase()
-        return list.filter { qso ->
-            listOf(qso.call, qso.name, qso.qth, qso.country, qso.locator, qso.comment, qso.band, qso.mode, qso.freqMhz)
-                .any { it.lowercase().contains(needle) }
-        }
+            .use { c -> ArrayList<Qso>(c.count.coerceAtLeast(1)).apply { while (c.moveToNext()) add(ru.r3xed.qsolog.data.compactQso(c.toQso(), pool)) } }
+        return ru.r3xed.qsolog.data.searchQsos(list, query)
     }
 
     fun history(call: String, excludeId: Long = 0): CallHistory {

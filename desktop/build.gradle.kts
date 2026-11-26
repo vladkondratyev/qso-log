@@ -12,7 +12,7 @@ kotlin {
 // -Ptarget=windows / linux builds the jar with that system's graphics libraries (bundles for them are made on a Mac).
 val target = (findProperty("target") as String?) ?: "current"
 
-val appVersion = "2.9.7"
+val appVersion = "3.0"
 
 // APP_VERSION for the settings pane, the ADIF header and the HTTP User-Agent.
 val generateBuildInfo by tasks.registering {
@@ -46,6 +46,8 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "ru.r3xed.qsolog.MainKt"
+        // Half the computer's memory at most (Java's default is a quarter); repeated texts of a large log shared by G1.
+        jvmArgs += listOf("-XX:MaxRAMPercentage=50", "-XX:+UseStringDeduplication")
         buildTypes.release.proguard {
             configurationFiles.from(project.file("proguard-rules.pro"))
             obfuscate.set(false)
@@ -76,6 +78,8 @@ compose.desktop {
                 }
             }
             windows {
+                // MSI/EXE want three numbers: "3.0" -> "3.0.0".
+                packageVersion = (appVersion.split('.') + listOf("0", "0")).take(3).joinToString(".")
                 iconFile.set(project.file("icons/icon.ico"))
                 menuGroup = "QSO-LOG"
                 shortcut = true

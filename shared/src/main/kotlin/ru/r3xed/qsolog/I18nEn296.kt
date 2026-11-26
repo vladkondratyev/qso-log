@@ -87,6 +87,11 @@ internal val EN_2_9_6: Map<String, String> = mapOf(
     "LoTW: сертификаты .p12 из новых версий TQSL открываются и на старых Android (ошибка «PBKDF2 SecretKeyFactory not available»)." to
         "LoTW: .p12 certificates from newer TQSL versions open on older Android too (the \"PBKDF2 SecretKeyFactory not available\" error).",
     "Исправлено закрытие приложения на Android 8–12 при поиске позывного, у которого в QRZ.ru есть фото, и при передаче CW через USB-адаптер." to "Fixed: on Android 8–12 the app closed when a callsign with a photo on QRZ.ru was looked up, and when CW was sent through a USB adapter.",
+    "Большой журнал (100 000 связей и больше) занимает в несколько раз меньше памяти. Программа больше не закрывается с ошибкой «Java heap space» на Windows и может взять до половины памяти компьютера." to
+        "A large log (100,000 contacts and more) takes several times less memory. The program no longer closes with \"Java heap space\" on Windows and may use up to half of the computer's memory.",
+    "Большой журнал (100 000 связей и больше) занимает в несколько раз меньше памяти телефона." to "A large log (100,000 contacts and more) takes several times less of the phone's memory.",
+    "После правки связи журнал остаётся на том же месте и не прыгает в начало списка." to "After a contact is edited, the log stays where it was instead of jumping to the top.",
+    "Поиск по журналу быстрее: журнал больше не читается из базы второй раз." to "Searching the log is faster: the log is no longer read from the database a second time.",
     "Исправлено закрытие программы при наборе позывного вида «A/P»." to "Fixed: the app closed when a callsign like \"A/P\" was typed.",
     "Если приложение закрылось с ошибкой, при следующем запуске оно предложит отправить отчёт разработчику." to
         "If the app closes with an error, on the next start it offers to send a report to the developer.",

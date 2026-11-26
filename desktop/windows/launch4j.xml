@@ -18,7 +18,9 @@
     <requires64Bit>true</requires64Bit>
     <opt>-Dfile.encoding=UTF-8</opt>
     <opt>-Dsun.stdout.encoding=UTF-8</opt>
-    <opt>-Xmx768m</opt>
+    <!-- Half the computer's memory at most (768 MB was too little for a log of 100 000+ contacts). -->
+    <opt>-XX:MaxRAMPercentage=50</opt>
+    <opt>-XX:+UseStringDeduplication</opt>
   </jre>
   <singleInstance>
     <mutexName>ru.r3xed.qsolog</mutexName>

@@ -1211,7 +1211,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val (all, list) = withContext(Dispatchers.IO) {
                 val all = db.all()
-                all to if (query.isBlank()) all else db.all(query)
+                all to ru.r3xed.qsolog.data.searchQsos(all, query)
             }
             allQsos = all
             // "Станция": only the contacts made under that callsign of mine.
@@ -1232,7 +1232,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Typed a callsign that is not in the log: ask QRZ.ru and, if it knows it, open a new card filled in.
         searchLookupJob = viewModelScope.launch {
             delay(900) // wait until typing pauses; QRZ.ru allows one request per 3 s
-            val inLog = withContext(Dispatchers.IO) { db.all(call) }
+            val inLog = ru.r3xed.qsolog.data.searchQsos(allQsos, call)
             if (inLog.isNotEmpty() || query.trim().uppercase() != call) return@launch
             if (!hasQrzAccount) {
                 searchLookup = SearchLookup.NoAccount
@@ -2013,6 +2013,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The log row the arrows are on (its id); the list draws it outlined and scrolls to it. */
     var logCursor by mutableStateOf<Long?>(null)
+
+    /**
+     * The log's scroll position, kept while a card is open: the list leaves the screen then, and its own state
+     * started again from the top after a saved card (GitHub #12). What the list has already acted on is kept too, so
+     * coming back does not replay a sort change, a new contact or a cursor move.
+     */
+    val logListState = androidx.compose.foundation.lazy.LazyListState()
+    var logSortSeen: String? = null
+    var logSavedTickSeen = 0
+    var logCursorSeen: Long? = null
     /** The rows in the order the log shows them (groups and sorting applied), set by the list. */
     var logOrder: List<Long> = emptyList()
     /** The log's search field has the cursor: letters and arrows belong to it. */

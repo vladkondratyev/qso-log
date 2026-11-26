@@ -349,15 +349,24 @@ fun LogScreen(
             } else {
                 SortBar(vm)
                 val groups = remember(vm.qsos, vm.sortBy, vm.sortDesc) { groupAndSort(vm.qsos, vm.sortBy, vm.sortDesc) }
-                val listState = rememberLazyListState()
+                // Kept by the view model: back from a card, the list is where it was (GitHub #12).
+                val listState = vm.logListState
                 // A new order starts from the top, not from wherever the old one was scrolled to.
-                LaunchedEffect(vm.sortBy, vm.sortDesc) { listState.scrollToItem(0) }
+                LaunchedEffect(vm.sortBy, vm.sortDesc) {
+                    val key = "${vm.sortBy}/${vm.sortDesc}"
+                    if (vm.logSortSeen != null && vm.logSortSeen != key) listState.scrollToItem(0)
+                    vm.logSortSeen = key
+                }
                 // A just-saved contact is shown: with the date sort it is the first row.
-                LaunchedEffect(vm.newSavedTick) { if (vm.newSavedTick > 0) listState.animateScrollToItem(0) }
+                LaunchedEffect(vm.newSavedTick) {
+                    if (vm.newSavedTick > vm.logSavedTickSeen) { vm.logSavedTickSeen = vm.newSavedTick; listState.animateScrollToItem(0) }
+                }
                 // The keyboard's cursor: the list knows the order of the rows, and keeps the outlined one in view.
                 LaunchedEffect(groups) { vm.logOrder = groups.flatMap { g -> g.items.map { it.id } } }
                 LaunchedEffect(vm.logCursor) {
                     val id = vm.logCursor ?: return@LaunchedEffect
+                    if (id == vm.logCursorSeen) return@LaunchedEffect
+                    vm.logCursorSeen = id
                     var i = 0
                     for (g in groups) {
                         if (g.title != null) i++

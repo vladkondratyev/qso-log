@@ -26,14 +26,13 @@ class WhatsNewTest {
 
     @Test
     fun computerAndPhonePoints() {
-        // 2.9.7: the LoTW certificate and the crash report are the phone's; the rest is on both.
+        // 3.0: the Windows heap on the computer, the log's place after a card on the phone.
         I18n.chosen = Lang.RU
         try {
-            assertTrue(WhatsNew.items(desktop = true).first().startsWith("Имя файла"))
-            assertTrue(WhatsNew.items(desktop = true).none { "LoTW" in it || "отчёт" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "LoTW" in it })
-            assertTrue(WhatsNew.items(desktop = false).any { "QSO-LOG Web" in it })
-            assertTrue(WhatsNew.items(desktop = false).first().startsWith("Исправлено закрытие приложения на Android 8–12"))
+            assertTrue("Java heap space" in WhatsNew.items(desktop = true).first())
+            assertTrue(WhatsNew.items(desktop = true).none { "прыгает" in it })
+            assertTrue(WhatsNew.items(desktop = false).any { "прыгает" in it })
+            assertTrue(WhatsNew.items(desktop = false).none { "Java" in it })
         } finally {
             I18n.chosen = Lang.SYSTEM
         }

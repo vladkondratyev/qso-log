@@ -95,17 +95,15 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) : SyncStore {
 
     @Synchronized
     fun all(query: String = ""): List<Qso> {
+        // One copy of each repeated text for the whole log (see StringPool): a large log fits the memory.
+        val pool = ru.r3xed.qsolog.data.StringPool()
         val list = conn.prepareStatement("SELECT * FROM qso ORDER BY time_utc DESC").use { st ->
-            st.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.toQso()) } }
+            st.fetchSize = 1000
+            st.executeQuery().use { rs -> ArrayList<Qso>(1024).apply { while (rs.next()) add(ru.r3xed.qsolog.data.compactQso(rs.toQso(), pool)) }.also { it.trimToSize() } }
         }
-        val needle = query.trim().lowercase()
-        if (needle.isEmpty()) return list
-        // Matched in Kotlin: SQLite's LIKE ignores case only for Latin letters.
-        return list.filter { q ->
-            listOf(q.call, q.name, q.qth, q.country, q.locator, q.comment, q.band, q.mode, q.freqMhz)
-                .any { it.lowercase().contains(needle) }
-        }
+        return search(list, query)
     }
+
 
     @Synchronized
     fun count(): Int = conn.createStatement().use { st -> st.executeQuery("SELECT COUNT(*) FROM qso").use { it.next(); it.getInt(1) } }
@@ -288,8 +286,10 @@ class QsoDb(file: File = File(AppDirs.data, "qsolog.db")) : SyncStore {
         uid = str("uid"),
     )
 
-    private companion object {
-        val COLUMNS = listOf(
+    companion object {
+        fun search(list: List<Qso>, query: String): List<Qso> = ru.r3xed.qsolog.data.searchQsos(list, query)
+
+        private val COLUMNS = listOf(
             "call", "time_utc", "band", "mode", "freq", "rst_sent", "rst_rcvd",
             "name", "qth", "country", "locator", "lat", "lon", "distance_km", "bearing",
             "power", "qsl_sent", "qsl_rcvd", "comment", "my_call", "my_locator", "created_at", "updated_at",

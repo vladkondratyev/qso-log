@@ -814,7 +814,7 @@ class AppState {
         scope.launch {
             val (all, list) = withContext(Dispatchers.IO) {
                 val all = db.all()
-                all to if (query.isBlank()) all else db.all(query)
+                all to QsoDb.search(all, query)
             }
             allQsos = all
             // "Станция": only the contacts made under that callsign of mine.
@@ -835,7 +835,7 @@ class AppState {
         // Typed a callsign that is not in the log: ask QRZ.ru and, if it knows it, open a new card filled in.
         searchLookupJob = scope.launch {
             delay(900) // wait until typing pauses; QRZ.ru allows one request per 3 s
-            val inLog = withContext(Dispatchers.IO) { db.all(call) }
+            val inLog = QsoDb.search(allQsos, call)
             if (inLog.isNotEmpty() || query.trim().uppercase() != call) return@launch
             if (!hasQrzAccount) {
                 searchLookup = SearchLookup.NoAccount

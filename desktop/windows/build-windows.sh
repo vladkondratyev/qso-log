@@ -45,7 +45,9 @@ echo "2/4 Java для Windows (jlink)"
 
 echo "3/4 QSO-LOG.exe (Launch4j)"
 # The config's relative paths work from desktop/build as well as from here; the copy carries the version.
-sed "s/@VERSION@/$VERSION/g" "$HERE/launch4j.xml" > "$ROOT/desktop/build/launch4j.xml"
+# Launch4j wants four numbers in fileVersion ("3.0" -> "3.0.0.0"; the template adds the last one).
+WINVER=$(echo "$VERSION" | awk -F. '{ printf "%d.%d.%d", $1, $2, $3 }')
+sed -e "s/@VERSION@\.0/$WINVER.0/g" -e "s/@VERSION@/$VERSION/g" "$HERE/launch4j.xml" > "$ROOT/desktop/build/launch4j.xml"
 "$MAC_JDK/bin/java" -jar "$LAUNCH4J/launch4j.jar" "$ROOT/desktop/build/launch4j.xml" | grep -v "^launch4j: \(Compiling\|Linking\)" || true
 [ -f "$OUT/QSO-LOG.exe" ] || { echo "Launch4j не создал exe" >&2; exit 1; }
 # Latin file name (Cyrillic names in a zip made on a Mac can look garbled in Explorer); BOM + CRLF for Notepad.
